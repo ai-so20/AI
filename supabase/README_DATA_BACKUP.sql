@@ -1,0 +1,11 @@
+-- 이 파일은 기존 Supabase에서 '데이터 자체'를 별도 백업해야 할 때 참고용입니다.
+-- SQL Editor는 전체 Auth/Storage 백업 도구가 아닙니다.
+-- 완전 동일 복제를 위해서는 아래 항목도 기존 프로젝트에서 별도 이전해야 합니다:
+-- 1) auth.users 및 인증 설정
+-- 2) public 테이블 실제 데이터
+-- 3) Storage bucket(chat-media 등)와 파일
+-- 4) Realtime publication/설정
+-- 5) 프로젝트 URL/키/Secrets
+-- 6) VAPID/Gemini/Twelve Data 키
+--
+-- 현재 이 대화에서 확보한 것은 '현재 DB 구조 메타데이터 315행'이며 실제 레코드 전체 덤프는 아닙니다.

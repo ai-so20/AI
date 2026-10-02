@@ -1,0 +1,2283 @@
+section,object_name,item_order,item_name,detail_1,detail_2,detail_3,definition
+01_TABLE_COLUMNS,ai_character_memories,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,ai_character_memories,2,character_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,ai_character_memories,3,memory_date,date,date,NOT NULL,CURRENT_DATE
+01_TABLE_COLUMNS,ai_character_memories,4,category,text,text,NOT NULL,
+01_TABLE_COLUMNS,ai_character_memories,5,content,text,text,NOT NULL,
+01_TABLE_COLUMNS,ai_character_memories,6,created_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,ai_characters,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,ai_characters,10,activity_start,time without time zone,time,NOT NULL,'11:00:00'::time without time zone
+01_TABLE_COLUMNS,ai_characters,11,activity_end,time without time zone,time,NOT NULL,'18:30:00'::time without time zone
+01_TABLE_COLUMNS,ai_characters,12,created_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,ai_characters,13,avatar,text,text,NOT NULL,'vip_01'::text
+01_TABLE_COLUMNS,ai_characters,2,nickname,text,text,NOT NULL,
+01_TABLE_COLUMNS,ai_characters,3,is_active,boolean,bool,NOT NULL,true
+01_TABLE_COLUMNS,ai_characters,4,age,integer,int4,NULLABLE,
+01_TABLE_COLUMNS,ai_characters,5,gender,text,text,NULLABLE,
+01_TABLE_COLUMNS,ai_characters,6,occupation,text,text,NULLABLE,
+01_TABLE_COLUMNS,ai_characters,7,personality,text,text,NULLABLE,
+01_TABLE_COLUMNS,ai_characters,8,speaking_style,text,text,NULLABLE,
+01_TABLE_COLUMNS,ai_characters,9,behavior,text,text,NULLABLE,
+01_TABLE_COLUMNS,attendance_records,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,attendance_records,2,event_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,attendance_records,3,member_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,attendance_records,4,attendance_date,date,date,NOT NULL,CURRENT_DATE
+01_TABLE_COLUMNS,attendance_records,5,checked_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,chat_rooms,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,chat_rooms,2,name,text,text,NOT NULL,'VIP 이벤트 혜택방'::text
+01_TABLE_COLUMNS,chat_rooms,3,description,text,text,NULLABLE,
+01_TABLE_COLUMNS,chat_rooms,4,is_active,boolean,bool,NOT NULL,true
+01_TABLE_COLUMNS,chat_rooms,5,created_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,event_entries,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,event_entries,2,event_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,event_entries,3,member_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,event_entries,4,answer,text,text,NULLABLE,
+01_TABLE_COLUMNS,event_entries,5,is_correct,boolean,bool,NULLABLE,
+01_TABLE_COLUMNS,event_entries,6,joined_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,event_entries,7,result_text,text,text,NULLABLE,
+01_TABLE_COLUMNS,event_entries,8,submitted_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,event_game_secrets,1,event_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,event_game_secrets,2,secret_answer,text,text,NULLABLE,
+01_TABLE_COLUMNS,event_game_secrets,3,created_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,event_quiz_bank,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,event_quiz_bank,2,question,text,text,NOT NULL,
+01_TABLE_COLUMNS,event_quiz_bank,3,option_1,text,text,NOT NULL,
+01_TABLE_COLUMNS,event_quiz_bank,4,option_2,text,text,NOT NULL,
+01_TABLE_COLUMNS,event_quiz_bank,5,option_3,text,text,NOT NULL,
+01_TABLE_COLUMNS,event_quiz_bank,6,option_4,text,text,NOT NULL,
+01_TABLE_COLUMNS,event_quiz_bank,7,correct_option,integer,int4,NOT NULL,
+01_TABLE_COLUMNS,event_quiz_bank,8,active,boolean,bool,NOT NULL,true
+01_TABLE_COLUMNS,event_quiz_bank,9,created_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,event_winners,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,event_winners,2,event_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,event_winners,3,member_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,event_winners,4,rank,integer,int4,NOT NULL,1
+01_TABLE_COLUMNS,event_winners,5,selected_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,events,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,events,10,quiz_question,text,text,NULLABLE,
+01_TABLE_COLUMNS,events,11,quiz_answer,text,text,NULLABLE,
+01_TABLE_COLUMNS,events,12,starts_at,timestamp with time zone,timestamptz,NULLABLE,
+01_TABLE_COLUMNS,events,13,ends_at,timestamp with time zone,timestamptz,NULLABLE,
+01_TABLE_COLUMNS,events,14,created_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,events,15,completed_at,timestamp with time zone,timestamptz,NULLABLE,
+01_TABLE_COLUMNS,events,16,group_message_id,uuid,uuid,NULLABLE,
+01_TABLE_COLUMNS,events,17,schedule_date,date,date,NULLABLE,
+01_TABLE_COLUMNS,events,18,round_number,integer,int4,NULLABLE,
+01_TABLE_COLUMNS,events,19,auto_event,boolean,bool,NOT NULL,false
+01_TABLE_COLUMNS,events,2,room_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,events,3,created_by,uuid,uuid,NULLABLE,
+01_TABLE_COLUMNS,events,4,title,text,text,NOT NULL,
+01_TABLE_COLUMNS,events,5,description,text,text,NULLABLE,
+01_TABLE_COLUMNS,events,6,prize,text,text,NULLABLE,
+01_TABLE_COLUMNS,events,7,event_type,text,text,NOT NULL,
+01_TABLE_COLUMNS,events,8,status,text,text,NOT NULL,'draft'::text
+01_TABLE_COLUMNS,events,9,winner_count,integer,int4,NOT NULL,1
+01_TABLE_COLUMNS,group_messages,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,group_messages,2,room_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,group_messages,3,member_id,uuid,uuid,NULLABLE,
+01_TABLE_COLUMNS,group_messages,4,message_type,text,text,NOT NULL,'text'::text
+01_TABLE_COLUMNS,group_messages,5,content,text,text,NULLABLE,
+01_TABLE_COLUMNS,group_messages,6,is_deleted,boolean,bool,NOT NULL,false
+01_TABLE_COLUMNS,group_messages,7,created_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,market_sim_cache,1,cache_key,text,text,NOT NULL,
+01_TABLE_COLUMNS,market_sim_cache,2,payload,jsonb,jsonb,NOT NULL,
+01_TABLE_COLUMNS,market_sim_cache,3,fetched_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,member_notes,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,member_notes,2,member_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,member_notes,3,operator_id,uuid,uuid,NULLABLE,
+01_TABLE_COLUMNS,member_notes,4,content,text,text,NOT NULL,
+01_TABLE_COLUMNS,member_notes,5,created_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,members,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,members,10,muted_until,timestamp with time zone,timestamptz,NULLABLE,
+01_TABLE_COLUMNS,members,11,ban_reason,text,text,NULLABLE,
+01_TABLE_COLUMNS,members,12,left_at,timestamp with time zone,timestamptz,NULLABLE,
+01_TABLE_COLUMNS,members,2,nickname,text,text,NOT NULL,
+01_TABLE_COLUMNS,members,3,password_hash,text,text,NOT NULL,
+01_TABLE_COLUMNS,members,4,role,text,text,NOT NULL,'member'::text
+01_TABLE_COLUMNS,members,5,status,text,text,NOT NULL,'pending'::text
+01_TABLE_COLUMNS,members,6,created_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,members,7,approved_at,timestamp with time zone,timestamptz,NULLABLE,
+01_TABLE_COLUMNS,members,8,last_seen_at,timestamp with time zone,timestamptz,NULLABLE,
+01_TABLE_COLUMNS,members,9,is_muted,boolean,bool,NOT NULL,false
+01_TABLE_COLUMNS,moderation_logs,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,moderation_logs,2,target_member_id,uuid,uuid,NULLABLE,
+01_TABLE_COLUMNS,moderation_logs,3,operator_id,uuid,uuid,NULLABLE,
+01_TABLE_COLUMNS,moderation_logs,4,action,text,text,NOT NULL,
+01_TABLE_COLUMNS,moderation_logs,5,reason,text,text,NULLABLE,
+01_TABLE_COLUMNS,moderation_logs,6,created_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,private_chats,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,private_chats,2,member_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,private_chats,3,operator_id,uuid,uuid,NULLABLE,
+01_TABLE_COLUMNS,private_chats,4,status,text,text,NOT NULL,'open'::text
+01_TABLE_COLUMNS,private_chats,5,created_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,private_chats,6,updated_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,private_messages,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,private_messages,2,chat_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,private_messages,3,sender_id,uuid,uuid,NULLABLE,
+01_TABLE_COLUMNS,private_messages,4,message_type,text,text,NOT NULL,'text'::text
+01_TABLE_COLUMNS,private_messages,5,content,text,text,NOT NULL,
+01_TABLE_COLUMNS,private_messages,6,is_deleted,boolean,bool,NOT NULL,false
+01_TABLE_COLUMNS,private_messages,7,is_read,boolean,bool,NOT NULL,false
+01_TABLE_COLUMNS,private_messages,8,created_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,profiles,1,id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,profiles,2,nickname,text,text,NOT NULL,
+01_TABLE_COLUMNS,profiles,3,real_name,text,text,NOT NULL,
+01_TABLE_COLUMNS,profiles,4,approval_status,text,text,NOT NULL,'pending'::text
+01_TABLE_COLUMNS,profiles,5,created_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,profiles,6,avatar,text,text,NOT NULL,'vip_01'::text
+01_TABLE_COLUMNS,profiles,7,role,text,text,NOT NULL,'member'::text
+01_TABLE_COLUMNS,profiles,8,show_in_admin_chat,boolean,bool,NOT NULL,true
+01_TABLE_COLUMNS,push_subscriptions,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,push_subscriptions,2,user_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,push_subscriptions,3,endpoint,text,text,NOT NULL,
+01_TABLE_COLUMNS,push_subscriptions,4,p256dh,text,text,NOT NULL,
+01_TABLE_COLUMNS,push_subscriptions,5,auth,text,text,NOT NULL,
+01_TABLE_COLUMNS,push_subscriptions,6,user_agent,text,text,NULLABLE,
+01_TABLE_COLUMNS,push_subscriptions,7,created_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,push_subscriptions,8,updated_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,room_chat_settings,1,room_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,room_chat_settings,2,is_frozen,boolean,bool,NOT NULL,false
+01_TABLE_COLUMNS,room_chat_settings,3,updated_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,room_chat_settings,4,updated_by,uuid,uuid,NULLABLE,
+01_TABLE_COLUMNS,room_members,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,room_members,2,room_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,room_members,3,member_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,room_members,4,joined_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,room_members,5,is_muted,boolean,bool,NOT NULL,false
+01_TABLE_COLUMNS,room_restrictions,1,id,uuid,uuid,NOT NULL,gen_random_uuid()
+01_TABLE_COLUMNS,room_restrictions,2,room_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,room_restrictions,3,member_id,uuid,uuid,NOT NULL,
+01_TABLE_COLUMNS,room_restrictions,4,restriction_type,text,text,NOT NULL,
+01_TABLE_COLUMNS,room_restrictions,5,reason,text,text,NULLABLE,
+01_TABLE_COLUMNS,room_restrictions,6,created_by,uuid,uuid,NULLABLE,
+01_TABLE_COLUMNS,room_restrictions,7,created_at,timestamp with time zone,timestamptz,NOT NULL,now()
+01_TABLE_COLUMNS,room_restrictions,8,expires_at,timestamp with time zone,timestamptz,NULLABLE,
+02_FUNCTIONS_RPC,admin_delete_group_message,18415,target_message_id uuid,void,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.admin_delete_group_message(target_message_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if not public.is_current_user_admin() then
+    raise exception '관리자만 메시지를 삭제할 수 있습니다.';
+  end if;
+
+  delete from public.group_messages
+  where id = target_message_id;
+end;
+$function$
+"
+02_FUNCTIONS_RPC,admin_delete_private_message,18416,target_message_id uuid,void,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.admin_delete_private_message(target_message_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if not public.is_current_user_admin() then
+    raise exception '관리자만 메시지를 삭제할 수 있습니다.';
+  end if;
+
+  delete from public.private_messages
+  where id = target_message_id;
+end;
+$function$
+"
+02_FUNCTIONS_RPC,admin_get_or_create_private_chat,18215,target_member_id uuid,uuid,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.admin_get_or_create_private_chat(target_member_id uuid)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  result_chat_id uuid;
+begin
+  -- 관리자 확인
+  if not exists (
+    select 1
+    from public.profiles
+    where id = auth.uid()
+      and role = 'admin'
+      and approval_status = 'approved'
+  ) then
+    raise exception '관리자만 사용할 수 있습니다.';
+  end if;
+
+  -- 선택한 회원 확인
+  if not exists (
+    select 1
+    from public.profiles
+    where id = target_member_id
+      and approval_status = 'approved'
+      and show_in_admin_chat = true
+      and coalesce(role, 'member') <> 'admin'
+  ) then
+    raise exception '사용할 수 없는 회원입니다.';
+  end if;
+
+  -- 기존 상담방 확인
+  select id
+  into result_chat_id
+  from public.private_chats
+  where member_id = target_member_id
+  limit 1;
+
+  -- 기존 상담방이 있으면 다시 열기
+  if result_chat_id is not null then
+    update public.private_chats
+    set
+      operator_id = auth.uid(),
+      status = 'open',
+      updated_at = now()
+    where id = result_chat_id;
+
+    return result_chat_id;
+  end if;
+
+  -- members 테이블에도 회원이 존재하도록 보장
+  insert into public.members (
+    id,
+    nickname,
+    password_hash,
+    role,
+    status,
+    approved_at
+  )
+  select
+    id,
+    nickname,
+    'SUPABASE_AUTH',
+    'member',
+    'approved',
+    now()
+  from public.profiles
+  where id = target_member_id
+  on conflict (id) do update
+  set
+    nickname = excluded.nickname,
+    status = 'approved';
+
+  -- 새 상담방 생성
+  insert into public.private_chats (
+    member_id,
+    operator_id,
+    status
+  )
+  values (
+    target_member_id,
+    auth.uid(),
+    'open'
+  )
+  returning id into result_chat_id;
+
+  return result_chat_id;
+end;
+$function$
+"
+02_FUNCTIONS_RPC,admin_kick_member,18417,target_member_id uuid,void,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.admin_kick_member(target_member_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if not public.is_current_user_admin() then
+    raise exception '관리자만 회원을 퇴장시킬 수 있습니다.';
+  end if;
+
+  if target_member_id = auth.uid() then
+    raise exception '관리자 본인은 퇴장시킬 수 없습니다.';
+  end if;
+
+  if exists (
+    select 1 from public.profiles
+    where id = target_member_id and role = 'admin'
+  ) then
+    raise exception '다른 관리자는 퇴장시킬 수 없습니다.';
+  end if;
+
+  update public.profiles
+  set approval_status = 'rejected'
+  where id = target_member_id;
+
+  update public.members
+  set status = 'rejected'
+  where id = target_member_id;
+end;
+$function$
+"
+02_FUNCTIONS_RPC,announce_event_winner_to_group,18407,,trigger,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.announce_event_winner_to_group()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_event public.events%rowtype;
+  v_winner_name text;
+  v_admin_id uuid;
+  v_game_name text;
+begin
+  select * into v_event
+  from public.events
+  where id = new.event_id;
+
+  if not found then
+    return new;
+  end if;
+
+  select nickname into v_winner_name
+  from public.profiles
+  where id = new.member_id;
+
+  select id into v_admin_id
+  from public.profiles
+  where role = 'admin'
+    and approval_status = 'approved'
+  order by created_at asc
+  limit 1;
+
+  if v_admin_id is null then
+    return new;
+  end if;
+
+  v_game_name := public.event_type_korean(v_event.event_type);
+
+  insert into public.group_messages(
+    room_id,
+    member_id,
+    message_type,
+    content,
+    is_deleted,
+    created_at
+  )
+  values (
+    v_event.room_id,
+    v_admin_id,
+    'text',
+    '🎉 축하드립니다!' || E'\n\n' ||
+    '이번 ' || v_game_name || ' 이벤트 당첨자는' || E'\n' ||
+    '🏆 ' || coalesce(v_winner_name, 'VIP 회원') || ' 님입니다!' || E'\n\n' ||
+    '🎁 상품은 1:1 문의로 즉시 지급됩니다.' || E'\n' ||
+    '당첨을 진심으로 축하드립니다! ✨',
+    false,
+    now()
+  );
+
+  return new;
+end;
+$function$
+"
+02_FUNCTIONS_RPC,create_daily_auto_events,18287,target_date date,void,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.create_daily_auto_events(target_date date DEFAULT ((now() AT TIME ZONE 'Asia/Seoul'::text))::date)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+
+  room_uuid uuid :=
+    '0a495a02-bcb8-4e38-b3ef-4e7059c2a883';
+
+  i integer;
+
+  event_start timestamp;
+  event_end timestamp;
+
+  selected_type text;
+  selected_title text;
+  selected_description text;
+
+  created_event_id uuid;
+
+begin
+
+  for i in 0..19 loop
+
+    event_start :=
+      target_date::timestamp
+      + time '11:00'
+      + (interval '435 minutes' * i / 19.0);
+
+    event_end :=
+      event_start + interval '15 minutes';
+
+
+    case (i % 7)
+
+      when 0 then
+
+        selected_type := 'gift_box';
+
+        selected_title :=
+          '🎁 랜덤 선물상자';
+
+        selected_description :=
+          '4개의 선물상자 중 하나를 선택하세요. 당첨 상자를 선택한 회원이 여러 명이면 그중 1명을 무작위로 선정합니다.';
+
+
+      when 1 then
+
+        selected_type := 'number';
+
+        selected_title :=
+          '🎯 숫자 맞히기';
+
+        selected_description :=
+          '1부터 100까지 숫자 하나를 선택하세요. 정답자가 여러 명이면 1명을 무작위 선정하며, 정답자가 없으면 가장 가까운 숫자를 선택한 회원 중 1명을 선정합니다.';
+
+
+      when 2 then
+
+        selected_type := 'roulette';
+
+        selected_title :=
+          '🎰 행운의 룰렛';
+
+        selected_description :=
+          '룰렛을 돌려 이벤트에 응모하세요. 회차 종료 후 실제 참여자 중 1명을 서버에서 무작위 선정합니다.';
+
+
+      when 3 then
+
+        selected_type := 'first_come';
+
+        selected_title :=
+          '⚡ 선착순 미션';
+
+        selected_description :=
+          '이벤트 시작 후 가장 먼저 정상 접수된 회원 1명이 즉시 당첨됩니다. 서버 접수시간을 기준으로 판정합니다.';
+
+
+      when 4 then
+
+        selected_type := 'quiz';
+
+        selected_title :=
+          '🧩 오늘의 퀴즈';
+
+        selected_description :=
+          '4개의 보기 중 정답 하나를 선택하세요. 정답자가 여러 명이면 정답자 중 1명을 무작위로 선정합니다.';
+
+
+      when 5 then
+
+        selected_type := 'draw';
+
+        selected_title :=
+          '🎟️ 자동 추첨';
+
+        selected_description :=
+          '한 번 응모하면 참여 완료됩니다. 회차 종료 후 실제 응모자 중 1명을 무작위로 선정합니다.';
+
+
+      else
+
+        selected_type := 'attendance';
+
+        selected_title :=
+          '📅 누적 출석';
+
+        selected_description :=
+          '출석 버튼을 눌러 오늘의 출석 기록을 남기세요. 해당 회차 출석자 중 1명을 무작위로 선정합니다.';
+
+    end case;
+
+
+    insert into public.events (
+      room_id,
+      created_by,
+      title,
+      description,
+      prize,
+      event_type,
+      status,
+      winner_count,
+      starts_at,
+      ends_at,
+      schedule_date,
+      round_number,
+      auto_event
+    )
+
+    values (
+      room_uuid,
+      null,
+      selected_title,
+      selected_description,
+      'VIP EVENT 당첨',
+      selected_type,
+      'scheduled',
+      1,
+
+      event_start at time zone 'Asia/Seoul',
+      event_end at time zone 'Asia/Seoul',
+
+      target_date,
+      i + 1,
+      true
+    )
+
+    on conflict do nothing;
+
+  end loop;
+
+
+  -- 오늘 생성되어 있는 모든 자동 이벤트에
+  -- 게임 설정을 붙임.
+  for created_event_id in
+
+    select id
+    from public.events
+
+    where auto_event = true
+      and schedule_date = target_date
+
+  loop
+
+    perform public.setup_event_game(
+      created_event_id
+    );
+
+  end loop;
+
+end;
+$function$
+"
+02_FUNCTIONS_RPC,event_type_korean,18406,t text,text,sql,SECURITY INVOKER,"CREATE OR REPLACE FUNCTION public.event_type_korean(t text)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE
+AS $function$
+  select case t
+    when 'gift_box' then '랜덤 선물상자'
+    when 'number' then '숫자 맞히기'
+    when 'roulette' then '룰렛'
+    when 'first_come' then '선착순'
+    when 'quiz' then '퀴즈'
+    when 'draw' then '자동 추첨'
+    when 'attendance' then '출석'
+    else coalesce(t, '이벤트')
+  end;
+$function$
+"
+02_FUNCTIONS_RPC,finish_auto_event,18289,target_event_id uuid,void,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.finish_auto_event(target_event_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+
+  target_event public.events%rowtype;
+
+  selected_member uuid;
+
+  secret_value text;
+
+  minimum_difference integer;
+
+begin
+
+  select *
+  into target_event
+
+  from public.events
+
+  where id = target_event_id
+
+  for update;
+
+
+  if not found then
+    return;
+  end if;
+
+
+  -- 이미 완료된 이벤트는 절대 재추첨하지 않음
+  if target_event.status = 'completed' then
+    return;
+  end if;
+
+
+  -- 이미 당첨자가 존재한다면
+  -- 당첨자를 바꾸지 않고 완료만 처리
+  if exists (
+
+    select 1
+
+    from public.event_winners
+
+    where event_id =
+      target_event_id
+
+  ) then
+
+    update public.events
+
+    set
+      status = 'completed',
+      completed_at =
+        coalesce(completed_at, now())
+
+    where id =
+      target_event_id;
+
+    return;
+
+  end if;
+
+
+  perform public.setup_event_game(
+    target_event_id
+  );
+
+
+  select secret_answer
+  into secret_value
+
+  from public.event_game_secrets
+
+  where event_id =
+    target_event_id;
+
+
+  -- =====================================================
+  -- 선물상자
+  -- 당첨 상자를 선택한 회원 중 랜덤 1명
+  -- =====================================================
+
+  if target_event.event_type = 'gift_box' then
+
+    select ee.member_id
+    into selected_member
+
+    from public.event_entries ee
+
+    where ee.event_id =
+      target_event_id
+
+      and ee.answer =
+        secret_value
+
+    order by random()
+
+    limit 1;
+
+
+  -- =====================================================
+  -- 숫자 맞히기
+  -- 정확한 정답자 우선
+  -- =====================================================
+
+  elsif target_event.event_type = 'number' then
+
+    select ee.member_id
+    into selected_member
+
+    from public.event_entries ee
+
+    where ee.event_id =
+      target_event_id
+
+      and ee.answer::integer =
+        secret_value::integer
+
+    order by random()
+
+    limit 1;
+
+
+    -- 정답자가 없으면 가장 가까운 숫자
+    if selected_member is null then
+
+      select
+        min(
+          abs(
+            ee.answer::integer -
+            secret_value::integer
+          )
+        )
+
+      into minimum_difference
+
+      from public.event_entries ee
+
+      where ee.event_id =
+        target_event_id;
+
+
+      if minimum_difference is not null then
+
+        select ee.member_id
+        into selected_member
+
+        from public.event_entries ee
+
+        where ee.event_id =
+          target_event_id
+
+          and abs(
+            ee.answer::integer -
+            secret_value::integer
+          ) =
+          minimum_difference
+
+        order by random()
+
+        limit 1;
+
+      end if;
+
+    end if;
+
+
+  -- =====================================================
+  -- 퀴즈
+  -- 정답자 중 랜덤 1명
+  -- =====================================================
+
+  elsif target_event.event_type = 'quiz' then
+
+    select ee.member_id
+    into selected_member
+
+    from public.event_entries ee
+
+    where ee.event_id =
+      target_event_id
+
+      and ee.is_correct = true
+
+    order by random()
+
+    limit 1;
+
+
+  -- =====================================================
+  -- 선착순
+  -- 정상적으로는 참여 순간 이미 결정됨.
+  -- 혹시 기존 데이터가 있으면 가장 빠른 접수자 사용.
+  -- =====================================================
+
+  elsif target_event.event_type = 'first_come' then
+
+    select ee.member_id
+    into selected_member
+
+    from public.event_entries ee
+
+    where ee.event_id =
+      target_event_id
+
+    order by
+      ee.submitted_at asc,
+      ee.id asc
+
+    limit 1;
+
+
+  -- =====================================================
+  -- 룰렛 / 자동추첨 / 출석
+  -- 실제 참여자 중 랜덤 1명
+  -- =====================================================
+
+  else
+
+    select ee.member_id
+    into selected_member
+
+    from public.event_entries ee
+
+    where ee.event_id =
+      target_event_id
+
+    order by random()
+
+    limit 1;
+
+  end if;
+
+
+  -- 당첨자 저장
+  if selected_member is not null then
+
+    insert into public.event_winners (
+      event_id,
+      member_id,
+      rank
+    )
+
+    values (
+      target_event_id,
+      selected_member,
+      1
+    )
+
+    on conflict (event_id)
+    do nothing;
+
+  end if;
+
+
+  -- 완료 처리
+  update public.events
+
+  set
+    status = 'completed',
+    completed_at = now()
+
+  where id =
+    target_event_id;
+
+end;
+$function$
+"
+02_FUNCTIONS_RPC,get_admin_member_list,18214,,"TABLE(member_id uuid, nickname text, avatar text, chat_id uuid, chat_status text, updated_at timestamp with time zone)",sql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.get_admin_member_list()
+ RETURNS TABLE(member_id uuid, nickname text, avatar text, chat_id uuid, chat_status text, updated_at timestamp with time zone)
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select
+    p.id as member_id,
+    p.nickname,
+    p.avatar,
+    pc.id as chat_id,
+    pc.status as chat_status,
+    pc.updated_at
+  from public.profiles p
+  left join public.private_chats pc
+    on pc.member_id = p.id
+  where p.approval_status = 'approved'
+    and coalesce(p.role, 'member') <> 'admin'
+    and p.show_in_admin_chat = true
+    and exists (
+      select 1
+      from public.profiles me
+      where me.id = auth.uid()
+        and me.role = 'admin'
+        and me.approval_status = 'approved'
+    )
+  order by
+    case when pc.updated_at is null then 1 else 0 end,
+    pc.updated_at desc nulls last,
+    p.nickname asc;
+$function$
+"
+02_FUNCTIONS_RPC,get_admin_private_chats,18203,,"TABLE(chat_id uuid, member_id uuid, nickname text, avatar text, status text, created_at timestamp with time zone, updated_at timestamp with time zone)",sql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.get_admin_private_chats()
+ RETURNS TABLE(chat_id uuid, member_id uuid, nickname text, avatar text, status text, created_at timestamp with time zone, updated_at timestamp with time zone)
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select
+    pc.id as chat_id,
+    pc.member_id,
+    p.nickname,
+    p.avatar,
+    pc.status,
+    pc.created_at,
+    pc.updated_at
+  from public.private_chats pc
+  join public.profiles p
+    on p.id = pc.member_id
+  where pc.operator_id = auth.uid()
+    and pc.status = 'open'
+    and exists (
+      select 1
+      from public.profiles me
+      where me.id = auth.uid()
+        and me.role = 'admin'
+        and me.approval_status = 'approved'
+    )
+  order by pc.updated_at desc;
+$function$
+"
+02_FUNCTIONS_RPC,get_admin_private_unread_counts,18204,,"TABLE(chat_id uuid, unread_count bigint)",sql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.get_admin_private_unread_counts()
+ RETURNS TABLE(chat_id uuid, unread_count bigint)
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select
+    pc.id as chat_id,
+    count(pm.id) as unread_count
+  from public.private_chats pc
+  left join public.private_messages pm
+    on pm.chat_id = pc.id
+    and pm.sender_id = pc.member_id
+    and pm.is_read = false
+    and pm.is_deleted = false
+  where pc.operator_id = auth.uid()
+    and pc.status = 'open'
+    and exists (
+      select 1
+      from public.profiles me
+      where me.id = auth.uid()
+        and me.role = 'admin'
+        and me.approval_status = 'approved'
+    )
+  group by pc.id;
+$function$
+"
+02_FUNCTIONS_RPC,get_auto_events,18381,,"TABLE(event_id uuid, title text, description text, prize text, event_type text, status text, starts_at timestamp with time zone, ends_at timestamp with time zone, round_number integer, participated boolean, winner_nickname text, my_answer text, my_result_text text, quiz_question text, quiz_option_1 text, quiz_option_2 text, quiz_option_3 text, quiz_option_4 text, revealed_answer text)",sql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.get_auto_events()
+ RETURNS TABLE(event_id uuid, title text, description text, prize text, event_type text, status text, starts_at timestamp with time zone, ends_at timestamp with time zone, round_number integer, participated boolean, winner_nickname text, my_answer text, my_result_text text, quiz_question text, quiz_option_1 text, quiz_option_2 text, quiz_option_3 text, quiz_option_4 text, revealed_answer text)
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+
+  select
+
+    e.id,
+
+    e.title,
+    e.description,
+    e.prize,
+
+    e.event_type,
+    e.status,
+
+    e.starts_at,
+    e.ends_at,
+
+    e.round_number,
+
+    exists (
+      select 1
+      from public.event_entries ee
+      where ee.event_id = e.id
+        and ee.member_id = auth.uid()
+    ) as participated,
+
+    (
+      select p.nickname
+      from public.event_winners ew
+      join public.profiles p
+        on p.id = ew.member_id
+      where ew.event_id = e.id
+      limit 1
+    ) as winner_nickname,
+
+    (
+      select ee.answer
+      from public.event_entries ee
+      where ee.event_id = e.id
+        and ee.member_id = auth.uid()
+      limit 1
+    ) as my_answer,
+
+    (
+      select ee.result_text
+      from public.event_entries ee
+      where ee.event_id = e.id
+        and ee.member_id = auth.uid()
+      limit 1
+    ) as my_result_text,
+
+    case
+      when e.event_type = 'quiz'
+      then q.question
+      else null
+    end as quiz_question,
+
+    case
+      when e.event_type = 'quiz'
+      then q.option_1
+      else null
+    end as quiz_option_1,
+
+    case
+      when e.event_type = 'quiz'
+      then q.option_2
+      else null
+    end as quiz_option_2,
+
+    case
+      when e.event_type = 'quiz'
+      then q.option_3
+      else null
+    end as quiz_option_3,
+
+    case
+      when e.event_type = 'quiz'
+      then q.option_4
+      else null
+    end as quiz_option_4,
+
+    case
+
+      when e.status <> 'completed'
+      then null
+
+      when e.event_type = 'number'
+      then s.secret_answer
+
+      when e.event_type = 'gift_box'
+      then s.secret_answer
+
+      when e.event_type = 'quiz'
+      then q.correct_option::text
+
+      else null
+
+    end as revealed_answer
+
+  from public.events e
+
+  left join public.event_game_secrets s
+    on s.event_id = e.id
+
+  /*
+    핵심 수정:
+    quiz 이벤트일 때만 secret_answer를 UUID로 변환한다.
+    선물상자/숫자의 ""1"", ""4"", ""57"" 같은 값은
+    절대로 UUID 변환을 시도하지 않는다.
+  */
+  left join public.event_quiz_bank q
+    on e.event_type = 'quiz'
+    and s.secret_answer is not null
+    and q.id::text = s.secret_answer
+
+  where e.auto_event = true
+    and e.schedule_date =
+      (now() at time zone 'Asia/Seoul')::date
+
+  order by e.round_number;
+
+$function$
+"
+02_FUNCTIONS_RPC,get_chat_avatars,18005,,"TABLE(id uuid, avatar text)",sql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.get_chat_avatars()
+ RETURNS TABLE(id uuid, avatar text)
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  -- 승인된 일반 회원 프로필
+  select
+    p.id,
+    p.avatar
+  from public.profiles p
+  where p.approval_status = 'approved'
+    and exists (
+      select 1
+      from public.profiles me
+      where me.id = auth.uid()
+        and me.approval_status = 'approved'
+    )
+
+  union all
+
+  -- 활성화된 AI 캐릭터 프로필
+  select
+    a.id,
+    a.avatar
+  from public.ai_characters a
+  where a.is_active = true
+    and exists (
+      select 1
+      from public.profiles me
+      where me.id = auth.uid()
+        and me.approval_status = 'approved'
+    );
+$function$
+"
+02_FUNCTIONS_RPC,get_group_chat_state,18402,target_room_id uuid,boolean,sql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.get_group_chat_state(target_room_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select coalesce((select is_frozen from public.room_chat_settings where room_id = target_room_id), false);
+$function$
+"
+02_FUNCTIONS_RPC,get_my_private_unread_count,18207,,bigint,sql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.get_my_private_unread_count()
+ RETURNS bigint
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select count(*)
+  from public.private_messages pm
+  join public.private_chats pc
+    on pc.id = pm.chat_id
+  where pc.member_id = auth.uid()
+    and pm.sender_id <> auth.uid()
+    and pm.is_read = false
+    and pm.is_deleted = false;
+$function$
+"
+02_FUNCTIONS_RPC,get_or_create_admin_chat,18174,,uuid,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.get_or_create_admin_chat()
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  admin_id uuid;
+  chat_id uuid;
+begin
+  -- 승인된 관리자 찾기
+  select id into admin_id
+  from public.profiles
+  where role = 'admin'
+    and approval_status = 'approved'
+  limit 1;
+
+  if admin_id is null then
+    raise exception '관리자 계정을 찾을 수 없습니다.';
+  end if;
+
+  -- 관리자가 자기 자신과 상담방을 만드는 것은 막기
+  if auth.uid() = admin_id then
+    raise exception '관리자 계정입니다.';
+  end if;
+
+  -- 승인된 회원만 사용 가능
+  if not exists (
+    select 1
+    from public.profiles
+    where id = auth.uid()
+      and approval_status = 'approved'
+  ) then
+    raise exception '승인된 회원만 이용할 수 있습니다.';
+  end if;
+
+  -- 기존 상담방 찾기
+  select id into chat_id
+  from public.private_chats
+  where member_id = auth.uid()
+    and operator_id = admin_id
+  limit 1;
+
+  -- 없으면 새 상담방 생성
+  if chat_id is null then
+    insert into public.private_chats (
+      member_id,
+      operator_id,
+      status
+    )
+    values (
+      auth.uid(),
+      admin_id,
+      'open'
+    )
+    returning id into chat_id;
+  end if;
+
+  return chat_id;
+end;
+$function$
+"
+02_FUNCTIONS_RPC,handle_new_user,17981,,trigger,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.handle_new_user()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  insert into public.profiles (
+    id,
+    nickname,
+    real_name,
+    approval_status
+  )
+  values (
+    new.id,
+    new.raw_user_meta_data ->> 'nickname',
+    new.raw_user_meta_data ->> 'real_name',
+    'pending'
+  );
+
+  return new;
+end;
+$function$
+"
+02_FUNCTIONS_RPC,is_current_user_admin,18414,,boolean,sql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.is_current_user_admin()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1
+    from public.profiles
+    where id = auth.uid()
+      and role = 'admin'
+      and approval_status = 'approved'
+  );
+$function$
+"
+02_FUNCTIONS_RPC,join_auto_event,18288,"target_event_id uuid, submitted_answer text",jsonb,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.join_auto_event(target_event_id uuid, submitted_answer text DEFAULT NULL::text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+
+  target_event public.events%rowtype;
+
+  secret_value text;
+
+  quiz_correct integer;
+
+  submitted_number integer;
+
+  submitted_box integer;
+
+begin
+
+  -- 로그인 확인
+  if auth.uid() is null then
+
+    raise exception
+      '로그인이 필요합니다.';
+
+  end if;
+
+
+  -- 승인 회원 확인
+  if not exists (
+
+    select 1
+
+    from public.profiles
+
+    where id = auth.uid()
+      and approval_status = 'approved'
+
+  ) then
+
+    raise exception
+      '승인된 회원만 참여할 수 있습니다.';
+
+  end if;
+
+
+  -- 이벤트 잠금
+  select *
+  into target_event
+
+  from public.events
+
+  where id = target_event_id
+
+  for update;
+
+
+  if not found then
+
+    raise exception
+      '이벤트를 찾을 수 없습니다.';
+
+  end if;
+
+
+  -- 서버시간 기준
+  if now() < target_event.starts_at then
+
+    return jsonb_build_object(
+      'success', false,
+      'message',
+      '아직 시작되지 않은 이벤트입니다.'
+    );
+
+  end if;
+
+
+  if now() >= target_event.ends_at then
+
+    return jsonb_build_object(
+      'success', false,
+      'message',
+      '이미 종료된 이벤트입니다.'
+    );
+
+  end if;
+
+
+  if target_event.status = 'completed' then
+
+    return jsonb_build_object(
+      'success', false,
+      'message',
+      '이미 종료된 이벤트입니다.'
+    );
+
+  end if;
+
+
+  -- 중복 참여 확인
+  if exists (
+
+    select 1
+
+    from public.event_entries
+
+    where event_id = target_event_id
+      and member_id = auth.uid()
+
+  ) then
+
+    return jsonb_build_object(
+      'success', false,
+      'message',
+      '이미 참여한 이벤트입니다.'
+    );
+
+  end if;
+
+
+  -- 게임 설정 보장
+  perform public.setup_event_game(
+    target_event_id
+  );
+
+
+  select secret_answer
+  into secret_value
+
+  from public.event_game_secrets
+
+  where event_id = target_event_id;
+
+
+  -- =====================================================
+  -- 숫자 맞히기
+  -- =====================================================
+
+  if target_event.event_type = 'number' then
+
+    begin
+
+      submitted_number :=
+        trim(submitted_answer)::integer;
+
+    exception when others then
+
+      return jsonb_build_object(
+        'success', false,
+        'message',
+        '1부터 100까지 숫자를 선택해주세요.'
+      );
+
+    end;
+
+
+    if submitted_number < 1
+       or submitted_number > 100 then
+
+      return jsonb_build_object(
+        'success', false,
+        'message',
+        '숫자는 1부터 100까지만 선택할 수 있습니다.'
+      );
+
+    end if;
+
+
+    insert into public.event_entries (
+      event_id,
+      member_id,
+      answer,
+      is_correct,
+      result_text,
+      submitted_at
+    )
+
+    values (
+      target_event_id,
+      auth.uid(),
+      submitted_number::text,
+
+      submitted_number::text =
+        secret_value,
+
+      '숫자 선택 완료',
+      now()
+    );
+
+
+    return jsonb_build_object(
+      'success', true,
+      'message',
+      submitted_number ||
+      '번으로 참여가 완료되었습니다.'
+    );
+
+
+  -- =====================================================
+  -- 선물상자
+  -- =====================================================
+
+  elsif target_event.event_type = 'gift_box' then
+
+    begin
+
+      submitted_box :=
+        trim(submitted_answer)::integer;
+
+    exception when others then
+
+      return jsonb_build_object(
+        'success', false,
+        'message',
+        '선물상자를 선택해주세요.'
+      );
+
+    end;
+
+
+    if submitted_box < 1
+       or submitted_box > 4 then
+
+      return jsonb_build_object(
+        'success', false,
+        'message',
+        '1번부터 4번까지의 선물상자 중 하나를 선택해주세요.'
+      );
+
+    end if;
+
+
+    insert into public.event_entries (
+      event_id,
+      member_id,
+      answer,
+      is_correct,
+      result_text,
+      submitted_at
+    )
+
+    values (
+      target_event_id,
+      auth.uid(),
+      submitted_box::text,
+
+      submitted_box::text =
+        secret_value,
+
+      submitted_box ||
+        '번 선물상자 선택 완료',
+
+      now()
+    );
+
+
+    return jsonb_build_object(
+      'success', true,
+      'message',
+      submitted_box ||
+      '번 선물상자를 선택했습니다.'
+    );
+
+
+  -- =====================================================
+  -- 퀴즈
+  -- =====================================================
+
+  elsif target_event.event_type = 'quiz' then
+
+    begin
+
+      submitted_number :=
+        trim(submitted_answer)::integer;
+
+    exception when others then
+
+      return jsonb_build_object(
+        'success', false,
+        'message',
+        '퀴즈 정답을 선택해주세요.'
+      );
+
+    end;
+
+
+    if submitted_number < 1
+       or submitted_number > 4 then
+
+      return jsonb_build_object(
+        'success', false,
+        'message',
+        '보기 중 하나를 선택해주세요.'
+      );
+
+    end if;
+
+
+    select q.correct_option
+    into quiz_correct
+
+    from public.event_quiz_bank q
+
+    where q.id = secret_value::uuid;
+
+
+    insert into public.event_entries (
+      event_id,
+      member_id,
+      answer,
+      is_correct,
+      result_text,
+      submitted_at
+    )
+
+    values (
+      target_event_id,
+      auth.uid(),
+      submitted_number::text,
+
+      submitted_number =
+        quiz_correct,
+
+      case
+
+        when submitted_number =
+          quiz_correct
+
+        then '정답 제출 완료'
+
+        else '답안 제출 완료'
+
+      end,
+
+      now()
+    );
+
+
+    -- 진행 중에는 정답 여부를 바로 공개하지 않음.
+    return jsonb_build_object(
+      'success', true,
+      'message',
+      '답안 제출이 완료되었습니다. 정답과 결과는 회차 종료 후 공개됩니다.'
+    );
+
+
+  -- =====================================================
+  -- 선착순
+  -- 이벤트 row를 FOR UPDATE로 잠근 상태이므로
+  -- 동시에 눌러도 먼저 DB에 들어온 요청 1명만 당첨
+  -- =====================================================
+
+  elsif target_event.event_type = 'first_come' then
+
+
+    if exists (
+
+      select 1
+
+      from public.event_winners
+
+      where event_id =
+        target_event_id
+
+    ) then
+
+      return jsonb_build_object(
+        'success', false,
+        'message',
+        '선착순 당첨자가 이미 결정되었습니다.'
+      );
+
+    end if;
+
+
+    insert into public.event_entries (
+      event_id,
+      member_id,
+      answer,
+      is_correct,
+      result_text,
+      submitted_at
+    )
+
+    values (
+      target_event_id,
+      auth.uid(),
+      null,
+      true,
+      '선착순 1위',
+      now()
+    );
+
+
+    insert into public.event_winners (
+      event_id,
+      member_id,
+      rank
+    )
+
+    values (
+      target_event_id,
+      auth.uid(),
+      1
+    )
+
+    on conflict (event_id)
+    do nothing;
+
+
+    update public.events
+
+    set
+      status = 'completed',
+      completed_at = now()
+
+    where id = target_event_id;
+
+
+    return jsonb_build_object(
+      'success', true,
+      'winner', true,
+      'message',
+      '축하합니다! 가장 먼저 참여하여 선착순 당첨자로 선정되었습니다.'
+    );
+
+
+  -- =====================================================
+  -- 룰렛
+  -- =====================================================
+
+  elsif target_event.event_type = 'roulette' then
+
+    insert into public.event_entries (
+      event_id,
+      member_id,
+      answer,
+      is_correct,
+      result_text,
+      submitted_at
+    )
+
+    values (
+      target_event_id,
+      auth.uid(),
+      'roulette',
+      null,
+      '룰렛 참여 완료',
+      now()
+    );
+
+
+    return jsonb_build_object(
+      'success', true,
+      'message',
+      '룰렛 참여가 완료되었습니다. 회차 종료 후 참여자 중 1명이 무작위로 선정됩니다.'
+    );
+
+
+  -- =====================================================
+  -- 자동 추첨
+  -- =====================================================
+
+  elsif target_event.event_type = 'draw' then
+
+    insert into public.event_entries (
+      event_id,
+      member_id,
+      answer,
+      is_correct,
+      result_text,
+      submitted_at
+    )
+
+    values (
+      target_event_id,
+      auth.uid(),
+      null,
+      null,
+      '자동 추첨 응모 완료',
+      now()
+    );
+
+
+    return jsonb_build_object(
+      'success', true,
+      'message',
+      '응모가 완료되었습니다. 회차 종료 후 참여자 중 1명이 무작위로 선정됩니다.'
+    );
+
+
+  -- =====================================================
+  -- 출석
+  -- =====================================================
+
+  elsif target_event.event_type = 'attendance' then
+
+    insert into public.event_entries (
+      event_id,
+      member_id,
+      answer,
+      is_correct,
+      result_text,
+      submitted_at
+    )
+
+    values (
+      target_event_id,
+      auth.uid(),
+      null,
+      null,
+      '출석 완료',
+      now()
+    );
+
+
+    insert into public.attendance_records (
+      event_id,
+      member_id,
+      attendance_date
+    )
+
+    values (
+      target_event_id,
+      auth.uid(),
+      (now() at time zone 'Asia/Seoul')::date
+    )
+
+    on conflict do nothing;
+
+
+    return jsonb_build_object(
+      'success', true,
+      'message',
+      '출석이 완료되었습니다.'
+    );
+
+
+  else
+
+    return jsonb_build_object(
+      'success', false,
+      'message',
+      '지원하지 않는 이벤트입니다.'
+    );
+
+  end if;
+
+end;
+$function$
+"
+02_FUNCTIONS_RPC,mark_private_chat_read,18205,target_chat_id uuid,void,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.mark_private_chat_read(target_chat_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if not exists (
+    select 1
+    from public.private_chats pc
+    where pc.id = target_chat_id
+      and (
+        pc.member_id = auth.uid()
+        or pc.operator_id = auth.uid()
+      )
+  ) then
+    raise exception '접근할 수 없는 상담방입니다.';
+  end if;
+
+  update public.private_messages
+  set is_read = true
+  where chat_id = target_chat_id
+    and sender_id <> auth.uid()
+    and is_read = false
+    and is_deleted = false;
+end;
+$function$
+"
+02_FUNCTIONS_RPC,run_auto_event_engine,18290,,void,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.run_auto_event_engine()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+
+  korea_today date;
+
+  target record;
+
+begin
+
+  korea_today :=
+    (now() at time zone 'Asia/Seoul')::date;
+
+
+  -- 오늘 이벤트 생성 + 게임 설정
+  perform public.create_daily_auto_events(
+    korea_today
+  );
+
+
+  -- 기존 오늘 이벤트에도 설정이 빠져있으면 생성
+  for target in
+
+    select id
+
+    from public.events
+
+    where auto_event = true
+      and schedule_date =
+        korea_today
+
+  loop
+
+    perform public.setup_event_game(
+      target.id
+    );
+
+  end loop;
+
+
+  -- 시작 시간이 된 이벤트 활성화
+  update public.events
+
+  set status = 'active'
+
+  where auto_event = true
+
+    and status = 'scheduled'
+
+    and starts_at <= now()
+
+    and ends_at > now();
+
+
+  -- 종료시간이 지난 이벤트 마감
+  for target in
+
+    select id
+
+    from public.events
+
+    where auto_event = true
+
+      and status in (
+        'scheduled',
+        'active'
+      )
+
+      and ends_at <= now()
+
+  loop
+
+    perform public.finish_auto_event(
+      target.id
+    );
+
+  end loop;
+
+end;
+$function$
+"
+02_FUNCTIONS_RPC,set_group_chat_frozen,18403,"target_room_id uuid, frozen boolean",boolean,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.set_group_chat_frozen(target_room_id uuid, frozen boolean)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if not exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role = 'admin' and approval_status = 'approved'
+  ) then
+    raise exception '관리자만 변경할 수 있습니다.';
+  end if;
+
+  insert into public.room_chat_settings(room_id, is_frozen, updated_at, updated_by)
+  values(target_room_id, frozen, now(), auth.uid())
+  on conflict (room_id) do update
+  set is_frozen = excluded.is_frozen,
+      updated_at = now(),
+      updated_by = auth.uid();
+
+  return frozen;
+end;
+$function$
+"
+02_FUNCTIONS_RPC,set_my_avatar,18006,new_avatar text,void,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.set_my_avatar(new_avatar text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if new_avatar not in (
+    'vip_01',
+    'vip_02',
+    'vip_03',
+    'vip_04',
+    'vip_05',
+    'vip_06'
+  ) then
+    raise exception 'Invalid avatar';
+  end if;
+
+  update public.profiles
+  set avatar = new_avatar
+  where id = auth.uid()
+    and approval_status = 'approved';
+
+  if not found then
+    raise exception 'Approved profile not found';
+  end if;
+end;
+$function$
+"
+02_FUNCTIONS_RPC,setup_event_game,18376,target_event_id uuid,void,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.setup_event_game(target_event_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+
+  target_type text;
+
+  random_number integer;
+
+  random_box integer;
+
+  quiz_row record;
+
+begin
+
+  select event_type
+  into target_type
+  from public.events
+  where id = target_event_id;
+
+
+  if not found then
+    return;
+  end if;
+
+
+  -- 이미 설정되어 있으면 절대 다시 만들지 않음.
+  -- 즉 정답이 중간에 바뀌지 않음.
+  if exists (
+    select 1
+    from public.event_game_secrets
+    where event_id = target_event_id
+  ) then
+    return;
+  end if;
+
+
+  -- ==========================================
+  -- 숫자 맞히기
+  -- 서버에서 1~100 정답 생성
+  -- ==========================================
+
+  if target_type = 'number' then
+
+    random_number :=
+      floor(random() * 100 + 1)::integer;
+
+    insert into public.event_game_secrets (
+      event_id,
+      secret_answer
+    )
+    values (
+      target_event_id,
+      random_number::text
+    )
+
+    on conflict (event_id)
+    do nothing;
+
+
+  -- ==========================================
+  -- 랜덤 선물상자
+  -- 1~4 중 당첨 상자 지정
+  -- ==========================================
+
+  elsif target_type = 'gift_box' then
+
+    random_box :=
+      floor(random() * 4 + 1)::integer;
+
+    insert into public.event_game_secrets (
+      event_id,
+      secret_answer
+    )
+    values (
+      target_event_id,
+      random_box::text
+    )
+
+    on conflict (event_id)
+    do nothing;
+
+
+  -- ==========================================
+  -- 퀴즈
+  -- 문제은행에서 랜덤 문제 선택
+  -- secret_answer에는 문제 ID 저장
+  -- ==========================================
+
+  elsif target_type = 'quiz' then
+
+    select
+      q.id,
+      q.correct_option
+    into quiz_row
+
+    from public.event_quiz_bank q
+
+    where q.active = true
+
+    order by random()
+
+    limit 1;
+
+
+    if quiz_row.id is not null then
+
+      insert into public.event_game_secrets (
+        event_id,
+        secret_answer
+      )
+      values (
+        target_event_id,
+        quiz_row.id::text
+      )
+
+      on conflict (event_id)
+      do nothing;
+
+    end if;
+
+
+  -- ==========================================
+  -- 나머지 게임
+  -- 별도 정답은 필요 없지만
+  -- 설정 완료 표시를 위해 row 생성
+  -- ==========================================
+
+  else
+
+    insert into public.event_game_secrets (
+      event_id,
+      secret_answer
+    )
+    values (
+      target_event_id,
+      null
+    )
+
+    on conflict (event_id)
+    do nothing;
+
+  end if;
+
+end;
+$function$
+"
+02_FUNCTIONS_RPC,sync_approved_member,17988,,trigger,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.sync_approved_member()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if new.approval_status = 'approved' then
+
+    insert into public.members (
+      id,
+      nickname,
+      password_hash,
+      role,
+      status,
+      approved_at
+    )
+    values (
+      new.id,
+      new.nickname,
+      'SUPABASE_AUTH',
+      'member',
+      'approved',
+      now()
+    )
+    on conflict (id) do update
+    set
+      nickname = excluded.nickname,
+      status = 'approved',
+      approved_at = coalesce(members.approved_at, now());
+
+  end if;
+
+  return new;
+end;
+$function$
+"
+02_FUNCTIONS_RPC,touch_private_chat_on_message,18208,,trigger,plpgsql,SECURITY DEFINER,"CREATE OR REPLACE FUNCTION public.touch_private_chat_on_message()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  update public.private_chats
+  set updated_at = now()
+  where id = new.chat_id;
+
+  return new;
+end;
+$function$
+"
+03_RLS_POLICIES,public.group_messages,Approved members can read group messages,SELECT,{authenticated},"(EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = aut",,permissive=PERMISSIVE
+03_RLS_POLICIES,public.group_messages,Approved members can send group messages,INSERT,{authenticated},,"((member_id = auth.uid()) AND (EXISTS ( SELECT 1
+   FROM profiles p
+  WHERE ((p.id = auth.uid()) AND (p.approval_status = 'approved'::text)))) AND ((EXISTS ( SELECT 1
+   FROM profiles p
+  WHERE ((p.id = auth.uid()) AND (p.role = 'admin'::text) AND (p.approval_status = 'approved'::text)))) OR (((timezone('Asia/Seoul'::text, now()))::time without time zone >= '11:00:00'::time without time zone) AND ((timezone('Asia/Seoul'::text, now()))::time without time zone < '18:30:00'::time without time zone) AND (NOT COALESCE(( SELECT s.is_frozen
+   FROM room_chat_settings s
+  WHERE (s.room_id = group_messages.room_id)), false)))))",permissive=PERMISSIVE
+03_RLS_POLICIES,public.members,Approved members can view member nicknames,SELECT,{authenticated},"(EXISTS ( SELECT 1
+   FROM profiles
+  WHERE ((profiles.id = aut",,permissive=PERMISSIVE
+03_RLS_POLICIES,public.private_chats,Private chat participants can view chats,SELECT,{authenticated},((member_id = auth.uid()) OR (operator_id = auth.uid())),,permissive=PERMISSIVE
+03_RLS_POLICIES,public.private_messages,Private chat participants can read messages,SELECT,{authenticated},"(EXISTS ( SELECT 1
+   FROM private_chats pc
+  WHERE ((pc.id = p",,permissive=PERMISSIVE
+03_RLS_POLICIES,public.private_messages,Private chat participants can send messages,INSERT,{authenticated},,"((sender_id = auth.uid()) AND (EXISTS ( SELECT 1
+   FROM private_chats pc
+  WHERE ((pc.id = private_messages.chat_id) AND ((pc.member_id = auth.uid()) OR (pc.operator_id = auth.uid()))))))",permissive=PERMISSIVE
+03_RLS_POLICIES,public.profiles,Users can view own profile,SELECT,{authenticated},(auth.uid() = id),,permissive=PERMISSIVE
+03_RLS_POLICIES,public.push_subscriptions,Users can delete own push subscriptions,DELETE,{authenticated},(auth.uid() = user_id),,permissive=PERMISSIVE
+03_RLS_POLICIES,public.push_subscriptions,Users can insert own push subscriptions,INSERT,{authenticated},,(auth.uid() = user_id),permissive=PERMISSIVE
+03_RLS_POLICIES,public.push_subscriptions,Users can update own push subscriptions,UPDATE,{authenticated},(auth.uid() = user_id),(auth.uid() = user_id),permissive=PERMISSIVE
+03_RLS_POLICIES,public.push_subscriptions,Users can view own push subscriptions,SELECT,{authenticated},(auth.uid() = user_id),,permissive=PERMISSIVE
+03_RLS_POLICIES,public.room_chat_settings,Authenticated can read room chat settings,SELECT,{authenticated},true,,permissive=PERMISSIVE
+04_TRIGGERS,event_winners,trg_announce_event_winner_to_group,INSERT,AFTER,ROW,,EXECUTE FUNCTION announce_event_winner_to_group()
+04_TRIGGERS,private_messages,touch_private_chat_on_new_message,INSERT,AFTER,ROW,,EXECUTE FUNCTION touch_private_chat_on_message()
+04_TRIGGERS,profiles,sync_profile_approval,INSERT,AFTER,ROW,,EXECUTE FUNCTION sync_approved_member()
+04_TRIGGERS,profiles,sync_profile_approval,UPDATE,AFTER,ROW,,EXECUTE FUNCTION sync_approved_member()
+05_INDEXES,ai_character_memories,ai_character_memories_pkey,,,,,CREATE UNIQUE INDEX ai_character_memories_pkey ON public.ai_character_memories USING btree (id)
+05_INDEXES,ai_characters,ai_characters_nickname_key,,,,,CREATE UNIQUE INDEX ai_characters_nickname_key ON public.ai_characters USING btree (nickname)
+05_INDEXES,ai_characters,ai_characters_pkey,,,,,CREATE UNIQUE INDEX ai_characters_pkey ON public.ai_characters USING btree (id)
+05_INDEXES,attendance_records,attendance_event_member_idx,,,,,"CREATE INDEX attendance_event_member_idx ON public.attendance_records USING btree (event_id, member_id)"
+05_INDEXES,attendance_records,attendance_records_event_id_member_id_attendance_date_key,,,,,"CREATE UNIQUE INDEX attendance_records_event_id_member_id_attendance_date_key ON public.attendance_records USING btree (event_id, member_id, attendance_date)"
+05_INDEXES,attendance_records,attendance_records_pkey,,,,,CREATE UNIQUE INDEX attendance_records_pkey ON public.attendance_records USING btree (id)
+05_INDEXES,chat_rooms,chat_rooms_pkey,,,,,CREATE UNIQUE INDEX chat_rooms_pkey ON public.chat_rooms USING btree (id)
+05_INDEXES,event_entries,event_entries_event_id_member_id_key,,,,,"CREATE UNIQUE INDEX event_entries_event_id_member_id_key ON public.event_entries USING btree (event_id, member_id)"
+05_INDEXES,event_entries,event_entries_event_idx,,,,,CREATE INDEX event_entries_event_idx ON public.event_entries USING btree (event_id)
+05_INDEXES,event_entries,event_entries_member_idx,,,,,CREATE INDEX event_entries_member_idx ON public.event_entries USING btree (member_id)
+05_INDEXES,event_entries,event_entries_one_member_one_event,,,,,"CREATE UNIQUE INDEX event_entries_one_member_one_event ON public.event_entries USING btree (event_id, member_id)"
+05_INDEXES,event_entries,event_entries_pkey,,,,,CREATE UNIQUE INDEX event_entries_pkey ON public.event_entries USING btree (id)
+05_INDEXES,event_game_secrets,event_game_secrets_pkey,,,,,CREATE UNIQUE INDEX event_game_secrets_pkey ON public.event_game_secrets USING btree (event_id)
+05_INDEXES,event_quiz_bank,event_quiz_bank_pkey,,,,,CREATE UNIQUE INDEX event_quiz_bank_pkey ON public.event_quiz_bank USING btree (id)
+05_INDEXES,event_winners,event_winners_event_id_member_id_key,,,,,"CREATE UNIQUE INDEX event_winners_event_id_member_id_key ON public.event_winners USING btree (event_id, member_id)"
+05_INDEXES,event_winners,event_winners_event_idx,,,,,CREATE INDEX event_winners_event_idx ON public.event_winners USING btree (event_id)
+05_INDEXES,event_winners,event_winners_one_winner_per_event,,,,,CREATE UNIQUE INDEX event_winners_one_winner_per_event ON public.event_winners USING btree (event_id)
+05_INDEXES,event_winners,event_winners_pkey,,,,,CREATE UNIQUE INDEX event_winners_pkey ON public.event_winners USING btree (id)
+05_INDEXES,events,events_auto_schedule_unique,,,,,"CREATE UNIQUE INDEX events_auto_schedule_unique ON public.events USING btree (schedule_date, round_number) WHERE (auto_event = true)"
+05_INDEXES,events,events_pkey,,,,,CREATE UNIQUE INDEX events_pkey ON public.events USING btree (id)
+05_INDEXES,events,events_room_status_idx,,,,,"CREATE INDEX events_room_status_idx ON public.events USING btree (room_id, status)"
+05_INDEXES,group_messages,group_messages_pkey,,,,,CREATE UNIQUE INDEX group_messages_pkey ON public.group_messages USING btree (id)
+05_INDEXES,group_messages,group_messages_room_created_idx,,,,,"CREATE INDEX group_messages_room_created_idx ON public.group_messages USING btree (room_id, created_at DESC)"
+05_INDEXES,market_sim_cache,market_sim_cache_pkey,,,,,CREATE UNIQUE INDEX market_sim_cache_pkey ON public.market_sim_cache USING btree (cache_key)
+05_INDEXES,member_notes,member_notes_member_idx,,,,,CREATE INDEX member_notes_member_idx ON public.member_notes USING btree (member_id)
+05_INDEXES,member_notes,member_notes_pkey,,,,,CREATE UNIQUE INDEX member_notes_pkey ON public.member_notes USING btree (id)
+05_INDEXES,members,members_nickname_idx,,,,,CREATE INDEX members_nickname_idx ON public.members USING btree (nickname)
+05_INDEXES,members,members_nickname_key,,,,,CREATE UNIQUE INDEX members_nickname_key ON public.members USING btree (nickname)
+05_INDEXES,members,members_pkey,,,,,CREATE UNIQUE INDEX members_pkey ON public.members USING btree (id)
+05_INDEXES,moderation_logs,moderation_logs_operator_idx,,,,,"CREATE INDEX moderation_logs_operator_idx ON public.moderation_logs USING btree (operator_id, created_at DESC)"
+05_INDEXES,moderation_logs,moderation_logs_pkey,,,,,CREATE UNIQUE INDEX moderation_logs_pkey ON public.moderation_logs USING btree (id)
+05_INDEXES,moderation_logs,moderation_logs_target_idx,,,,,"CREATE INDEX moderation_logs_target_idx ON public.moderation_logs USING btree (target_member_id, created_at DESC)"
+05_INDEXES,private_chats,private_chats_member_id_key,,,,,CREATE UNIQUE INDEX private_chats_member_id_key ON public.private_chats USING btree (member_id)
+05_INDEXES,private_chats,private_chats_operator_idx,,,,,CREATE INDEX private_chats_operator_idx ON public.private_chats USING btree (operator_id)
+05_INDEXES,private_chats,private_chats_pkey,,,,,CREATE UNIQUE INDEX private_chats_pkey ON public.private_chats USING btree (id)
+05_INDEXES,private_messages,private_messages_chat_created_idx,,,,,"CREATE INDEX private_messages_chat_created_idx ON public.private_messages USING btree (chat_id, created_at)"
+05_INDEXES,private_messages,private_messages_pkey,,,,,CREATE UNIQUE INDEX private_messages_pkey ON public.private_messages USING btree (id)
+05_INDEXES,private_messages,private_messages_unread_idx,,,,,"CREATE INDEX private_messages_unread_idx ON public.private_messages USING btree (chat_id, is_read)"
+05_INDEXES,profiles,profiles_nickname_key,,,,,CREATE UNIQUE INDEX profiles_nickname_key ON public.profiles USING btree (nickname)
+05_INDEXES,profiles,profiles_pkey,,,,,CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id)
+05_INDEXES,push_subscriptions,push_subscriptions_endpoint_key,,,,,CREATE UNIQUE INDEX push_subscriptions_endpoint_key ON public.push_subscriptions USING btree (endpoint)
+05_INDEXES,push_subscriptions,push_subscriptions_pkey,,,,,CREATE UNIQUE INDEX push_subscriptions_pkey ON public.push_subscriptions USING btree (id)
+05_INDEXES,push_subscriptions,push_subscriptions_user_id_idx,,,,,CREATE INDEX push_subscriptions_user_id_idx ON public.push_subscriptions USING btree (user_id)
+05_INDEXES,room_chat_settings,room_chat_settings_pkey,,,,,CREATE UNIQUE INDEX room_chat_settings_pkey ON public.room_chat_settings USING btree (room_id)
+05_INDEXES,room_members,room_members_member_idx,,,,,CREATE INDEX room_members_member_idx ON public.room_members USING btree (member_id)
+05_INDEXES,room_members,room_members_pkey,,,,,CREATE UNIQUE INDEX room_members_pkey ON public.room_members USING btree (id)
+05_INDEXES,room_members,room_members_room_id_member_id_key,,,,,"CREATE UNIQUE INDEX room_members_room_id_member_id_key ON public.room_members USING btree (room_id, member_id)"
+05_INDEXES,room_restrictions,room_restrictions_lookup_idx,,,,,"CREATE INDEX room_restrictions_lookup_idx ON public.room_restrictions USING btree (room_id, member_id, restriction_type)"
+05_INDEXES,room_restrictions,room_restrictions_pkey,,,,,CREATE UNIQUE INDEX room_restrictions_pkey ON public.room_restrictions USING btree (id)
+06_CONSTRAINTS,ai_character_memories,ai_character_memories_character_id_fkey,f,,,,FOREIGN KEY (character_id) REFERENCES ai_characters(id) ON DELETE CASCADE
+06_CONSTRAINTS,ai_character_memories,ai_character_memories_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,ai_characters,ai_characters_nickname_key,u,,,,UNIQUE (nickname)
+06_CONSTRAINTS,ai_characters,ai_characters_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,attendance_records,attendance_records_event_id_fkey,f,,,,FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+06_CONSTRAINTS,attendance_records,attendance_records_event_id_member_id_attendance_date_key,u,,,,"UNIQUE (event_id, member_id, attendance_date)"
+06_CONSTRAINTS,attendance_records,attendance_records_member_id_fkey,f,,,,FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
+06_CONSTRAINTS,attendance_records,attendance_records_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,chat_rooms,chat_rooms_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,event_entries,event_entries_event_id_fkey,f,,,,FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+06_CONSTRAINTS,event_entries,event_entries_event_id_member_id_key,u,,,,"UNIQUE (event_id, member_id)"
+06_CONSTRAINTS,event_entries,event_entries_member_id_fkey,f,,,,FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
+06_CONSTRAINTS,event_entries,event_entries_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,event_game_secrets,event_game_secrets_event_id_fkey,f,,,,FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+06_CONSTRAINTS,event_game_secrets,event_game_secrets_pkey,p,,,,PRIMARY KEY (event_id)
+06_CONSTRAINTS,event_quiz_bank,event_quiz_bank_correct_option_check,c,,,,CHECK (((correct_option >= 1) AND (correct_option <= 4)))
+06_CONSTRAINTS,event_quiz_bank,event_quiz_bank_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,event_winners,event_winners_event_id_fkey,f,,,,FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+06_CONSTRAINTS,event_winners,event_winners_event_id_member_id_key,u,,,,"UNIQUE (event_id, member_id)"
+06_CONSTRAINTS,event_winners,event_winners_member_id_fkey,f,,,,FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
+06_CONSTRAINTS,event_winners,event_winners_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,event_winners,event_winners_rank_check,c,,,,CHECK ((rank > 0))
+06_CONSTRAINTS,events,events_created_by_fkey,f,,,,FOREIGN KEY (created_by) REFERENCES members(id) ON DELETE SET NULL
+06_CONSTRAINTS,events,events_event_type_check,c,,,,"CHECK ((event_type = ANY (ARRAY['gift_box'::text, 'number'::text, 'roulette'::text, 'first_come'::text, 'quiz'::text, 'draw'::text, 'attendance'::text])))"
+06_CONSTRAINTS,events,events_group_message_id_fkey,f,,,,FOREIGN KEY (group_message_id) REFERENCES group_messages(id) ON DELETE SET NULL
+06_CONSTRAINTS,events,events_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,events,events_room_id_fkey,f,,,,FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE
+06_CONSTRAINTS,events,events_status_check,c,,,,"CHECK ((status = ANY (ARRAY['draft'::text, 'scheduled'::text, 'active'::text, 'completed'::text, 'cancelled'::text])))"
+06_CONSTRAINTS,events,events_winner_count_check,c,,,,CHECK ((winner_count > 0))
+06_CONSTRAINTS,group_messages,group_messages_member_id_fkey,f,,,,FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE SET NULL
+06_CONSTRAINTS,group_messages,group_messages_message_type_check,c,,,,"CHECK ((message_type = ANY (ARRAY['text'::text, 'notice'::text, 'event'::text, 'system'::text])))"
+06_CONSTRAINTS,group_messages,group_messages_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,group_messages,group_messages_room_id_fkey,f,,,,FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE
+06_CONSTRAINTS,market_sim_cache,market_sim_cache_pkey,p,,,,PRIMARY KEY (cache_key)
+06_CONSTRAINTS,member_notes,member_notes_member_id_fkey,f,,,,FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
+06_CONSTRAINTS,member_notes,member_notes_operator_id_fkey,f,,,,FOREIGN KEY (operator_id) REFERENCES members(id) ON DELETE SET NULL
+06_CONSTRAINTS,member_notes,member_notes_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,members,members_nickname_key,u,,,,UNIQUE (nickname)
+06_CONSTRAINTS,members,members_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,members,members_role_check,c,,,,"CHECK ((role = ANY (ARRAY['member'::text, 'operator'::text, 'admin'::text])))"
+06_CONSTRAINTS,members,members_status_check,c,,,,"CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'suspended'::text, 'banned'::text, 'left'::text])))"
+06_CONSTRAINTS,moderation_logs,moderation_logs_action_check,c,,,,"CHECK ((action = ANY (ARRAY['approve'::text, 'reject'::text, 'warn'::text, 'mute'::text, 'unmute'::text, 'silent_kick'::text, 'ban'::text, 'unban'::text, 'promote_operator'::text, 'remove_operator'::text])))"
+06_CONSTRAINTS,moderation_logs,moderation_logs_operator_id_fkey,f,,,,FOREIGN KEY (operator_id) REFERENCES members(id) ON DELETE SET NULL
+06_CONSTRAINTS,moderation_logs,moderation_logs_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,moderation_logs,moderation_logs_target_member_id_fkey,f,,,,FOREIGN KEY (target_member_id) REFERENCES members(id) ON DELETE SET NULL
+06_CONSTRAINTS,private_chats,private_chats_member_id_fkey,f,,,,FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
+06_CONSTRAINTS,private_chats,private_chats_member_id_key,u,,,,UNIQUE (member_id)
+06_CONSTRAINTS,private_chats,private_chats_operator_id_fkey,f,,,,FOREIGN KEY (operator_id) REFERENCES members(id) ON DELETE SET NULL
+06_CONSTRAINTS,private_chats,private_chats_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,private_chats,private_chats_status_check,c,,,,"CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text])))"
+06_CONSTRAINTS,private_messages,private_messages_chat_id_fkey,f,,,,FOREIGN KEY (chat_id) REFERENCES private_chats(id) ON DELETE CASCADE
+06_CONSTRAINTS,private_messages,private_messages_message_type_check,c,,,,"CHECK ((message_type = ANY (ARRAY['text'::text, 'system'::text])))"
+06_CONSTRAINTS,private_messages,private_messages_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,private_messages,private_messages_sender_id_fkey,f,,,,FOREIGN KEY (sender_id) REFERENCES members(id) ON DELETE SET NULL
+06_CONSTRAINTS,profiles,profiles_approval_status_check,c,,,,"CHECK ((approval_status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])))"
+06_CONSTRAINTS,profiles,profiles_id_fkey,f,,,,FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE
+06_CONSTRAINTS,profiles,profiles_nickname_key,u,,,,UNIQUE (nickname)
+06_CONSTRAINTS,profiles,profiles_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,push_subscriptions,push_subscriptions_endpoint_key,u,,,,UNIQUE (endpoint)
+06_CONSTRAINTS,push_subscriptions,push_subscriptions_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,push_subscriptions,push_subscriptions_user_id_fkey,f,,,,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+06_CONSTRAINTS,room_chat_settings,room_chat_settings_pkey,p,,,,PRIMARY KEY (room_id)
+06_CONSTRAINTS,room_members,room_members_member_id_fkey,f,,,,FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
+06_CONSTRAINTS,room_members,room_members_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,room_members,room_members_room_id_fkey,f,,,,FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE
+06_CONSTRAINTS,room_members,room_members_room_id_member_id_key,u,,,,"UNIQUE (room_id, member_id)"
+06_CONSTRAINTS,room_restrictions,room_restrictions_created_by_fkey,f,,,,FOREIGN KEY (created_by) REFERENCES members(id) ON DELETE SET NULL
+06_CONSTRAINTS,room_restrictions,room_restrictions_member_id_fkey,f,,,,FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
+06_CONSTRAINTS,room_restrictions,room_restrictions_pkey,p,,,,PRIMARY KEY (id)
+06_CONSTRAINTS,room_restrictions,room_restrictions_restriction_type_check,c,,,,"CHECK ((restriction_type = ANY (ARRAY['kicked'::text, 'banned'::text])))"
+06_CONSTRAINTS,room_restrictions,room_restrictions_room_id_fkey,f,,,,FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE
