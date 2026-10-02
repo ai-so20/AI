@@ -20,8 +20,8 @@ const AVATAR_KEYS = new Set(AVATAR_CATALOG.map((item) => item.key));
 function avatarSrc(key) {
   const avatar = String(key || "profile-01");
   if (AVATAR_KEYS.has(avatar)) return `/avatars/40/${avatar}.jpg`;
-  if (/^(vip_0[1-5])$/.test(avatar)) return `/avatars/${avatar}.png`;
-  if (avatar === "vip_06") return "/avatars/vip_06.jpg";
+  const legacyVip = avatar.match(/^vip_0([1-6])$/);
+  if (legacyVip) return `/avatars/40/profile-${String(Number(legacyVip[1])).padStart(2, "0")}.jpg`;
   return "/avatars/40/profile-01.jpg";
 }
 
@@ -81,6 +81,7 @@ export default function Home() {
   const [adminMembers, setAdminMembers] = useState([]);
   const [adminAllMembers, setAdminAllMembers] = useState([]);
   const [memberSearch, setMemberSearch] = useState("");
+  const [adminMemberFilter, setAdminMemberFilter] = useState("all");
   const [selectedAdminChat, setSelectedAdminChat] = useState(null);
 
   const [adminUnreadCounts, setAdminUnreadCounts] = useState({});
@@ -348,7 +349,7 @@ export default function Home() {
       try {
         const n = new Notification("AI PROCESS VIP · 1:1 새 메시지", {
           body,
-          icon: "/avatars/vip_01.png",
+          icon: "/avatars/40/profile-01.jpg",
           tag: "vip-private-message"
         });
         n.onclick = () => {
@@ -779,11 +780,21 @@ export default function Home() {
   }, [user?.id, profile?.role, aiSession?.started_at, aiSession?.status]);
 
   useEffect(() => {
-    if (profile?.role === "admin" && (chatTab === "ai" || chatTab === "admin" || chatTab === "private")) {
+    if (profile?.role === "admin" && (chatTab === "ai" || chatTab === "admin" || chatTab === "members" || chatTab === "private")) {
       loadAdminMembers();
       loadAdminAllMembers();
     }
   }, [chatTab, profile?.role, user?.id]);
+
+  useEffect(() => {
+    if (!user || profile?.role !== "admin") return;
+    const refreshAdminDashboard = () => {
+      Promise.all([loadAdminAllMembers(), loadAdminMembers(), loadMemberNames(), loadAdminUnreadCounts()]).catch(() => {});
+    };
+    refreshAdminDashboard();
+    const timer = setInterval(refreshAdminDashboard, 4000);
+    return () => clearInterval(timer);
+  }, [user?.id, profile?.role]);
 
   useEffect(() => {
     if (chatTab !== "ai" || !aiNextUpdate) return;
@@ -1421,13 +1432,13 @@ export default function Home() {
       const fromPush = params.get("from") === "push";
       const savedTab = window.sessionStorage.getItem("vip-active-tab");
 
-      if (["admin", "group", "event", "ai", "private"].includes(urlTab)) {
+      if (["home", "admin", "members", "group", "event", "ai", "private"].includes(urlTab)) {
         setChatTab(urlTab);
         window.sessionStorage.setItem("vip-active-tab", urlTab);
-      } else if (["admin", "group", "event", "ai", "private"].includes(savedTab)) {
+      } else if (["home", "admin", "members", "group", "event", "ai", "private"].includes(savedTab)) {
         setChatTab(savedTab);
       } else {
-        setChatTab("private");
+        setChatTab("home");
       }
 
       // 푸시 알림을 눌러 들어온 경우 인증 세션이 살아 있으면 잠금 화면을 건너뜁니다.
@@ -1491,7 +1502,7 @@ export default function Home() {
 
     data.forEach((member) => {
       map[member.id] = member.nickname;
-      if (member.status === "approved") approvedCount += 1;
+      if (member.status === "approved" && member.role !== "admin") approvedCount += 1;
       if (member.role === "admin") {
         setAdminIdentity((current) => ({
           ...current,
@@ -1979,6 +1990,10 @@ export default function Home() {
     };
 
     setMemberSearch("");
+    setChatTab("private");
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem("vip-active-tab", "private");
+    }
     await loadAdminChats();
     await selectAdminChat(chat);
   }
@@ -2213,10 +2228,11 @@ export default function Home() {
         return;
       }
 
+      const landingTab = memberProfile.role === "admin" ? "admin" : "home";
       if (typeof window !== "undefined") {
-        window.sessionStorage.setItem("vip-active-tab", "private");
+        window.sessionStorage.setItem("vip-active-tab", landingTab);
       }
-      setChatTab("private");
+      setChatTab(landingTab);
       setUser(data.user);
       setProfile(memberProfile);
       setVipLocked(false);
@@ -2310,7 +2326,7 @@ export default function Home() {
       window.localStorage.setItem("vip-ui-locked", "1");
       window.localStorage.setItem("vip-last-nickname", profile?.nickname || "");
       window.localStorage.setItem("vip-last-avatar", profile?.avatar || "profile-01");
-      window.sessionStorage.setItem("vip-active-tab", "private");
+      window.sessionStorage.setItem("vip-active-tab", profile?.role === "admin" ? "admin" : "home");
     }
     setShowProfileInfo(false);
     setShowAvatarPicker(false);
@@ -2319,12 +2335,13 @@ export default function Home() {
   }
 
   function resumeVipSession() {
+    const landingTab = profile?.role === "admin" ? "admin" : "home";
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("vip-ui-locked");
-      window.sessionStorage.setItem("vip-active-tab", "private");
-      window.history.replaceState({}, "", "/?tab=private");
+      window.sessionStorage.setItem("vip-active-tab", landingTab);
+      window.history.replaceState({}, "", `/?tab=${landingTab}`);
     }
-    setChatTab("private");
+    setChatTab(landingTab);
     setVipLocked(false);
     setNotice("");
   }
@@ -2455,7 +2472,22 @@ export default function Home() {
       ? Object.values(adminUnreadCounts).reduce((sum, count) => sum + Number(count || 0), 0)
       : Number(memberUnreadCount || 0);
     const adminPendingMembers = profile?.role === "admin"
-      ? adminAllMembers.filter((member) => member.approval_status === "pending")
+      ? adminAllMembers.filter((member) => member.approval_status === "pending" && member.role !== "admin")
+      : [];
+    const adminApprovedMembers = profile?.role === "admin"
+      ? adminAllMembers.filter((member) => member.approval_status === "approved" && member.role !== "admin")
+      : [];
+    const adminRejectedMembers = profile?.role === "admin"
+      ? adminAllMembers.filter((member) => member.approval_status === "rejected" && member.role !== "admin")
+      : [];
+    const adminVisibleMembers = profile?.role === "admin"
+      ? adminAllMembers.filter((member) => {
+          if (member.role === "admin") return false;
+          if (adminMemberFilter !== "all" && member.approval_status !== adminMemberFilter) return false;
+          const query = memberSearch.trim().toLowerCase();
+          if (!query) return true;
+          return `${member.nickname || ""} ${member.real_name || ""}`.toLowerCase().includes(query);
+        })
       : [];
 
     const aiMarketRows = Array.isArray(aiSim?.marketRows) ? aiSim.marketRows : [];
@@ -2468,16 +2500,18 @@ export default function Home() {
 
     const navItems = profile?.role === "admin"
       ? [
-          { id: "admin", icon: "▦", label: "관리자 홈" },
-          { id: "group", icon: "💬", label: "그룹 관리" },
-          { id: "event", icon: "🎁", label: "이벤트 관리" },
-          { id: "ai", icon: "bars", label: "AI PROCESS 관리" },
-          { id: "private", icon: "🎧", label: "회원 · 1:1" },
+          { id: "admin", icon: "▦", label: "대시보드" },
+          { id: "members", icon: "♙", label: "회원 관리" },
+          { id: "ai", icon: "bars", label: "AI PROCESS" },
+          { id: "event", icon: "🎁", label: "이벤트" },
+          { id: "group", icon: "💬", label: "그룹채팅" },
+          { id: "private", icon: "🎧", label: "1:1 문의" },
         ]
       : [
-          { id: "group", icon: "💬", label: "그룹채팅" },
+          { id: "home", icon: "⌂", label: "홈" },
+          { id: "ai", icon: "bars", label: "AI PROCESS" },
           { id: "event", icon: "🎁", label: "이벤트" },
-          { id: "ai", icon: "bars", label: "AI프로세스" },
+          { id: "group", icon: "💬", label: "그룹채팅" },
           { id: "private", icon: "🎧", label: "1:1 문의" },
         ];
 
@@ -2534,7 +2568,7 @@ export default function Home() {
               }}
               style={styles.refPrivateAlert}
             >
-              <img src="/avatars/vip_01.png" alt="" style={styles.refPrivateAlertAvatar} />
+              <img src="/avatars/40/profile-01.jpg" alt="" style={styles.refPrivateAlertAvatar} />
               <span style={styles.refPrivateAlertCopy}>
                 <b>{privateAlert.title}</b>
                 <small>{privateAlert.body}</small>
@@ -2552,11 +2586,11 @@ export default function Home() {
                 />
               </button>
               <div>
-                <div style={styles.refBrandTitle}>AI PROCESS <span>VIP</span></div>
-                <div style={styles.refBrandSub}>
+                <div style={styles.refBrandTitle} className="vip-brand-title">AI PROCESS <span>VIP</span></div>
+                <div style={styles.refBrandSub} className="vip-brand-sub">
                   {profile?.role === "admin"
-                    ? (chatTab === "admin" ? "ADMIN CONSOLE" : chatTab === "group" ? "ADMIN · GROUP" : chatTab === "event" ? "ADMIN · EVENT" : chatTab === "ai" ? "ADMIN · AI PROCESS" : "ADMIN · MEMBER SUPPORT")
-                    : (chatTab === "group" ? "Private Community" : chatTab === "event" ? "Event Schedule" : chatTab === "ai" ? "AI Market Process" : "Private Support")}
+                    ? (chatTab === "admin" ? "ADMIN CONSOLE" : chatTab === "members" ? "ADMIN · MEMBERS" : chatTab === "group" ? "ADMIN · GROUP" : chatTab === "event" ? "ADMIN · EVENT" : chatTab === "ai" ? "ADMIN · AI PROCESS" : "ADMIN · MEMBER SUPPORT")
+                    : (chatTab === "home" ? "VIP DASHBOARD" : chatTab === "group" ? "Private Community" : chatTab === "event" ? "Event Schedule" : chatTab === "ai" ? "AI Market Process" : "Private Support")}
                 </div>
               </div>
             </div>
@@ -2592,6 +2626,7 @@ export default function Home() {
                 type="button"
                 onClick={() => setShowProfileInfo(true)}
                 style={styles.refMyInfoButton}
+                className="vip-myinfo-button"
                 aria-label="내 정보 보기"
               >
                 <img
@@ -2601,7 +2636,7 @@ export default function Home() {
                 />
                 <span>내 정보</span>
               </button>
-              <button type="button" onClick={handleLogout} style={styles.refLogoutButton} title="로그아웃">
+              <button type="button" onClick={handleLogout} style={styles.refLogoutButton} className="vip-logout-button" title="로그아웃">
                 <span>↪</span><small>로그아웃</small>
               </button>
             </div>
@@ -2614,6 +2649,7 @@ export default function Home() {
                 <button
                   key={nav.id}
                   type="button"
+                  className={active ? "is-active" : ""}
                   onClick={() => changeTab(nav.id)}
                   style={{...styles.refNavButton, ...(active ? styles.refNavButtonActive : {})}}
                 >
@@ -2711,32 +2747,108 @@ export default function Home() {
           )}
 
           <div style={styles.refBody} className="vip-app-body">
+            {chatTab === "home" && profile?.role !== "admin" && (
+              <div className="vip-member-dashboard">
+                <section className="vip-member-hero">
+                  <div className="vip-member-hero-copy">
+                    <span>AI PROCESS VIP · PRIVATE MEMBER</span>
+                    <h2>안녕하세요, {profile.nickname}님!</h2>
+                    <p>오늘도 AI PROCESS와 함께 내 진행 현황과 VIP 서비스를 한눈에 확인하세요.</p>
+                    <button type="button" onClick={() => changeTab("ai")}>AI PROCESS 보기 <b>›</b></button>
+                  </div>
+                  <div className="vip-member-hero-mascot">
+                    <div className="vip-member-hero-ring"></div>
+                    <img src={avatarSrc(profile.avatar)} alt=""/>
+                    <em>VIP</em>
+                  </div>
+                </section>
+
+                <section className="vip-member-kpis">
+                  <button type="button" onClick={() => changeTab("ai")}><span>총 운용금액</span><strong>{aiSession?.status === "running" ? aiKrw(aiCurrentStartMoney) : "대기 중"}</strong><small>AI PROCESS 시작 기준</small></button>
+                  <button type="button" onClick={() => changeTab("ai")}><span>누적 손익</span><strong className={(aiSession?.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSession?.status === "running" ? aiSignedKrw(aiSession?.total_profit || 0) : "-"}</strong><small>{aiSession?.status === "running" ? aiSignedPct(aiSession?.total_return || 0, 2) : "진행 대기"}</small></button>
+                  <button type="button" onClick={() => changeTab("ai")}><span>진행 중 PROCESS</span><strong>{aiSession?.status === "running" ? "1건" : "0건"}</strong><small>{aiSession?.status === "running" ? aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours}) + " 남음" : "시작된 PROCESS 없음"}</small></button>
+                </section>
+
+                <section className="vip-member-workspace">
+                  <div className="vip-member-panel vip-member-chart-card">
+                    <div className="vip-member-panel-head"><div><span>PERFORMANCE</span><strong>수익 그래프</strong></div><button type="button" onClick={() => changeTab("ai")}>상세 보기</button></div>
+                    <div className="vip-member-chart-meta">
+                      <div><span>현재 평가금액</span><b>{aiSession?.status === "running" ? aiKrw(aiSession?.current_amount || aiCurrentStartMoney) : "대기 중"}</b></div>
+                      <div><span>최근 반영</span><b>{aiTime(aiSim?.updatedAt)}</b></div>
+                    </div>
+                    <div className="vip-member-mini-chart">
+                      {aiChart.nodes.length > 1 ? (
+                        <svg viewBox={`0 0 ${aiChart.width} ${aiChart.height}`} preserveAspectRatio="none">
+                          <defs><linearGradient id="vipHomeArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#d7a94a" stopOpacity=".32"/><stop offset="100%" stopColor="#d7a94a" stopOpacity="0"/></linearGradient></defs>
+                          <line x1="52" y1={aiChart.baselineY} x2="866" y2={aiChart.baselineY} className="vip-member-chart-base"/>
+                          <path d={aiChart.areaPath} fill="url(#vipHomeArea)"/>
+                          <polyline points={aiChart.points} className="vip-member-chart-line"/>
+                        </svg>
+                      ) : <div className="vip-member-chart-empty">AI PROCESS가 시작되면 자산 변화가 표시됩니다.</div>}
+                    </div>
+                  </div>
+
+                  <div className="vip-member-panel vip-member-process-card">
+                    <div className="vip-member-panel-head"><div><span>MY PROCESS</span><strong>진행 중인 프로젝트</strong></div><i className={aiSession?.status === "running" ? "is-live" : ""}>{aiSession?.status === "running" ? "진행중" : "대기"}</i></div>
+                    <div className="vip-member-process-body">
+                      <div className="vip-member-process-icon">AI</div>
+                      <div><b>AI PROCESS</b><span>{aiSession?.status === "running" ? `운용금액 ${aiKrw(aiCurrentStartMoney)}` : "관리자가 PROCESS를 시작하면 여기에 표시됩니다."}</span></div>
+                    </div>
+                    {aiSession?.status === "running" && <div className="vip-member-progress"><span style={{width:`${Math.max(4,Math.min(100,((Date.now()-new Date(aiSession.started_at).getTime())/(Math.max(1,Number(aiSession.duration_hours))*3600000))*100))}%`}}></span></div>}
+                    <div className="vip-member-process-foot"><span>남은 시간 <b>{aiSession?.status === "running" ? aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours}) : "-"}</b></span><span>수익률 <b className={(aiSession?.total_return || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSession?.status === "running" ? aiSignedPct(aiSession.total_return || 0, 2) : "-"}</b></span></div>
+                    <button type="button" onClick={() => changeTab("ai")}>PROCESS 상세 보기</button>
+                  </div>
+                </section>
+
+                <section className="vip-member-shortcuts">
+                  <button type="button" onClick={() => changeTab("group")}><span>💬</span><div><b>그룹채팅</b><small>{approvedMemberCount}명과 함께하는 VIP 라운지</small></div><em>›</em></button>
+                  <button type="button" onClick={() => changeTab("event")}><span>🎁</span><div><b>이벤트</b><small>{featuredEvent ? featuredEvent.title : "다음 이벤트를 확인하세요"}</small></div><em>›</em></button>
+                  <button type="button" onClick={() => changeTab("private")}><span>🎧</span><div><b>1:1 문의</b><small>{unreadPrivate > 0 ? `읽지 않은 답변 ${unreadPrivate}건` : "관리자에게 바로 문의하기"}</small></div><em>›</em></button>
+                </section>
+              </div>
+            )}
+
             {chatTab === "admin" && profile?.role === "admin" && (
               <div className="vip-admin-dashboard">
-                <section className="vip-admin-hero">
+                <section className="vip-admin-hero vip-admin-hero-premium">
                   <div>
-                    <span>AI PROCESS VIP · ADMIN</span>
+                    <span>AI PROCESS VIP · ADMIN CONSOLE</span>
                     <h2>관리자 대시보드</h2>
-                    <p>회원, 채팅, 이벤트와 AI PROCESS 운영 상태를 한 화면에서 확인합니다.</p>
+                    <p>회원 승인부터 AI PROCESS, 이벤트, 상담까지 현재 운영 상태를 한 화면에서 관리합니다.</p>
                   </div>
                   <div className="vip-admin-status"><i></i> SYSTEM ONLINE</div>
                 </section>
 
-                <section className="vip-admin-kpis">
-                  <button type="button" onClick={() => changeTab("private")}><span>승인 회원</span><strong>{approvedMemberCount.toLocaleString("ko-KR")}명</strong><small>전체 승인 회원</small></button>
-                  <button type="button"><span>승인 대기</span><strong>{adminPendingMembers.length.toLocaleString("ko-KR")}명</strong><small>아래에서 바로 처리</small></button>
-                  <button type="button" onClick={() => changeTab("ai")}><span>AI PROCESS 진행</span><strong>{aiPublicSessions.length.toLocaleString("ko-KR")}명</strong><small>진행 회원 관리</small></button>
-                  <button type="button" onClick={() => changeTab("private")}><span>읽지 않은 문의</span><strong>{unreadPrivate.toLocaleString("ko-KR")}건</strong><small>상담함 바로가기</small></button>
+                <section className="vip-admin-kpis vip-admin-kpis-premium">
+                  <button type="button" onClick={() => { setAdminMemberFilter("approved"); setMemberSearch(""); changeTab("members"); }}><span>승인 회원</span><strong>{adminApprovedMembers.length.toLocaleString("ko-KR")}명</strong><small>관리자 제외 · 승인 완료</small></button>
+                  <button type="button" onClick={() => { setAdminMemberFilter("pending"); setMemberSearch(""); changeTab("members"); }}><span>승인 대기</span><strong>{adminPendingMembers.length.toLocaleString("ko-KR")}명</strong><small>가입 신청 확인</small></button>
+                  <button type="button" onClick={() => changeTab("ai")}><span>AI PROCESS 진행</span><strong>{aiPublicSessions.length.toLocaleString("ko-KR")}명</strong><small>현재 진행 세션</small></button>
+                  <button type="button" onClick={() => changeTab("private")}><span>읽지 않은 문의</span><strong>{unreadPrivate.toLocaleString("ko-KR")}건</strong><small>1:1 상담함 바로가기</small></button>
                 </section>
 
-                <section className="vip-admin-grid">
-                  <div className="vip-admin-panel">
+                <section className="vip-admin-overview-grid">
+                  <div className="vip-admin-panel vip-admin-status-panel">
+                    <div className="vip-admin-panel-head"><div><span>MEMBER STATUS</span><strong>회원 현황</strong></div><button type="button" onClick={() => { setAdminMemberFilter("all"); changeTab("members"); }}>전체 보기</button></div>
+                    <div className="vip-admin-status-body">
+                      <div className="vip-admin-donut" style={{background:`conic-gradient(#4c9cff 0 ${Math.round((adminApprovedMembers.length / Math.max(1, adminApprovedMembers.length + adminPendingMembers.length + adminRejectedMembers.length)) * 100)}%, #f1b84c 0 ${Math.round(((adminApprovedMembers.length + adminPendingMembers.length) / Math.max(1, adminApprovedMembers.length + adminPendingMembers.length + adminRejectedMembers.length)) * 100)}%, #e76d7a 0 100%)`}}>
+                        <div><strong>{(adminApprovedMembers.length + adminPendingMembers.length + adminRejectedMembers.length).toLocaleString("ko-KR")}</strong><span>전체 회원</span></div>
+                      </div>
+                      <div className="vip-admin-status-legend">
+                        <button type="button" onClick={() => { setAdminMemberFilter("approved"); changeTab("members"); }}><i className="is-approved"></i><span>승인 완료</span><b>{adminApprovedMembers.length}명</b></button>
+                        <button type="button" onClick={() => { setAdminMemberFilter("pending"); changeTab("members"); }}><i className="is-pending"></i><span>승인 대기</span><b>{adminPendingMembers.length}명</b></button>
+                        <button type="button" onClick={() => { setAdminMemberFilter("rejected"); changeTab("members"); }}><i className="is-rejected"></i><span>거절</span><b>{adminRejectedMembers.length}명</b></button>
+                        <button type="button" onClick={() => changeTab("ai")}><i className="is-process"></i><span>PROCESS 진행</span><b>{aiPublicSessions.length}명</b></button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="vip-admin-panel vip-admin-requests-panel">
                     <div className="vip-admin-panel-head"><div><span>MEMBER APPROVAL</span><strong>최근 가입 신청</strong></div><small>{adminPendingMembers.length}명 대기</small></div>
                     <div className="vip-admin-mini-list">
-                      {adminPendingMembers.slice(0, 6).map((member) => (
+                      {adminPendingMembers.slice(0, 5).map((member) => (
                         <div key={member.member_id} className="is-pending">
                           <img src={avatarSrc(member.avatar)} alt=""/>
-                          <span><b>{member.nickname}</b><small>{member.real_name || "성함 미입력"} · 가입 대기</small></span>
+                          <span><b>{member.nickname}</b><small>{member.real_name || "성함 미입력"} · 승인 대기</small></span>
                           <div className="vip-admin-approval-actions">
                             <button type="button" disabled={working} onClick={() => setMemberApproval(member.member_id, "approved")}>승인</button>
                             <button type="button" disabled={working} onClick={() => setMemberApproval(member.member_id, "rejected")}>거절</button>
@@ -2746,15 +2858,57 @@ export default function Home() {
                       {!adminPendingMembers.length && <p>현재 승인 대기 회원이 없습니다.</p>}
                     </div>
                   </div>
-                  <div className="vip-admin-panel">
-                    <div className="vip-admin-panel-head"><div><span>OPERATIONS</span><strong>빠른 관리</strong></div></div>
-                    <div className="vip-admin-actions">
-                      <button type="button" onClick={() => changeTab("group")}>💬 그룹채팅 관리 <span>›</span></button>
-                      <button type="button" onClick={() => changeTab("event")}>🎁 이벤트 관리 <span>›</span></button>
-                      <button type="button" onClick={() => changeTab("ai")}>▥ AI PROCESS 관리 <span>›</span></button>
-                      <button type="button" onClick={() => changeTab("private")}>🎧 회원 · 1:1 관리 <span>›</span></button>
-                    </div>
+                </section>
+
+                <section className="vip-admin-quick-grid">
+                  <button type="button" onClick={() => {setAdminMemberFilter("all"); changeTab("members");}}><span>♙</span><div><b>회원 관리</b><small>승인·상태·문의 연결</small></div><em>›</em></button>
+                  <button type="button" onClick={() => changeTab("ai")}><span>▥</span><div><b>AI PROCESS</b><small>시작·진행·종료 관리</small></div><em>›</em></button>
+                  <button type="button" onClick={() => changeTab("event")}><span>🎁</span><div><b>이벤트 관리</b><small>자동 이벤트 현황 확인</small></div><em>›</em></button>
+                  <button type="button" onClick={() => changeTab("private")}><span>🎧</span><div><b>1:1 문의</b><small>{unreadPrivate ? `미확인 ${unreadPrivate}건` : "새 문의 없음"}</small></div><em>›</em></button>
+                </section>
+              </div>
+            )}
+
+            {chatTab === "members" && profile?.role === "admin" && (
+              <div className="vip-admin-members-screen">
+                <section className="vip-admin-members-head">
+                  <div><span>MEMBER MANAGEMENT</span><h2>회원 관리</h2><p>회원 승인 상태와 AI PROCESS 진행 여부를 확인하고 1:1 상담으로 바로 이동합니다.</p></div>
+                  <div className="vip-admin-members-total"><span>승인 회원</span><strong>{adminApprovedMembers.length}명</strong></div>
+                </section>
+
+                <section className="vip-admin-member-toolbar">
+                  <div className="vip-admin-member-filters">
+                    {[
+                      ["all", "전체", adminApprovedMembers.length + adminPendingMembers.length + adminRejectedMembers.length],
+                      ["pending", "승인 대기", adminPendingMembers.length],
+                      ["approved", "승인 완료", adminApprovedMembers.length],
+                      ["rejected", "거절", adminRejectedMembers.length],
+                    ].map(([value,label,count]) => (
+                      <button key={value} type="button" className={adminMemberFilter === value ? "is-active" : ""} onClick={() => setAdminMemberFilter(value)}>{label}<b>{count}</b></button>
+                    ))}
                   </div>
+                  <input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder="닉네임 또는 성함 검색"/>
+                </section>
+
+                <section className="vip-admin-member-table">
+                  <div className="vip-admin-member-row vip-admin-member-row-head"><span>회원</span><span>가입일</span><span>상태</span><span>AI PROCESS</span><span>관리</span></div>
+                  {adminVisibleMembers.map((member) => {
+                    const running = aiPublicSessions.some((session) => session.user_id === member.member_id);
+                    return (
+                      <div className="vip-admin-member-row" key={member.member_id}>
+                        <div className="vip-admin-member-identity"><img src={avatarSrc(member.avatar)} alt=""/><span><b>{member.nickname}</b><small>{member.real_name || "성함 미입력"}</small></span></div>
+                        <span className="vip-admin-member-date">{member.created_at ? new Intl.DateTimeFormat("ko-KR", {year:"2-digit",month:"2-digit",day:"2-digit"}).format(new Date(member.created_at)) : "-"}</span>
+                        <span className={`vip-admin-member-state is-${member.approval_status}`}>{member.approval_status === "approved" ? "승인 완료" : member.approval_status === "pending" ? "승인 대기" : "거절"}</span>
+                        <span className={`vip-admin-process-state ${running ? "is-running" : ""}`}>{running ? "진행 중" : "대기"}</span>
+                        <div className="vip-admin-member-actions">
+                          {member.approval_status === "pending" && <><button type="button" disabled={working} onClick={() => setMemberApproval(member.member_id, "approved")}>승인</button><button type="button" className="is-danger" disabled={working} onClick={() => setMemberApproval(member.member_id, "rejected")}>거절</button></>}
+                          {member.approval_status === "approved" && <button type="button" onClick={() => openAdminMemberChat(member)}>1:1 문의</button>}
+                          {member.approval_status === "rejected" && <button type="button" disabled={working} onClick={() => setMemberApproval(member.member_id, "approved")}>다시 승인</button>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {!adminVisibleMembers.length && <div className="vip-admin-member-empty">조건에 맞는 회원이 없습니다.</div>}
                 </section>
               </div>
             )}
@@ -3151,7 +3305,7 @@ export default function Home() {
                       {adminMembers
                         .filter(m => !memberSearch || (m.nickname || "").toLowerCase().includes(memberSearch.toLowerCase()))
                         .map(member => (
-                          <button key={member.id} type="button" onClick={()=>openAdminMemberChat(member)} style={styles.refConsultRow}>
+                          <button key={member.member_id} type="button" onClick={()=>openAdminMemberChat(member)} style={styles.refConsultRow}>
                             <img
                               src={avatarSrc(member.avatar)}
                               alt=""
@@ -3296,7 +3450,7 @@ export default function Home() {
           <p style={styles.description}>AI와 함께하는 프라이빗 VIP 커뮤니티</p>
           <div style={styles.luxMascotFrame}>
             <div style={styles.luxMascotRing}></div>
-            <img src="/avatars/vip_01.png" alt="AI PROCESS VIP" style={styles.luxMascotImage}/>
+            <img src="/avatars/40/profile-01.jpg" alt="AI PROCESS VIP" style={styles.luxMascotImage}/>
             <div style={styles.luxVipSeal}>VIP</div>
           </div>
           <div style={styles.luxHeroCaption}>PRIVATE · PREMIUM · COMMUNITY</div>
