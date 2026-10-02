@@ -2,6 +2,14 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+const RANDOM_PROFILE_KEYS = Array.from({ length: 40 }, (_, index) =>
+  `profile-${String(index + 1).padStart(2, "0")}`
+);
+
+function pickRandomProfile() {
+  return RANDOM_PROFILE_KEYS[Math.floor(Math.random() * RANDOM_PROFILE_KEYS.length)];
+}
+
 function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const secretKey = process.env.SUPABASE_SECRET_KEY;
@@ -70,6 +78,8 @@ export async function POST(request) {
       );
     }
 
+    const randomAvatar = pickRandomProfile();
+
     const { data, error } = await admin.auth.admin.createUser({
       email: makeInternalAuthAddress(),
       password,
@@ -77,6 +87,7 @@ export async function POST(request) {
       user_metadata: {
         nickname,
         real_name: realName,
+        avatar: randomAvatar,
       },
     });
 
@@ -85,6 +96,27 @@ export async function POST(request) {
       return NextResponse.json(
         { message: "가입 신청 중 오류가 발생했습니다." },
         { status: 400 }
+      );
+    }
+
+    const { error: profileError } = await admin
+      .from("profiles")
+      .upsert(
+        {
+          id: data.user.id,
+          nickname,
+          real_name: realName,
+          approval_status: "pending",
+          avatar: randomAvatar,
+        },
+        { onConflict: "id" }
+      );
+
+    if (profileError) {
+      console.error("랜덤 프로필 지정 오류:", profileError);
+      return NextResponse.json(
+        { message: "프로필 생성 중 오류가 발생했습니다." },
+        { status: 500 }
       );
     }
 
