@@ -748,3 +748,71 @@
 @media(max-width:420px){
   .vip-master-member .vip-member-hero-copy{max-width:61%!important}.vip-master-member .vip-member-hero-copy h2{font-size:18px!important}.vip-master-mascot{width:90px!important;height:90px!important}.vip-master-mascot img{width:74px!important;height:74px!important}.vip-master-member-kpis strong{font-size:10px!important}.vip-master-member-workspace .vip-member-mini-chart{height:138px!important}.vip-admin-request-head,.vip-admin-request-row{grid-template-columns:minmax(105px,1fr) 54px 58px 88px}
 }
+
+/* ============================================================
+   V11 — multi AI PROCESS selector / 1-minute server display
+   ============================================================ */
+.ai-v2-process-switcher{margin:12px 0 0;padding:14px 16px;border:1px solid #e9dfd2;border-radius:20px;background:#fffdf9;box-shadow:0 7px 22px rgba(79,56,37,.045)}
+.ai-v2-process-switcher-head{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:10px}
+.ai-v2-process-switcher-head>span{font-size:8px;font-weight:950;letter-spacing:1.15px;color:#a17b3f}
+.ai-v2-process-switcher-head>strong{font-size:13px;color:#342e29}
+.ai-v2-process-switcher-head>small{margin-left:auto;color:#a99b90;font-size:8px}
+.ai-v2-process-switcher-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}
+.ai-v2-process-switcher-list button{min-width:0;text-align:left;padding:11px 12px;border-radius:14px;border:1px solid #e9dfd2;background:#faf7f1;color:#4a4039;cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:3px 8px;box-shadow:none}
+.ai-v2-process-switcher-list button:hover{border-color:#d9bd8a;background:#fffaf0}
+.ai-v2-process-switcher-list button.is-active{border-color:#c99c55;background:linear-gradient(135deg,#fff8e6,#fffdf8);box-shadow:0 0 0 2px rgba(201,156,85,.08)}
+.ai-v2-process-switcher-list button>span{grid-column:1/-1;font-size:7.5px;font-weight:950;letter-spacing:.45px;color:#a18e7e}
+.ai-v2-process-switcher-list button>b{font-size:12px;color:#332d29;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ai-v2-process-switcher-list button>em{font-style:normal;font-size:8px;font-weight:900;text-align:right}
+.ai-v2-process-switcher-list button>small{grid-column:1/-1;font-size:7.5px;color:#aa9b8f}
+.ai-v2-live-member-name>small{font-size:6px;color:#a79a8f;font-weight:900;letter-spacing:.25px;white-space:nowrap}
+@media(max-width:760px){
+  .ai-v2-process-switcher{margin-top:9px;padding:12px;border-radius:16px}
+  .ai-v2-process-switcher-head>small{width:100%;margin-left:0}
+  .ai-v2-process-switcher-list{grid-template-columns:1fr 1fr;gap:6px}
+  .ai-v2-process-switcher-list button{padding:9px 10px}
+}
+@media(max-width:430px){.ai-v2-process-switcher-list{grid-template-columns:1fr}}
+
+/* ============================================================
+   V13 — mobile full-width + profile picker usability
+   - Mobile/tablet app always fills the available screen width.
+   - Header keeps only the right-side member profile to avoid duplicate avatars.
+   - Avatar picker stays above every app layer and accepts touch/click reliably.
+   ============================================================ */
+.vip-avatar-picker{
+  z-index:2147483647!important;
+  pointer-events:auto!important;
+}
+.vip-avatar-picker .vip-avatar-choice{
+  pointer-events:auto!important;
+  touch-action:manipulation!important;
+  -webkit-tap-highlight-color:transparent;
+}
+
+@media(max-width:999px){
+  .vip-page-shell{
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+  }
+  .vip-app-shell{
+    width:100%!important;
+    max-width:none!important;
+    margin:0!important;
+  }
+  .vip-app-body,
+  .vip-app-body>div,
+  .vip-member-dashboard{
+    width:100%!important;
+    max-width:none!important;
+    min-width:0!important;
+    box-sizing:border-box!important;
+  }
+  .vip-avatar-picker{
+    left:10px!important;
+    right:10px!important;
+    width:auto!important;
+    max-width:none!important;
+  }
+}

@@ -4049,3 +4049,897 @@ end;
 $$;
 
 grant execute on function public.admin_set_profile_approval(uuid,text) to authenticated;
+
+-- ============================================================
+-- V8 ADMIN MEMBER MANAGEMENT FIX
+-- ============================================================
+-- AI PROCESS VIP V8
+-- 관리자 회원관리 복구 패치
+-- 목적:
+-- 1) 관리자 화면에서 pending / approved / rejected 일반회원을 모두 조회
+-- 2) 승인/거절을 관리자 RPC로 안전하게 처리
+-- 3) profiles RLS가 "본인 프로필만 조회"여도 관리자 화면은 SECURITY DEFINER RPC로 동작
+
+begin;
+
+create or replace function public.get_admin_all_profiles()
+returns table(
+  member_id uuid,
+  nickname text,
+  real_name text,
+  avatar text,
+  role text,
+  approval_status text,
+  created_at timestamptz
+)
+language sql
+security definer
+set search_path to 'public'
+as $$
+  select
+    p.id as member_id,
+    p.nickname,
+    p.real_name,
+    p.avatar,
+    p.role,
+    p.approval_status,
+    p.created_at
+  from public.profiles p
+  where coalesce(p.role, 'member') <> 'admin'
+    and exists (
+      select 1
+      from public.profiles me
+      where me.id = auth.uid()
+        and me.role = 'admin'
+        and me.approval_status = 'approved'
+    )
+  order by
+    case
+      when p.approval_status = 'pending' then 0
+      when p.approval_status = 'approved' then 1
+      else 2
+    end,
+    p.created_at desc;
+$$;
+
+grant execute on function public.get_admin_all_profiles() to authenticated;
+
+create or replace function public.admin_set_profile_approval(
+  target_member_id uuid,
+  target_status text
+)
+returns void
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  target_profile public.profiles%rowtype;
+begin
+  if not public.is_current_user_admin() then
+    raise exception '관리자만 사용할 수 있습니다.';
+  end if;
+
+  if target_status not in ('approved', 'rejected') then
+    raise exception '지원하지 않는 승인 상태입니다.';
+  end if;
+
+  select * into target_profile
+  from public.profiles
+  where id = target_member_id
+  for update;
+
+  if not found then
+    raise exception '회원을 찾을 수 없습니다.';
+  end if;
+
+  if coalesce(target_profile.role, 'member') = 'admin' then
+    raise exception '관리자 계정은 이 화면에서 변경할 수 없습니다.';
+  end if;
+
+  update public.profiles
+  set approval_status = target_status
+  where id = target_member_id;
+
+  if target_status = 'approved' then
+    insert into public.members (
+      id,
+      nickname,
+      password_hash,
+      role,
+      status,
+      approved_at,
+      left_at
+    )
+    values (
+      target_profile.id,
+      target_profile.nickname,
+      'SUPABASE_AUTH',
+      'member',
+      'approved',
+      now(),
+      null
+    )
+    on conflict (id) do update
+    set
+      nickname = excluded.nickname,
+      role = 'member',
+      status = 'approved',
+      approved_at = coalesce(public.members.approved_at, now()),
+      left_at = null;
+  else
+    update public.members
+    set
+      status = 'left',
+      left_at = now()
+    where id = target_member_id;
+  end if;
+
+  -- 기존 회원 레코드가 있는 경우에만 감사 로그를 남깁니다.
+  -- pending 상태를 바로 거절하는 경우 members에 아직 레코드가 없을 수 있어
+  -- FK 오류로 승인/거절 자체가 실패하지 않도록 분리합니다.
+  if exists (select 1 from public.members where id = target_member_id) then
+    insert into public.moderation_logs(
+      target_member_id,
+      operator_id,
+      action,
+      reason
+    )
+    values (
+      target_member_id,
+      case when exists (select 1 from public.members where id = auth.uid()) then auth.uid() else null end,
+      case when target_status = 'approved' then 'approve' else 'reject' end,
+      '관리자 회원관리 화면에서 처리'
+    );
+  end if;
+end;
+$$;
+
+grant execute on function public.admin_set_profile_approval(uuid, text) to authenticated;
+
+commit;
+
+-- 확인용 (실행 후 관리자 로그인 상태에서 사이트를 새로고침하세요.)
+-- select nickname, approval_status, role, created_at from public.profiles order by created_at desc;
+
+
+-- ============================================================
+-- V11 MULTI / 1-MINUTE SERVER ENGINE UPGRADE
+-- ============================================================
+-- ============================================================
+-- AI PROCESS V11
+-- - 한 회원에게 여러 AI PROCESS 동시 진행
+-- - 1분 서버 진행 / 5분 시장 스냅샷 1건으로 압축 저장
+-- - 브라우저가 꺼져 있어도 Supabase Cron -> Vercel market route로 진행
+-- - AI PROCESS 테이블은 Realtime publication에서 제외하여 Realtime 사용량 절감
+-- ============================================================
+
+begin;
+
+create extension if not exists pgcrypto;
+
+-- ------------------------------------------------------------
+-- 1) ai_process_sessions: user_id 1개 PK 구조 -> process id PK 구조
+-- ------------------------------------------------------------
+alter table public.ai_process_sessions
+  add column if not exists id uuid default gen_random_uuid(),
+  add column if not exists last_tick_at timestamptz,
+  add column if not exists last_market_snapshot_at timestamptz,
+  add column if not exists snapshot_tick_count integer not null default 0;
+
+update public.ai_process_sessions
+set id = gen_random_uuid()
+where id is null;
+
+alter table public.ai_process_sessions
+  alter column id set default gen_random_uuid(),
+  alter column id set not null;
+
+alter table public.ai_process_sessions
+  drop constraint if exists ai_process_sessions_pkey;
+
+alter table public.ai_process_sessions
+  add constraint ai_process_sessions_pkey primary key (id);
+
+create index if not exists ai_process_sessions_user_status_idx
+  on public.ai_process_sessions(user_id, status, started_at desc);
+
+-- ------------------------------------------------------------
+-- 2) logs에 process_id 추가 / 5분 스냅샷당 process 1행만 유지
+-- ------------------------------------------------------------
+alter table public.ai_process_logs
+  add column if not exists process_id uuid;
+
+update public.ai_process_logs l
+set process_id = s.id
+from public.ai_process_sessions s
+where l.process_id is null
+  and s.user_id = l.user_id;
+
+alter table public.ai_process_logs
+  drop constraint if exists ai_process_logs_user_id_market_at_key;
+
+alter table public.ai_process_logs
+  drop constraint if exists ai_process_logs_process_id_fkey;
+
+alter table public.ai_process_logs
+  add constraint ai_process_logs_process_id_fkey
+  foreign key (process_id) references public.ai_process_sessions(id) on delete cascade;
+
+create unique index if not exists ai_process_logs_process_market_unique
+  on public.ai_process_logs(process_id, market_at)
+  where process_id is not null;
+
+create index if not exists ai_process_logs_process_market_idx
+  on public.ai_process_logs(process_id, market_at desc);
+
+-- ------------------------------------------------------------
+-- 3) 공개 LIVE 목록: process_id 포함
+-- ------------------------------------------------------------
+drop function if exists public.get_ai_process_public_sessions();
+
+create function public.get_ai_process_public_sessions()
+returns table(
+  process_id uuid,
+  user_id uuid,
+  nickname text,
+  avatar text,
+  status text,
+  start_amount numeric,
+  current_amount numeric,
+  total_profit numeric,
+  total_return numeric,
+  duration_hours integer,
+  started_at timestamptz,
+  ends_at timestamptz,
+  last_asset_symbol text,
+  last_asset_name text,
+  last_asset_type text,
+  last_market_pct numeric,
+  last_delta numeric,
+  updated_at timestamptz
+)
+language sql
+security definer
+set search_path to 'public'
+as $$
+  select
+    s.id as process_id,
+    s.user_id,
+    p.nickname,
+    p.avatar,
+    s.status,
+    s.start_amount,
+    s.current_amount,
+    s.total_profit,
+    s.total_return,
+    s.duration_hours,
+    s.started_at,
+    s.ends_at,
+    s.last_asset_symbol,
+    s.last_asset_name,
+    s.last_asset_type,
+    s.last_market_pct,
+    s.last_delta,
+    s.updated_at
+  from public.ai_process_sessions s
+  join public.profiles p on p.id = s.user_id
+  where s.status = 'running'
+    and p.approval_status = 'approved'
+    and exists (
+      select 1 from public.profiles me
+      where me.id = auth.uid()
+        and me.approval_status = 'approved'
+    )
+  order by s.updated_at desc, s.started_at desc;
+$$;
+
+grant execute on function public.get_ai_process_public_sessions() to authenticated;
+
+-- ------------------------------------------------------------
+-- 4) 관리자가 PROCESS를 새로 추가: 기존 진행 PROCESS를 덮어쓰지 않음
+--    0시간 = 기간 미정 / 1~720시간 = 지정 기간
+-- ------------------------------------------------------------
+drop function if exists public.admin_start_ai_process(uuid,numeric,integer);
+
+create function public.admin_start_ai_process(
+  target_user_id uuid,
+  starting_amount numeric,
+  process_duration_hours integer
+)
+returns uuid
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  v_duration integer;
+  v_ends_at timestamptz;
+  v_process_id uuid;
+begin
+  if not exists (
+    select 1 from public.profiles me
+    where me.id = auth.uid()
+      and me.role = 'admin'
+      and me.approval_status = 'approved'
+  ) then
+    raise exception '관리자만 AI PROCESS를 시작할 수 있습니다.';
+  end if;
+
+  if starting_amount is null or starting_amount <= 0 then
+    raise exception '운용금액은 0보다 커야 합니다.';
+  end if;
+
+  if process_duration_hours is null or process_duration_hours < 0 or process_duration_hours > 720 then
+    raise exception '진행시간은 0(기간 미정) 또는 1시간~720시간이어야 합니다.';
+  end if;
+
+  if not exists (
+    select 1 from public.profiles p
+    where p.id = target_user_id
+      and p.approval_status = 'approved'
+      and coalesce(p.role,'member') <> 'admin'
+  ) then
+    raise exception '승인된 회원을 찾을 수 없습니다.';
+  end if;
+
+  if process_duration_hours = 0 then
+    v_duration := 720;
+    v_ends_at := null;
+  else
+    v_duration := process_duration_hours;
+    v_ends_at := now() + make_interval(hours => process_duration_hours);
+  end if;
+
+  insert into public.ai_process_sessions(
+    user_id,status,start_amount,current_amount,total_profit,total_return,duration_hours,
+    started_at,ends_at,completed_at,last_market_at,last_asset_symbol,last_asset_name,
+    last_asset_type,last_market_pct,last_delta,last_tick_at,last_market_snapshot_at,
+    snapshot_tick_count,updated_at
+  ) values (
+    target_user_id,'running',starting_amount,starting_amount,0,0,v_duration,
+    now(),v_ends_at,null,null,null,null,null,null,null,null,null,0,now()
+  )
+  returning id into v_process_id;
+
+  return v_process_id;
+end;
+$$;
+
+grant execute on function public.admin_start_ai_process(uuid,numeric,integer) to authenticated;
+
+-- 같은 함수명/인자이지만 이제 user_id가 아니라 process_id를 받습니다.
+create or replace function public.admin_stop_ai_process(target_process_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+begin
+  if not exists (
+    select 1 from public.profiles me
+    where me.id = auth.uid()
+      and me.role = 'admin'
+      and me.approval_status = 'approved'
+  ) then
+    raise exception '관리자만 AI PROCESS를 종료할 수 있습니다.';
+  end if;
+
+  update public.ai_process_sessions
+  set status='stopped', completed_at=now(), updated_at=now()
+  where id = target_process_id and status='running';
+end;
+$$;
+
+grant execute on function public.admin_stop_ai_process(uuid) to authenticated;
+
+-- 구버전 브라우저가 PROCESS를 직접 갱신하지 못하도록 제거합니다.
+drop function if exists public.record_ai_process_tick(timestamptz,text,text,text,numeric);
+
+-- ------------------------------------------------------------
+-- 5) 서버용 1분 엔진
+--    market_quotes = Vercel market route가 전달하는 8종 배열
+--    실제 시장은 5분 스냅샷, PROCESS 현재금액은 그 움직임을 5등분해 1분마다 갱신
+--    로그는 process + 5분 snapshot 1행에 누적하여 저장량 절감
+-- ------------------------------------------------------------
+create or replace function public.run_ai_process_market_tick(
+  tick_at timestamptz,
+  market_at timestamptz,
+  market_quotes jsonb
+)
+returns integer
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  s public.ai_process_sessions%rowtype;
+  v_symbol text;
+  v_name text;
+  v_type text;
+  v_market_pct numeric;
+  v_step_pct numeric;
+  v_before numeric;
+  v_delta numeric;
+  v_after numeric;
+  v_result text;
+  v_wants_profit boolean;
+  v_roll integer;
+  v_next_tick_count integer;
+  v_processed integer := 0;
+begin
+  if market_quotes is null or jsonb_typeof(market_quotes) <> 'array' then
+    return 0;
+  end if;
+
+  for s in
+    select *
+    from public.ai_process_sessions
+    where status = 'running'
+    for update skip locked
+  loop
+    if s.ends_at is not null and tick_at >= s.ends_at then
+      update public.ai_process_sessions
+      set status='completed', completed_at=tick_at, updated_at=now()
+      where id=s.id;
+      continue;
+    end if;
+
+    -- 동일 분 중복 실행 방지
+    if s.last_tick_at is not null and tick_at <= s.last_tick_at then
+      continue;
+    end if;
+
+    -- 같은 5분 시장 스냅샷은 최대 5번까지만 1분 단위로 반영
+    if s.last_market_snapshot_at is not distinct from market_at
+       and coalesce(s.snapshot_tick_count,0) >= 5 then
+      update public.ai_process_sessions
+      set last_tick_at=tick_at, updated_at=now()
+      where id=s.id;
+      continue;
+    end if;
+
+    v_symbol := null;
+    v_name := null;
+    v_type := null;
+    v_market_pct := null;
+
+    -- PROCESS마다 85/15 방향을 고정적으로 분산
+    v_roll := get_byte(decode(md5(s.id::text || market_at::text), 'hex'), 0);
+    v_wants_profit := v_roll < 217; -- 256 * 0.85 ≈ 217
+
+    if v_wants_profit then
+      select q.symbol, q.name, q.type, q."changePct"
+      into v_symbol, v_name, v_type, v_market_pct
+      from jsonb_to_recordset(market_quotes)
+        as q(symbol text, name text, type text, price numeric, "beforePrice" numeric, "changePct" numeric)
+      where q."changePct" > 0
+      order by q."changePct" desc
+      limit 1;
+    else
+      select q.symbol, q.name, q.type, q."changePct"
+      into v_symbol, v_name, v_type, v_market_pct
+      from jsonb_to_recordset(market_quotes)
+        as q(symbol text, name text, type text, price numeric, "beforePrice" numeric, "changePct" numeric)
+      where q."changePct" < 0
+      order by q."changePct" asc
+      limit 1;
+    end if;
+
+    -- 원하는 방향 종목이 없으면 변동폭이 가장 큰 종목 연결
+    if v_symbol is null then
+      select q.symbol, q.name, q.type, q."changePct"
+      into v_symbol, v_name, v_type, v_market_pct
+      from jsonb_to_recordset(market_quotes)
+        as q(symbol text, name text, type text, price numeric, "beforePrice" numeric, "changePct" numeric)
+      order by abs(coalesce(q."changePct",0)) desc
+      limit 1;
+    end if;
+
+    if v_symbol is null then
+      continue;
+    end if;
+
+    v_market_pct := coalesce(v_market_pct,0);
+    v_step_pct := v_market_pct / 5.0;
+    v_before := s.current_amount;
+    v_delta := round(v_before * v_step_pct / 100.0, 2);
+    v_after := greatest(0, v_before + v_delta);
+    v_result := case when v_delta > 0 then 'profit' when v_delta < 0 then 'loss' else 'wait' end;
+
+    if s.last_market_snapshot_at is distinct from market_at then
+      v_next_tick_count := 1;
+    else
+      v_next_tick_count := coalesce(s.snapshot_tick_count,0) + 1;
+    end if;
+
+    update public.ai_process_sessions
+    set current_amount=v_after,
+        total_profit=v_after-start_amount,
+        total_return=case when start_amount > 0 then ((v_after-start_amount)/start_amount)*100 else 0 end,
+        last_market_at=market_at,
+        last_market_snapshot_at=market_at,
+        last_tick_at=tick_at,
+        snapshot_tick_count=v_next_tick_count,
+        last_asset_symbol=v_symbol,
+        last_asset_name=v_name,
+        last_asset_type=v_type,
+        last_market_pct=v_market_pct,
+        last_delta=v_delta,
+        updated_at=now()
+    where id=s.id;
+
+    insert into public.ai_process_logs(
+      process_id,user_id,market_at,asset_symbol,asset_name,asset_type,market_pct,
+      amount_before,delta,amount_after,result_type
+    ) values (
+      s.id,s.user_id,market_at,v_symbol,v_name,v_type,v_market_pct,
+      v_before,v_delta,v_after,v_result
+    )
+    on conflict (process_id,market_at) where process_id is not null
+    do update set
+      asset_symbol=excluded.asset_symbol,
+      asset_name=excluded.asset_name,
+      asset_type=excluded.asset_type,
+      market_pct=excluded.market_pct,
+      delta=public.ai_process_logs.delta + excluded.delta,
+      amount_after=excluded.amount_after,
+      result_type=case
+        when public.ai_process_logs.delta + excluded.delta > 0 then 'profit'
+        when public.ai_process_logs.delta + excluded.delta < 0 then 'loss'
+        else 'wait'
+      end;
+
+    v_processed := v_processed + 1;
+  end loop;
+
+  return v_processed;
+end;
+$$;
+
+-- 서버 service_role에서만 호출. 브라우저 계정에는 실행권한을 주지 않습니다.
+revoke all on function public.run_ai_process_market_tick(timestamptz,timestamptz,jsonb) from public;
+revoke all on function public.run_ai_process_market_tick(timestamptz,timestamptz,jsonb) from anon;
+revoke all on function public.run_ai_process_market_tick(timestamptz,timestamptz,jsonb) from authenticated;
+grant execute on function public.run_ai_process_market_tick(timestamptz,timestamptz,jsonb) to service_role;
+
+-- ------------------------------------------------------------
+-- 6) AI PROCESS는 Realtime 방송하지 않음.
+--    화면은 1분 HTTP polling으로 읽으므로 chat Realtime 사용량과 분리됩니다.
+-- ------------------------------------------------------------
+do $$
+begin
+  if exists (
+    select 1 from pg_publication_tables
+    where pubname='supabase_realtime'
+      and schemaname='public'
+      and tablename='ai_process_sessions'
+  ) then
+    execute 'alter publication supabase_realtime drop table public.ai_process_sessions';
+  end if;
+end $$;
+
+commit;
+
+-- ------------------------------------------------------------
+-- 7) 선택사항: Supabase Cron이 Vercel market route를 매분 호출하도록 설정
+--    아래 함수 생성 후 SQL Editor에서 마지막에 한 줄만 실행하면 됩니다.
+--    예: select public.configure_ai_process_market_cron('https://내주소.vercel.app');
+-- ------------------------------------------------------------
+create extension if not exists pg_net with schema extensions;
+
+create or replace function public.configure_ai_process_market_cron(base_url text)
+returns void
+language plpgsql
+security definer
+set search_path to 'public','cron','net'
+as $$
+declare
+  v_job_id bigint;
+  v_url text;
+begin
+  if base_url is null or length(trim(base_url)) < 8 then
+    raise exception 'Vercel 주소를 입력해주세요.';
+  end if;
+
+  v_url := regexp_replace(trim(base_url), '/+$', '');
+  if right(v_url, 15) <> '/api/market-sim' then
+    v_url := v_url || '/api/market-sim';
+  end if;
+
+  for v_job_id in
+    select jobid from cron.job where jobname='vip-ai-process-market'
+  loop
+    perform cron.unschedule(v_job_id);
+  end loop;
+
+  perform cron.schedule(
+    'vip-ai-process-market',
+    '* * * * *',
+    format('select net.http_get(url := %L);', v_url)
+  );
+end;
+$$;
+
+revoke all on function public.configure_ai_process_market_cron(text) from public, anon, authenticated;
+
+
+-- ============================================================
+-- V12 LONG-RUN OPTIMIZATION (2026-10-03)
+-- 아래는 supabase/09_ai_process_long_run_optimization.sql 과 동일한 추가 마이그레이션입니다.
+-- ============================================================
+-- ============================================================
+-- AI PROCESS V12 LONG-RUN OPTIMIZATION
+-- 목적
+-- 1) AI PROCESS는 1분마다 현재 상태 UPDATE (행 누적 없음)
+-- 2) 상세 로그는 기존 5분 단위 유지
+-- 3) 오래된 상세 로그는 일별 요약으로 압축 후 삭제
+-- 4) AI PROCESS 테이블은 Realtime 미사용 유지
+-- 5) Supabase Cron은 /api/market-sim?engine=1 만 호출
+--    일반 사용자 화면 조회가 서버 엔진을 중복 실행하지 않도록 분리
+-- ============================================================
+
+begin;
+
+-- ------------------------------------------------------------
+-- 1) 오래 운용해도 상세 로그가 무한정 증가하지 않도록 일별 요약 테이블 생성
+-- ------------------------------------------------------------
+create table if not exists public.ai_process_daily_summaries (
+  process_id uuid not null references public.ai_process_sessions(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  summary_date date not null,
+  first_market_at timestamptz,
+  last_market_at timestamptz,
+  open_amount numeric(18,2) not null default 0,
+  close_amount numeric(18,2) not null default 0,
+  min_amount numeric(18,2) not null default 0,
+  max_amount numeric(18,2) not null default 0,
+  total_delta numeric(18,2) not null default 0,
+  sample_count integer not null default 0,
+  profit_count integer not null default 0,
+  loss_count integer not null default 0,
+  wait_count integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (process_id, summary_date)
+);
+
+create index if not exists ai_process_daily_user_date_idx
+  on public.ai_process_daily_summaries(user_id, summary_date desc);
+
+alter table public.ai_process_daily_summaries enable row level security;
+
+drop policy if exists "member or admin can read ai process daily summaries"
+  on public.ai_process_daily_summaries;
+create policy "member or admin can read ai process daily summaries"
+on public.ai_process_daily_summaries for select
+to authenticated
+using (
+  user_id = auth.uid()
+  or exists (
+    select 1 from public.profiles me
+    where me.id = auth.uid()
+      and me.role = 'admin'
+      and me.approval_status = 'approved'
+  )
+);
+
+grant select on public.ai_process_daily_summaries to authenticated;
+
+-- ------------------------------------------------------------
+-- 2) 상세 로그 압축 함수
+-- retain_days = 최근 상세 로그를 그대로 남겨둘 날짜 수
+-- 기본 14일: 그 이전의 완결된 날짜는 1일 1행으로 압축
+-- ------------------------------------------------------------
+create or replace function public.compact_ai_process_logs(retain_days integer default 14)
+returns integer
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+declare
+  v_cutoff timestamptz;
+  v_deleted integer := 0;
+begin
+  if retain_days is null or retain_days < 1 or retain_days > 90 then
+    raise exception 'retain_days는 1~90 사이여야 합니다.';
+  end if;
+
+  -- 오늘 진행 중인 로그는 건드리지 않고 최근 N일 상세 로그를 보존합니다.
+  v_cutoff := date_trunc('day', now()) - make_interval(days => retain_days);
+
+  insert into public.ai_process_daily_summaries (
+    process_id,
+    user_id,
+    summary_date,
+    first_market_at,
+    last_market_at,
+    open_amount,
+    close_amount,
+    min_amount,
+    max_amount,
+    total_delta,
+    sample_count,
+    profit_count,
+    loss_count,
+    wait_count,
+    updated_at
+  )
+  select
+    l.process_id,
+    l.user_id,
+    (l.market_at at time zone 'Asia/Seoul')::date as summary_date,
+    min(l.market_at) as first_market_at,
+    max(l.market_at) as last_market_at,
+    (array_agg(l.amount_before order by l.market_at asc))[1] as open_amount,
+    (array_agg(l.amount_after order by l.market_at desc))[1] as close_amount,
+    min(least(l.amount_before, l.amount_after)) as min_amount,
+    max(greatest(l.amount_before, l.amount_after)) as max_amount,
+    sum(l.delta) as total_delta,
+    count(*)::integer as sample_count,
+    count(*) filter (where l.result_type = 'profit')::integer as profit_count,
+    count(*) filter (where l.result_type = 'loss')::integer as loss_count,
+    count(*) filter (where l.result_type = 'wait')::integer as wait_count,
+    now()
+  from public.ai_process_logs l
+  where l.process_id is not null
+    and l.market_at < v_cutoff
+  group by l.process_id, l.user_id, (l.market_at at time zone 'Asia/Seoul')::date
+  on conflict (process_id, summary_date)
+  do update set
+    user_id = excluded.user_id,
+    first_market_at = excluded.first_market_at,
+    last_market_at = excluded.last_market_at,
+    open_amount = excluded.open_amount,
+    close_amount = excluded.close_amount,
+    min_amount = excluded.min_amount,
+    max_amount = excluded.max_amount,
+    total_delta = excluded.total_delta,
+    sample_count = excluded.sample_count,
+    profit_count = excluded.profit_count,
+    loss_count = excluded.loss_count,
+    wait_count = excluded.wait_count,
+    updated_at = now();
+
+  delete from public.ai_process_logs
+  where process_id is not null
+    and market_at < v_cutoff;
+
+  get diagnostics v_deleted = row_count;
+  return v_deleted;
+end;
+$$;
+
+revoke all on function public.compact_ai_process_logs(integer) from public, anon, authenticated;
+grant execute on function public.compact_ai_process_logs(integer) to service_role;
+
+-- ------------------------------------------------------------
+-- 3) V11 configure 함수 업그레이드
+-- 시장 엔진: 매분 /api/market-sim?engine=1 호출
+-- 유지관리: 매일 03:20 KST(18:20 UTC)에 14일 초과 상세 로그 압축
+-- ------------------------------------------------------------
+create or replace function public.configure_ai_process_market_cron(base_url text)
+returns void
+language plpgsql
+security definer
+set search_path to 'public','cron','net'
+as $$
+declare
+  v_job_id bigint;
+  v_url text;
+begin
+  if base_url is null or length(trim(base_url)) < 8 then
+    raise exception 'Vercel 주소를 입력해주세요.';
+  end if;
+
+  v_url := regexp_replace(trim(base_url), '/+$', '');
+  if right(v_url, 15) = '/api/market-sim' then
+    v_url := v_url || '?engine=1';
+  elsif position('/api/market-sim?' in v_url) > 0 then
+    null;
+  else
+    v_url := v_url || '/api/market-sim?engine=1';
+  end if;
+
+  for v_job_id in
+    select jobid from cron.job where jobname='vip-ai-process-market'
+  loop
+    perform cron.unschedule(v_job_id);
+  end loop;
+
+  perform cron.schedule(
+    'vip-ai-process-market',
+    '* * * * *',
+    format('select net.http_get(url := %L);', v_url)
+  );
+
+  for v_job_id in
+    select jobid from cron.job where jobname='vip-ai-process-log-compact'
+  loop
+    perform cron.unschedule(v_job_id);
+  end loop;
+
+  perform cron.schedule(
+    'vip-ai-process-log-compact',
+    '20 18 * * *',
+    'select public.compact_ai_process_logs(14);'
+  );
+end;
+$$;
+
+revoke all on function public.configure_ai_process_market_cron(text) from public, anon, authenticated;
+
+-- ------------------------------------------------------------
+-- 4) Realtime 안전장치: AI PROCESS 관련 대량 갱신 테이블을 방송 대상에서 제외
+-- ------------------------------------------------------------
+do $$
+begin
+  if exists (
+    select 1 from pg_publication_tables
+    where pubname='supabase_realtime'
+      and schemaname='public'
+      and tablename='ai_process_sessions'
+  ) then
+    execute 'alter publication supabase_realtime drop table public.ai_process_sessions';
+  end if;
+
+  if exists (
+    select 1 from pg_publication_tables
+    where pubname='supabase_realtime'
+      and schemaname='public'
+      and tablename='ai_process_logs'
+  ) then
+    execute 'alter publication supabase_realtime drop table public.ai_process_logs';
+  end if;
+
+  if exists (
+    select 1 from pg_publication_tables
+    where pubname='supabase_realtime'
+      and schemaname='public'
+      and tablename='ai_process_daily_summaries'
+  ) then
+    execute 'alter publication supabase_realtime drop table public.ai_process_daily_summaries';
+  end if;
+end $$;
+
+commit;
+
+-- ============================================================
+-- 적용 후 반드시 현재 Vercel 주소로 Cron을 다시 등록하세요.
+-- 예:
+-- select public.configure_ai_process_market_cron('https://내사이트.vercel.app');
+--
+-- 확인:
+-- select jobid, jobname, schedule, active
+-- from cron.job
+-- where jobname in ('vip-ai-process-market','vip-ai-process-log-compact')
+-- order by jobname;
+-- ============================================================
+
+-- ============================================================
+-- V13 FINAL OVERRIDE — 40-profile picker compatibility
+-- Keep this at the end so older avatar definitions above cannot override it.
+-- ============================================================
+create or replace function public.set_my_avatar(new_avatar text)
+returns void
+language plpgsql
+security definer
+set search_path to 'public'
+as $$
+begin
+  if new_avatar !~ '^profile-(0[1-9]|[12][0-9]|3[0-9]|40)$' then
+    raise exception 'Invalid avatar';
+  end if;
+
+  update public.profiles
+  set avatar = new_avatar
+  where id = auth.uid()
+    and approval_status = 'approved';
+
+  if not found then
+    raise exception 'Approved profile not found';
+  end if;
+end;
+$$;
+
+grant execute on function public.set_my_avatar(text) to authenticated;

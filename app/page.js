@@ -104,6 +104,8 @@ export default function Home() {
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
   const [aiSession, setAiSession] = useState(null);
+  const [aiSessions, setAiSessions] = useState([]);
+  const [aiSelectedProcessId, setAiSelectedProcessId] = useState("");
   const [aiPublicSessions, setAiPublicSessions] = useState([]);
   const [aiPublicLoading, setAiPublicLoading] = useState(false);
   const [aiAdminMemberId, setAiAdminMemberId] = useState("");
@@ -133,7 +135,7 @@ export default function Home() {
   const privateEmojiRef = useRef(null);
 
   const AI_START_MONEY = 5000000;
-  const AI_REFRESH_MS = 5 * 60 * 1000;
+  const AI_REFRESH_MS = 60 * 1000;
   const AI_PROFIT_CHANCE = 0.85;
 
   async function refreshPushStatus() {
@@ -503,18 +505,32 @@ export default function Home() {
 
   async function loadAiProcessState() {
     if (!user) return;
-    setAiPublicLoading(true);
+    const needPublicSessions = profile?.role === "admin" || chatTab === "ai";
+    if (needPublicSessions) setAiPublicLoading(true);
     try {
-      const [{ data: mine, error: mineError }, { data: publicRows, error: publicError }] = await Promise.all([
-        supabase.from("ai_process_sessions").select("*").eq("user_id", user.id).maybeSingle(),
-        supabase.rpc("get_ai_process_public_sessions")
-      ]);
-      if (mineError && mineError.code !== "PGRST116") console.error("AI PROCESS 내 세션 조회 오류:", mineError);
+      const minePromise = supabase
+        .from("ai_process_sessions")
+        .select("id,user_id,status,start_amount,current_amount,total_profit,total_return,duration_hours,started_at,ends_at,completed_at,last_market_at,last_asset_symbol,last_asset_name,last_asset_type,last_market_pct,last_delta,last_tick_at,updated_at")
+        .eq("user_id", user.id)
+        .order("started_at", { ascending: false })
+        .limit(50);
+      const publicPromise = needPublicSessions
+        ? supabase.rpc("get_ai_process_public_sessions")
+        : Promise.resolve({ data: null, error: null });
+      const [{ data: mineRows, error: mineError }, { data: publicRows, error: publicError }] = await Promise.all([minePromise, publicPromise]);
+      if (mineError) console.error("AI PROCESS 내 세션 조회 오류:", mineError);
       if (publicError) console.error("AI PROCESS 공개 현황 조회 오류:", publicError);
-      setAiSession(mine || null);
-      setAiPublicSessions(publicRows || []);
+
+      const rows = Array.isArray(mineRows) ? mineRows : [];
+      setAiSessions(rows);
+      const preferredId = aiSelectedProcessId && rows.some((row) => row.id === aiSelectedProcessId)
+        ? aiSelectedProcessId
+        : (rows.find((row) => row.status === "running")?.id || rows[0]?.id || "");
+      if (preferredId !== aiSelectedProcessId) setAiSelectedProcessId(preferredId);
+      setAiSession(rows.find((row) => row.id === preferredId) || null);
+      if (needPublicSessions) setAiPublicSessions(publicRows || []);
     } finally {
-      setAiPublicLoading(false);
+      if (needPublicSessions) setAiPublicLoading(false);
     }
   }
 
@@ -542,11 +558,11 @@ export default function Home() {
     }
   }
 
-  async function adminStopAiProcess(targetUserId) {
-    if (profile?.role !== "admin" || !targetUserId || aiAdminWorking) return;
+  async function adminStopAiProcess(targetProcessId) {
+    if (profile?.role !== "admin" || !targetProcessId || aiAdminWorking) return;
     setAiAdminWorking(true);
     try {
-      const { error } = await supabase.rpc("admin_stop_ai_process", { target_user_id: targetUserId });
+      const { error } = await supabase.rpc("admin_stop_ai_process", { target_process_id: targetProcessId });
       if (error) throw error;
       await loadAiProcessState();
     } catch (error) {
@@ -562,189 +578,89 @@ export default function Home() {
     setAiSimError("");
 
     try {
-      const response = await fetch("/api/market-sim", { cache: "no-store" });
-      const raw = await response.text();
-      let result = null;
+      const marketPromise = fetch("/api/market-sim", { cache: "no-store" });
+      const logsPromise = aiSession?.id
+        ? supabase
+            .from("ai_process_logs")
+            .select("process_id,market_at,asset_symbol,asset_name,asset_type,market_pct,amount_before,delta,amount_after,result_type")
+            .eq("process_id", aiSession.id)
+            .order("market_at", { ascending: false })
+            .limit(120)
+        : Promise.resolve({ data: [], error: null });
+
+      const [marketResponse, logsResult] = await Promise.all([marketPromise, logsPromise]);
+      const raw = await marketResponse.text();
+      let marketResult = null;
       try {
-        result = JSON.parse(raw);
+        marketResult = JSON.parse(raw);
       } catch {
         throw new Error("시장 데이터 응답 형식을 확인해주세요.");
       }
 
-      if (!response.ok || !result.success || !result.quotes?.length) {
-        throw new Error(result?.error || "시장 데이터를 불러오지 못했습니다.");
+      if (!marketResponse.ok || !marketResult?.success || !marketResult?.quotes?.length) {
+        throw new Error(marketResult?.error || "시장 데이터를 불러오지 못했습니다.");
       }
+      if (logsResult?.error) console.error("AI PROCESS 연동기록 조회 오류:", logsResult.error);
 
-      const now = result.updatedAt || new Date().toISOString();
-      const quotes = result.quotes.map((item) => ({
+      const quotes = marketResult.quotes.map((item) => ({
         ...item,
         price: Number(item.price),
+        beforePrice: Number(item.beforePrice ?? item.price),
+        changePct: Number(item.changePct || 0),
       }));
-      const startMoney = aiStartMoney();
-      const processRunning = aiSession?.status === "running" && (!aiSession?.ends_at || new Date(aiSession.ends_at).getTime() > Date.now());
-      const key = aiStorageKey();
-      let saved = null;
+      const logRows = Array.isArray(logsResult?.data) ? logsResult.data : [];
+      const results = logRows.map((row) => ({
+        at: row.market_at,
+        symbol: row.asset_symbol,
+        name: row.asset_name,
+        type: row.asset_type,
+        intervalPct: Number(row.market_pct || 0),
+        intervalProfit: Number(row.delta || 0),
+        allocatedKrw: Number(row.amount_before || 0),
+        portfolioValue: Number(row.amount_after || 0),
+        resultType: row.result_type || "wait",
+      }));
+      const history = [...results].reverse().map((row) => ({
+        at: row.at,
+        value: row.portfolioValue,
+        delta: row.intervalProfit,
+        resultType: row.resultType,
+        symbol: row.symbol,
+        name: row.name,
+        marketPct: row.intervalPct,
+      }));
 
-      try {
-        saved = JSON.parse(window.localStorage.getItem(key) || "null");
-      } catch {
-        saved = null;
+      if (aiSession?.started_at && (!history.length || history[0]?.at !== aiSession.started_at)) {
+        history.unshift({
+          at: aiSession.started_at,
+          value: Number(aiSession.start_amount || AI_START_MONEY),
+          delta: 0,
+          resultType: "start",
+          name: "AI PROCESS 시작",
+        });
       }
 
-      if (!saved?.startedAt) {
-        saved = {
-          startedAt: now,
-          durationHours: Number(aiSession?.duration_hours || makeAiDurationHours()),
-          portfolioValue: startMoney,
-          totalProfit: 0,
-          previousQuotes: Object.fromEntries(quotes.map((item) => [item.symbol, item.price])),
-          lastMarketAt: now,
-          lastLinkedAsset: null,
-          holdings: [],
-          marketRows: quotes.map((item) => ({ ...item, beforePrice: item.price, changePct: 0 })),
-          resultHistory: [],
-          history: [{ at: now, value: startMoney, delta: 0, resultType: processRunning ? "start" : "observe" }],
-          activity: [{
-            at: now,
-            text: processRunning ? "기준 시세 저장 완료 · 다음 5분 구간부터 실제 시장 움직임과 AI PROCESS 결과를 연동합니다." : "5분 시장 기준 시세를 기록했습니다. AI PROCESS 시작 시 이 시장 흐름과 연동됩니다.",
-            type: "analysis",
-          }],
-        };
-      } else {
-        const previous = saved.previousQuotes || {};
-        const previousMarketAt = saved.lastMarketAt;
-        const currentMarketAt = now;
-        const isNewSnapshot = !previousMarketAt || previousMarketAt !== currentMarketAt;
-
-        if (isNewSnapshot) {
-          const scored = quotes.map((item) => {
-            const before = Number(previous[item.symbol]);
-            const current = Number(item.price);
-            const changePct = Number.isFinite(before) && before > 0
-              ? ((current - before) / before) * 100
-              : 0;
-            return { ...item, beforePrice: before, changePct };
-          }).filter((item) => Number.isFinite(item.changePct));
-
-          saved.marketRows = scored;
-
-          const rising = scored.filter((item) => item.changePct > 0).sort((a, b) => b.changePct - a.changePct);
-          const falling = scored.filter((item) => item.changePct < 0).sort((a, b) => a.changePct - b.changePct);
-          const wantsProfit = aiSeedRoll(`${user.id}:${currentMarketAt}`) < AI_PROFIT_CHANCE;
-          let linked = null;
-
-          if (processRunning) {
-            if (wantsProfit && rising.length) linked = rising[0];
-            else if (!wantsProfit && falling.length) linked = falling[0];
-            else if (rising.length) linked = rising[0];
-            else if (falling.length) linked = falling[0];
-          }
-
-          const beforeValue = Number(saved.portfolioValue || startMoney);
-          const intervalPct = Number(linked?.changePct || 0);
-          const intervalProfit = linked ? beforeValue * (intervalPct / 100) : 0;
-          const nextValue = Math.max(0, beforeValue + intervalProfit);
-          const activity = Array.isArray(saved.activity) ? [...saved.activity] : [];
-
-          if (processRunning && linked && Math.abs(intervalPct) > 0.000001) {
-            const resultType = intervalProfit >= 0 ? "profit" : "loss";
-            const settledResult = {
-              at: currentMarketAt,
-              symbol: linked.symbol,
-              name: linked.name,
-              type: linked.type,
-              beforePrice: linked.beforePrice,
-              currentPrice: linked.price,
-              intervalPct,
-              intervalProfit,
-              allocatedKrw: beforeValue,
-              portfolioValue: nextValue,
-              resultType,
-              resultMode: true,
-            };
-
-            activity.unshift({
-              at: currentMarketAt,
-              type: resultType,
-              text: `${linked.name} · 실제 5분 ${aiSignedPct(intervalPct)} · AI PROCESS ${resultType === "profit" ? "수익" : "손실"} ${aiSignedKrw(intervalProfit)}`,
-            });
-
-            saved.lastLinkedAsset = {
-              symbol: linked.symbol,
-              name: linked.name,
-              type: linked.type,
-              resultType,
-            };
-            saved.holdings = [settledResult];
-            saved.resultHistory = [
-              settledResult,
-              ...(Array.isArray(saved.resultHistory) ? saved.resultHistory : []),
-            ].slice(0, 5000);
-            saved.history = [
-              ...(Array.isArray(saved.history) ? saved.history : []),
-              {
-                at: currentMarketAt,
-                value: nextValue,
-                delta: intervalProfit,
-                resultType,
-                symbol: linked.symbol,
-                name: linked.name,
-                marketPct: intervalPct,
-              },
-            ].slice(-1000);
-
-            if (aiSession?.status === "running") {
-              const { data: synced, error: syncError } = await supabase.rpc("record_ai_process_tick", {
-                market_at: currentMarketAt,
-                asset_symbol: linked.symbol,
-                asset_name: linked.name,
-                asset_type: linked.type,
-                market_pct: intervalPct
-              });
-              if (syncError) console.error("AI PROCESS 서버 동기화 오류:", syncError);
-              else if (synced) setAiSession(synced);
-            }
-          } else {
-            activity.unshift({
-              at: currentMarketAt,
-              type: "wait",
-              text: processRunning ? "직전 5분 시장 변동이 미미해 AI PROCESS 손익을 0원으로 처리했습니다." : "실시간 시장 5분 변동을 갱신했습니다.",
-            });
-            saved.holdings = [];
-            saved.history = [
-              ...(Array.isArray(saved.history) ? saved.history : []),
-              { at: currentMarketAt, value: nextValue, delta: 0, resultType: "wait" },
-            ].slice(-1000);
-          }
-
-          saved.portfolioValue = nextValue;
-          saved.totalProfit = nextValue - startMoney;
-          saved.previousQuotes = Object.fromEntries(quotes.map((item) => [item.symbol, item.price]));
-          saved.lastMarketAt = currentMarketAt;
-          saved.activity = activity.slice(0, 1000);
-        } else if (!Array.isArray(saved.marketRows)) {
-          saved.marketRows = quotes.map((item) => ({ ...item, beforePrice: item.price, changePct: 0 }));
-        }
-      }
-
-      window.localStorage.setItem(key, JSON.stringify(saved));
-
-      const portfolioValue = Number(saved.portfolioValue || startMoney);
-      const totalProfit = processRunning ? portfolioValue - startMoney : 0;
-      const totalReturn = processRunning && startMoney > 0 ? (totalProfit / startMoney) * 100 : 0;
-      const endAt = new Date(saved.startedAt).getTime() + Number(saved.durationHours || 1) * 3600000;
-      const remainingMs = Math.max(0, endAt - Date.now());
+      const startMoney = Number(aiSession?.start_amount || AI_START_MONEY);
+      const portfolioValue = Number(aiSession?.current_amount || startMoney);
+      const totalProfit = portfolioValue - startMoney;
+      const totalReturn = startMoney > 0 ? (totalProfit / startMoney) * 100 : 0;
 
       setAiSim({
-        ...saved,
+        startedAt: aiSession?.started_at || marketResult.updatedAt,
+        durationHours: Number(aiSession?.duration_hours || 24),
         portfolioValue,
         totalProfit,
         totalReturn,
-        completed: remainingMs <= 0,
-        remainingHours: Math.ceil(remainingMs / 3600000),
-        updatedAt: saved.lastMarketAt || now,
+        marketRows: quotes,
+        resultHistory: results,
+        history,
+        lastMarketAt: aiSession?.last_market_at || marketResult.updatedAt,
+        updatedAt: aiSession?.updated_at || marketResult.updatedAt,
       });
       setAiNextUpdate(new Date(Date.now() + AI_REFRESH_MS).toISOString());
+
+      // market route가 서버 엔진을 실행했을 수 있으므로 최신 세션 값을 다시 읽습니다.
+      await loadAiProcessState();
     } catch (error) {
       console.error(error);
       setAiSimError(error.message || "시장 결과 분석 중 오류가 발생했습니다.");
@@ -755,31 +671,33 @@ export default function Home() {
 
   useEffect(() => {
     if (!user || !profile) return;
+    if (!["ai", "home", "admin", "members"].includes(chatTab)) return;
     loadAiProcessState();
-
-    const channel = supabase
-      .channel(`ai-process-live-${user.id}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "ai_process_sessions" }, () => {
-        loadAiProcessState();
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [user?.id, profile?.role]);
+  }, [user?.id, profile?.role, aiSelectedProcessId, chatTab]);
 
   useEffect(() => {
     if (!user || !profile) return;
+    if (chatTab !== "ai" && chatTab !== "home") return;
 
-    hydrateAiSimulationFromStorage();
     updateAiSimulation();
 
-    const timer = setInterval(() => {
-      updateAiSimulation();
-      loadAutoEvents();
-    }, AI_REFRESH_MS);
+    const refreshVisible = () => {
+      if (typeof document === "undefined" || document.visibilityState === "visible") {
+        updateAiSimulation();
+        loadAutoEvents();
+      }
+    };
+    const timer = setInterval(refreshVisible, AI_REFRESH_MS);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refreshVisible();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
 
-    return () => clearInterval(timer);
-  }, [user?.id, profile?.role, aiSession?.started_at, aiSession?.status]);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [user?.id, profile?.role, aiSession?.id, aiSession?.status, chatTab]);
 
   useEffect(() => {
     if (profile?.role === "admin" && (chatTab === "ai" || chatTab === "admin" || chatTab === "members" || chatTab === "private")) {
@@ -794,7 +712,7 @@ export default function Home() {
       Promise.all([loadAdminAllMembers(), loadAdminMembers(), loadMemberNames(), loadAdminUnreadCounts()]).catch(() => {});
     };
     refreshAdminDashboard();
-    const timer = setInterval(refreshAdminDashboard, 4000);
+    const timer = setInterval(refreshAdminDashboard, 15000);
     return () => clearInterval(timer);
   }, [user?.id, profile?.role]);
 
@@ -2233,7 +2151,7 @@ export default function Home() {
         return;
       }
 
-      const landingTab = memberProfile.role === "admin" ? "admin" : "home";
+      const landingTab = memberProfile.role === "admin" ? "admin" : "private";
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem("vip-active-tab", landingTab);
       }
@@ -2334,7 +2252,7 @@ export default function Home() {
       window.localStorage.setItem("vip-ui-locked", "1");
       window.localStorage.setItem("vip-last-nickname", profile?.nickname || "");
       window.localStorage.setItem("vip-last-avatar", profile?.avatar || "profile-01");
-      window.sessionStorage.setItem("vip-active-tab", profile?.role === "admin" ? "admin" : "home");
+      window.sessionStorage.setItem("vip-active-tab", profile?.role === "admin" ? "admin" : "private");
     }
     setShowProfileInfo(false);
     setShowAvatarPicker(false);
@@ -2343,7 +2261,7 @@ export default function Home() {
   }
 
   function resumeVipSession() {
-    const landingTab = profile?.role === "admin" ? "admin" : "home";
+    const landingTab = profile?.role === "admin" ? "admin" : "private";
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("vip-ui-locked");
       window.sessionStorage.setItem("vip-active-tab", landingTab);
@@ -2602,13 +2520,6 @@ export default function Home() {
           )}
           <header style={styles.refHeader} className="vip-app-header">
             <div style={styles.refBrand}>
-              <button type="button" onClick={() => setShowAvatarPicker(!showAvatarPicker)} style={styles.refAvatarButton}>
-                <img
-                  src={avatarSrc(profile.avatar)}
-                  alt="프로필"
-                  style={styles.refAvatar}
-                />
-              </button>
               <div>
                 <div style={styles.refBrandTitle} className="vip-brand-title">AI PROCESS <span>VIP</span></div>
                 <div style={styles.refBrandSub} className="vip-brand-sub">
@@ -2813,8 +2724,8 @@ export default function Home() {
                   <button type="button" onClick={() => changeTab("ai")}>
                     <i className="vip-kpi-icon is-blue">▣</i>
                     <span>진행 중 프로젝트</span>
-                    <strong>{aiSession?.status === "running" ? "1개" : "0개"}</strong>
-                    <small>{aiSession?.status === "running" ? (aiSession?.ends_at ? `${aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours})} 남음` : "기간 미정") : "진행 중인 PROCESS 없음"}</small>
+                    <strong>{aiSessions.filter((item) => item.status === "running").length}개</strong>
+                    <small>{aiSessions.filter((item) => item.status === "running").length > 1 ? `현재 ${aiSessions.filter((item) => item.status === "running").length}개 PROCESS 동시 진행` : aiSession?.status === "running" ? (aiSession?.ends_at ? `${aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours})} 남음` : "기간 미정") : "진행 중인 PROCESS 없음"}</small>
                   </button>
                   <button type="button" onClick={() => changeTab("ai")}>
                     <i className="vip-kpi-icon is-green">✓</i>
@@ -3244,10 +3155,10 @@ export default function Home() {
                   <div className="ai-v2-hero-copy">
                     <div className="ai-v2-eyebrow"><span className="ai-v2-live-dot"></span> AI PROCESS · LIVE</div>
                     <h2>내 AI PROCESS 운용 현황</h2>
-                    <p>내 자산 변화와 5분 주식·코인 흐름, 현재 진행 회원 현황을 한 화면에서 확인하세요.</p>
+                    <p>내 자산 변화와 실제 시장 연동 기록, 현재 진행 PROCESS를 한 화면에서 확인하세요.</p>
                     <div className="ai-v2-status-row">
                       <span className={`ai-v2-status ${aiSession?.status === "running" ? "is-running" : "is-done"}`}>{aiSession?.status === "running" ? "진행 중" : "대기"}</span>
-                      <span>다음 시장 갱신 <b>{aiCountdown}</b></span>
+                      <span>다음 PROCESS 갱신 <b>{aiCountdown}</b></span>
                       <span>최근 반영 <b>{aiTime(aiSim?.updatedAt)}</b></span>
                     </div>
                   </div>
@@ -3263,9 +3174,38 @@ export default function Home() {
                   </div>
                 </section>
 
+                {profile?.role !== "admin" && aiSessions.length > 1 && (
+                  <section className="ai-v2-process-switcher">
+                    <div className="ai-v2-process-switcher-head">
+                      <span>MY PROCESS</span>
+                      <strong>진행 중인 AI PROCESS 선택</strong>
+                      <small>{aiSessions.filter((item) => item.status === "running").length}개 진행 중 · 완료 기록 포함 {aiSessions.length}개</small>
+                    </div>
+                    <div className="ai-v2-process-switcher-list">
+                      {aiSessions.map((item, index) => (
+                        <button
+                          type="button"
+                          key={item.id || `${item.started_at}-${index}`}
+                          className={item.id === aiSession?.id ? "is-active" : ""}
+                          onClick={() => {
+                            setAiSelectedProcessId(item.id);
+                            setAiSession(item);
+                            setAiSim(null);
+                          }}
+                        >
+                          <span>PROCESS #{String(item.id || "").slice(0, 6).toUpperCase()}</span>
+                          <b>{aiKrw(item.current_amount || item.start_amount)}</b>
+                          <em className={Number(item.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedKrw(item.total_profit || 0)}</em>
+                          <small>{item.status === "running" ? (item.ends_at ? aiRemainingText({startedAt:item.started_at,durationHours:item.duration_hours}) : "기간 미정") : item.status === "completed" ? "완료" : "종료"}</small>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
                 {profile?.role === "admin" && (
                   <section className="ai-v2-admin-console">
-                    <div className="ai-v2-admin-head"><div><span>ADMIN CONTROL</span><strong>회원 AI PROCESS 시작</strong></div><small>1시간 ~ 30일</small></div>
+                    <div className="ai-v2-admin-head"><div><span>ADMIN CONTROL</span><strong>회원 AI PROCESS 추가</strong></div><small>동일 회원 다중 진행 가능</small></div>
                     <div className="ai-v2-admin-form">
                       <select value={aiAdminMemberId} onChange={(e) => setAiAdminMemberId(e.target.value)}>
                         <option value="">회원 선택</option>
@@ -3290,7 +3230,7 @@ export default function Home() {
 
                 <div className="ai-v2-summary-grid">
                   <div className="ai-v2-summary-card"><span>시작 운용금액</span><strong>{aiSession?.status === "running" ? aiKrw(aiCurrentStartMoney) : "대기"}</strong><small>프로세스 시작 기준</small></div>
-                  <div className="ai-v2-summary-card"><span>현재 평가금액</span><strong>{aiSession?.status === "running" ? aiKrw(aiSession?.current_amount || aiCurrentStartMoney) : "-"}</strong><small>최근 5분 결과 반영</small></div>
+                  <div className="ai-v2-summary-card"><span>현재 평가금액</span><strong>{aiSession?.status === "running" ? aiKrw(aiSession?.current_amount || aiCurrentStartMoney) : "-"}</strong><small>1분 단위 현재금액 갱신</small></div>
                   <div className="ai-v2-summary-card"><span>누적 손익</span><strong className={(aiSession?.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSession?.status === "running" ? aiSignedKrw(aiSession?.total_profit || 0) : "-"}</strong><small>{aiSession?.status === "running" ? aiSignedPct(aiSession?.total_return || 0) : "PROCESS WAIT"}</small></div>
                   <div className="ai-v2-summary-card"><span>진행 기간</span><strong>{aiSession?.status === "running" ? (aiSession?.ends_at ? aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours}) : "기간 미정") : "대기"}</strong><small>{aiSession?.status === "running" && !aiSession?.ends_at ? "관리자 종료 시까지 진행" : "최대 30일 진행"}</small></div>
                   <div className="ai-v2-summary-card"><span>5분 시장</span><strong>{aiPositiveMarkets}↑ / {aiNegativeMarkets}↓</strong><small>주식·코인 8종 · 5분</small></div>
@@ -3299,15 +3239,15 @@ export default function Home() {
                 <section className="ai-v2-live-members">
                   <div className="ai-v2-live-members-head">
                     <div><span>LIVE MEMBERS</span><strong>지금 함께 진행 중인 회원</strong><small>다른 회원은 요약 수익만 표시됩니다.</small></div>
-                    <div className="ai-v2-live-count"><i></i>{aiPublicSessions.length}명 진행 중</div>
+                    <div className="ai-v2-live-count"><i></i>{aiPublicSessions.length}건 진행 중</div>
                   </div>
                   {aiPublicLoading && !aiPublicSessions.length ? <div className="ai-v2-live-empty">진행 현황을 불러오는 중입니다.</div> : aiPublicSessions.length ? (
                     <div className="ai-v2-live-member-grid">
                       {aiPublicSessions.map((item) => (
-                        <article className={`ai-v2-live-member-card ${item.user_id === user.id ? "is-me" : ""}`} key={item.user_id}>
+                        <article className={`ai-v2-live-member-card ${item.user_id === user.id ? "is-me" : ""}`} key={item.process_id || `${item.user_id}-${item.started_at}`}>
                           <img src={avatarSrc(item.avatar)} alt=""/>
                           <div className="ai-v2-live-member-main">
-                            <div className="ai-v2-live-member-name"><strong>{item.nickname}</strong>{item.user_id === user.id && <em>ME</em>}<span>● 진행 중</span></div>
+                            <div className="ai-v2-live-member-name"><strong>{item.nickname}</strong>{item.user_id === user.id && <em>ME</em>}<span>● 진행 중</span><small>#{String(item.process_id || "").slice(0,6).toUpperCase()}</small></div>
                             <div className="ai-v2-live-member-profit">
                               <b className={Number(item.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedKrw(item.total_profit || 0)}</b>
                               <small className={Number(item.total_return || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedPct(item.total_return || 0)}</small>
@@ -3317,7 +3257,7 @@ export default function Home() {
                               <time>{aiTime(item.updated_at)}</time>
                             </div>
                           </div>
-                          {profile?.role === "admin" && <button type="button" className="ai-v2-stop" onClick={() => adminStopAiProcess(item.user_id)}>종료</button>}
+                          {profile?.role === "admin" && <button type="button" className="ai-v2-stop" onClick={() => adminStopAiProcess(item.process_id)}>종료</button>}
                         </article>
                       ))}
                     </div>
@@ -3412,13 +3352,13 @@ export default function Home() {
                         <time>{aiTime(item.at)}</time>
                       </div>
                     )) : (
-                      <div className="ai-v2-history-empty">다음 시장 스냅샷부터 수익·손실과 연동 종목이 기록됩니다.</div>
+                      <div className="ai-v2-history-empty">시장 연결 후 5분 스냅샷마다 연동 종목과 누적 손익이 기록됩니다.</div>
                     )}
                   </div>
                 </section>
 
                 <div className="ai-v2-disclaimer">
-                  <b>연동 기준</b> · AI PROCESS 손익과 동일한 방향의 실제 5분 시장 움직임을 연결해 표시합니다. 시장 표시값은 Twelve Data 기반이며, 실제 주문·체결 내역을 의미하지 않습니다.
+                  <b>연동 기준</b> · 실제 5분 시장 움직임을 기준으로 연동 종목을 선택하고, 현재금액은 서버에서 1분 단위로 갱신합니다. 연동기록은 5분 스냅샷 1건으로 압축 저장되며 실제 주문·체결 내역을 의미하지 않습니다.
                 </div>
               </div>
             )}
