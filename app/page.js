@@ -80,6 +80,7 @@ export default function Home() {
   const [adminChats, setAdminChats] = useState([]);
   const [adminMembers, setAdminMembers] = useState([]);
   const [adminAllMembers, setAdminAllMembers] = useState([]);
+  const [adminMemberLoadError, setAdminMemberLoadError] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
   const [adminMemberFilter, setAdminMemberFilter] = useState("all");
   const [selectedAdminChat, setSelectedAdminChat] = useState(null);
@@ -108,6 +109,7 @@ export default function Home() {
   const [aiAdminMemberId, setAiAdminMemberId] = useState("");
   const [aiAdminAmount, setAiAdminAmount] = useState("5000000");
   const [aiAdminDurationHours, setAiAdminDurationHours] = useState("24");
+  const [aiAdminIndefinite, setAiAdminIndefinite] = useState(false);
   const [aiAdminWorking, setAiAdminWorking] = useState(false);
 
   const [autoEvents, setAutoEvents] = useState([]);
@@ -519,9 +521,9 @@ export default function Home() {
   async function adminStartAiProcess() {
     if (profile?.role !== "admin" || !aiAdminMemberId || aiAdminWorking) return;
     const amount = Number(String(aiAdminAmount).replace(/,/g, ""));
-    const duration = Number(aiAdminDurationHours);
+    const duration = aiAdminIndefinite ? 0 : Number(aiAdminDurationHours);
     if (!Number.isFinite(amount) || amount <= 0) { setNotice("운용금액을 확인해주세요."); return; }
-    if (!Number.isFinite(duration) || duration < 1 || duration > 720) { setNotice("진행시간은 1시간~720시간(30일)으로 설정해주세요."); return; }
+    if (!aiAdminIndefinite && (!Number.isFinite(duration) || duration < 1 || duration > 720)) { setNotice("진행시간은 1시간~720시간(30일)으로 설정해주세요."); return; }
     setAiAdminWorking(true);
     try {
       const { error } = await supabase.rpc("admin_start_ai_process", {
@@ -1933,8 +1935,11 @@ export default function Home() {
     const { data, error } = await supabase.rpc("get_admin_all_profiles");
     if (error) {
       console.error("전체 회원 목록 불러오기 실패:", error);
+      setAdminAllMembers([]);
+      setAdminMemberLoadError(error.message || "회원 목록을 불러오지 못했습니다.");
       return;
     }
+    setAdminMemberLoadError("");
     setAdminAllMembers(data || []);
   }
 
@@ -2236,11 +2241,14 @@ export default function Home() {
       setUser(data.user);
       setProfile(memberProfile);
       setVipLocked(false);
-      setShowWelcomeModal(true);
       if (typeof window !== "undefined") {
+        const welcomeKey = `vip-welcome-seen-${data.user.id}`;
+        setShowWelcomeModal(memberProfile.role !== "admin" && !window.localStorage.getItem(welcomeKey));
         window.localStorage.removeItem("vip-ui-locked");
         window.localStorage.setItem("vip-last-nickname", memberProfile.nickname || cleanNickname);
         window.localStorage.setItem("vip-last-avatar", memberProfile.avatar || "profile-01");
+      } else {
+        setShowWelcomeModal(memberProfile.role !== "admin");
       }
       setPassword("");
     } catch {
@@ -2497,6 +2505,16 @@ export default function Home() {
     const aiLastResult = aiRecentResults[0] || null;
     const aiPositiveMarkets = aiMarketRows.filter((item) => Number(item.changePct) > 0).length;
     const aiNegativeMarkets = aiMarketRows.filter((item) => Number(item.changePct) < 0).length;
+    const aiCompletedCount = ["completed", "stopped"].includes(aiSession?.status) ? 1 : 0;
+    const aiTodayLabel = new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
+    const aiTodayProfit = (Array.isArray(aiSim?.resultHistory) ? aiSim.resultHistory : []).reduce((sum, item) => {
+      if (!item?.at) return sum;
+      const itemLabel = new Date(item.at).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
+      return itemLabel === aiTodayLabel ? sum + Number(item.intervalProfit || 0) : sum;
+    }, 0);
+    const aiProgressPct = aiSession?.status === "running" && aiSession?.ends_at
+      ? Math.max(4, Math.min(100, ((Date.now() - new Date(aiSession.started_at).getTime()) / (Math.max(1, Number(aiSession.duration_hours)) * 3600000)) * 100))
+      : 0;
 
     const navItems = profile?.role === "admin"
       ? [
@@ -2553,7 +2571,13 @@ export default function Home() {
                   <button type="button" onClick={() => { setShowWelcomeModal(false); setChatTab("group"); }}>💬 <b>그룹채팅 바로가기</b></button>
                   <button type="button" onClick={() => { setShowWelcomeModal(false); setChatTab("event"); }}>🎁 <b>이벤트 확인하기</b></button>
                 </div>
-                <button type="button" className="vip-welcome-confirm" onClick={() => setShowWelcomeModal(false)}>확인했어요 <span>›</span></button>
+                <button type="button" className="vip-welcome-confirm" onClick={async () => {
+                  setShowWelcomeModal(false);
+                  if (typeof window !== "undefined" && user?.id) {
+                    window.localStorage.setItem(`vip-welcome-seen-${user.id}`, "1");
+                  }
+                  await changeTab("private");
+                }}>확인했어요 <span>›</span></button>
               </section>
             </div>
           )}
@@ -2747,88 +2771,179 @@ export default function Home() {
           )}
 
           <div style={styles.refBody} className="vip-app-body">
+            {profile?.role === "admin" && adminMemberLoadError && (
+              <div style={{margin:"0 0 14px",padding:"12px 14px",border:"1px solid #8f4f58",borderRadius:"12px",background:"#2b1720",color:"#ffd8dd",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px",fontSize:"12px"}}>
+                <span>회원 목록을 불러오지 못했습니다. 관리자 회원관리 SQL을 적용한 뒤 다시 시도해주세요.</span>
+                <button type="button" onClick={loadAdminAllMembers} style={{border:"1px solid #b56c76",background:"#4a2630",color:"#fff",borderRadius:"9px",padding:"7px 10px",fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}}>다시 불러오기</button>
+              </div>
+            )}
             {chatTab === "home" && profile?.role !== "admin" && (
-              <div className="vip-member-dashboard">
-                <section className="vip-member-hero">
+              <div className="vip-member-dashboard vip-master-member">
+                <section className="vip-member-hero vip-member-hero-master">
                   <div className="vip-member-hero-copy">
                     <span>AI PROCESS VIP · PRIVATE MEMBER</span>
                     <h2>안녕하세요, {profile.nickname}님!</h2>
-                    <p>오늘도 AI PROCESS와 함께 내 진행 현황과 VIP 서비스를 한눈에 확인하세요.</p>
-                    <button type="button" onClick={() => changeTab("ai")}>AI PROCESS 보기 <b>›</b></button>
+                    <p>오늘도 AI와 함께 운용 현황을 확인하고, 진행 중인 PROCESS를 한눈에 관리하세요.</p>
+                    <div className="vip-member-hero-finance">
+                      <button type="button" onClick={() => changeTab("ai")}>
+                        <span>총 투자금</span>
+                        <strong>{aiSession?.status === "running" ? aiKrw(aiCurrentStartMoney) : "대기 중"}</strong>
+                        <small>{aiSession?.status === "running" ? "AI PROCESS 운용 기준금액" : "PROCESS가 시작되면 표시됩니다"}</small>
+                      </button>
+                      <button type="button" onClick={() => changeTab("ai")}>
+                        <span>누적 수익</span>
+                        <strong className={(aiSession?.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>
+                          {aiSession?.status === "running" ? aiSignedKrw(aiSession?.total_profit || 0) : "-"}
+                        </strong>
+                        <small>{aiSession?.status === "running" ? aiSignedPct(aiSession?.total_return || 0, 2) : "PROCESS WAIT"}</small>
+                      </button>
+                    </div>
                   </div>
-                  <div className="vip-member-hero-mascot">
+                  <div className="vip-member-hero-mascot vip-master-mascot">
+                    <span className="vip-master-mascot-crown">♛</span>
+                    <div className="vip-member-hero-spark s1">✦</div>
+                    <div className="vip-member-hero-spark s2">✦</div>
                     <div className="vip-member-hero-ring"></div>
-                    <img src={avatarSrc(profile.avatar)} alt=""/>
+                    <img src="/avatars/40/profile-21.jpg" alt="AI PROCESS VIP 캐릭터"/>
                     <em>VIP</em>
                   </div>
                 </section>
 
-                <section className="vip-member-kpis">
-                  <button type="button" onClick={() => changeTab("ai")}><span>총 운용금액</span><strong>{aiSession?.status === "running" ? aiKrw(aiCurrentStartMoney) : "대기 중"}</strong><small>AI PROCESS 시작 기준</small></button>
-                  <button type="button" onClick={() => changeTab("ai")}><span>누적 손익</span><strong className={(aiSession?.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSession?.status === "running" ? aiSignedKrw(aiSession?.total_profit || 0) : "-"}</strong><small>{aiSession?.status === "running" ? aiSignedPct(aiSession?.total_return || 0, 2) : "진행 대기"}</small></button>
-                  <button type="button" onClick={() => changeTab("ai")}><span>진행 중 PROCESS</span><strong>{aiSession?.status === "running" ? "1건" : "0건"}</strong><small>{aiSession?.status === "running" ? aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours}) + " 남음" : "시작된 PROCESS 없음"}</small></button>
+                <section className="vip-member-kpis vip-master-member-kpis">
+                  <button type="button" onClick={() => changeTab("ai")}>
+                    <i className="vip-kpi-icon is-blue">▣</i>
+                    <span>진행 중 프로젝트</span>
+                    <strong>{aiSession?.status === "running" ? "1개" : "0개"}</strong>
+                    <small>{aiSession?.status === "running" ? (aiSession?.ends_at ? `${aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours})} 남음` : "기간 미정") : "진행 중인 PROCESS 없음"}</small>
+                  </button>
+                  <button type="button" onClick={() => changeTab("ai")}>
+                    <i className="vip-kpi-icon is-green">✓</i>
+                    <span>완료 프로젝트</span>
+                    <strong>{aiCompletedCount}개</strong>
+                    <small>{aiCompletedCount ? "최근 PROCESS 종료 완료" : "완료된 PROCESS 없음"}</small>
+                  </button>
+                  <button type="button" onClick={() => changeTab("ai")}>
+                    <i className="vip-kpi-icon is-gold">★</i>
+                    <span>오늘 수익</span>
+                    <strong className={aiTodayProfit >= 0 ? "is-profit" : "is-loss"}>{aiSignedKrw(aiTodayProfit)}</strong>
+                    <small>오늘 5분 시장 연동 결과 합계</small>
+                  </button>
                 </section>
 
-                <section className="vip-member-workspace">
+                <section className="vip-member-workspace vip-master-member-workspace">
                   <div className="vip-member-panel vip-member-chart-card">
-                    <div className="vip-member-panel-head"><div><span>PERFORMANCE</span><strong>수익 그래프</strong></div><button type="button" onClick={() => changeTab("ai")}>상세 보기</button></div>
+                    <div className="vip-member-panel-head">
+                      <div><span>PERFORMANCE</span><strong>수익 그래프</strong></div>
+                      <button type="button" onClick={() => changeTab("ai")}>최근 기록 ›</button>
+                    </div>
                     <div className="vip-member-chart-meta">
                       <div><span>현재 평가금액</span><b>{aiSession?.status === "running" ? aiKrw(aiSession?.current_amount || aiCurrentStartMoney) : "대기 중"}</b></div>
+                      <div><span>누적 수익률</span><b className={(aiSession?.total_return || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSession?.status === "running" ? aiSignedPct(aiSession?.total_return || 0, 2) : "-"}</b></div>
                       <div><span>최근 반영</span><b>{aiTime(aiSim?.updatedAt)}</b></div>
                     </div>
                     <div className="vip-member-mini-chart">
                       {aiChart.nodes.length > 1 ? (
                         <svg viewBox={`0 0 ${aiChart.width} ${aiChart.height}`} preserveAspectRatio="none">
-                          <defs><linearGradient id="vipHomeArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#d7a94a" stopOpacity=".32"/><stop offset="100%" stopColor="#d7a94a" stopOpacity="0"/></linearGradient></defs>
+                          <defs>
+                            <linearGradient id="vipHomeArea" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#edaa2f" stopOpacity=".30"/>
+                              <stop offset="100%" stopColor="#edaa2f" stopOpacity="0"/>
+                            </linearGradient>
+                          </defs>
+                          {[0.2,0.4,0.6,0.8].map((ratio) => <line key={ratio} x1="52" y1={aiChart.height * ratio} x2="866" y2={aiChart.height * ratio} className="vip-member-chart-grid"/>)}
                           <line x1="52" y1={aiChart.baselineY} x2="866" y2={aiChart.baselineY} className="vip-member-chart-base"/>
                           <path d={aiChart.areaPath} fill="url(#vipHomeArea)"/>
                           <polyline points={aiChart.points} className="vip-member-chart-line"/>
+                          {aiChart.nodes.slice(-7).map((node, idx) => <circle key={`${node.at}-${idx}`} cx={node.x} cy={node.y} r="4.2" className="vip-member-chart-dot"/>)}
                         </svg>
                       ) : <div className="vip-member-chart-empty">AI PROCESS가 시작되면 자산 변화가 표시됩니다.</div>}
                     </div>
                   </div>
 
                   <div className="vip-member-panel vip-member-process-card">
-                    <div className="vip-member-panel-head"><div><span>MY PROCESS</span><strong>진행 중인 프로젝트</strong></div><i className={aiSession?.status === "running" ? "is-live" : ""}>{aiSession?.status === "running" ? "진행중" : "대기"}</i></div>
+                    <div className="vip-member-panel-head">
+                      <div><span>MY PROCESS</span><strong>진행 중인 프로젝트</strong></div>
+                      <i className={aiSession?.status === "running" ? "is-live" : ""}>{aiSession?.status === "running" ? "진행중" : "대기"}</i>
+                    </div>
                     <div className="vip-member-process-body">
                       <div className="vip-member-process-icon">AI</div>
-                      <div><b>AI PROCESS</b><span>{aiSession?.status === "running" ? `운용금액 ${aiKrw(aiCurrentStartMoney)}` : "관리자가 PROCESS를 시작하면 여기에 표시됩니다."}</span></div>
+                      <div>
+                        <b>AI PROCESS #CURRENT</b>
+                        <span>{aiSession?.status === "running" ? `운용금액 ${aiKrw(aiCurrentStartMoney)}` : "관리자가 PROCESS를 시작하면 여기에 표시됩니다."}</span>
+                      </div>
                     </div>
-                    {aiSession?.status === "running" && <div className="vip-member-progress"><span style={{width:`${Math.max(4,Math.min(100,((Date.now()-new Date(aiSession.started_at).getTime())/(Math.max(1,Number(aiSession.duration_hours))*3600000))*100))}%`}}></span></div>}
-                    <div className="vip-member-process-foot"><span>남은 시간 <b>{aiSession?.status === "running" ? aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours}) : "-"}</b></span><span>수익률 <b className={(aiSession?.total_return || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSession?.status === "running" ? aiSignedPct(aiSession.total_return || 0, 2) : "-"}</b></span></div>
-                    <button type="button" onClick={() => changeTab("ai")}>PROCESS 상세 보기</button>
+                    {aiSession?.status === "running" && (
+                      <>
+                        <div className="vip-member-progress"><span style={{width:`${aiSession?.ends_at ? aiProgressPct : 100}%`}} className={!aiSession?.ends_at ? "is-indefinite" : ""}></span></div>
+                        <div className="vip-member-process-meta-row">
+                          <span>남은 시간 <b>{aiSession?.ends_at ? aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours}) : "∞ 기간 미정"}</b></span>
+                          <span>현재 수익률 <b className={(aiSession?.total_return || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedPct(aiSession.total_return || 0, 2)}</b></span>
+                        </div>
+                      </>
+                    )}
+                    <button type="button" onClick={() => changeTab("ai")}>프로젝트 자세히 보기</button>
                   </div>
-                </section>
-
-                <section className="vip-member-shortcuts">
-                  <button type="button" onClick={() => changeTab("group")}><span>💬</span><div><b>그룹채팅</b><small>{approvedMemberCount}명과 함께하는 VIP 라운지</small></div><em>›</em></button>
-                  <button type="button" onClick={() => changeTab("event")}><span>🎁</span><div><b>이벤트</b><small>{featuredEvent ? featuredEvent.title : "다음 이벤트를 확인하세요"}</small></div><em>›</em></button>
-                  <button type="button" onClick={() => changeTab("private")}><span>🎧</span><div><b>1:1 문의</b><small>{unreadPrivate > 0 ? `읽지 않은 답변 ${unreadPrivate}건` : "관리자에게 바로 문의하기"}</small></div><em>›</em></button>
                 </section>
               </div>
             )}
 
             {chatTab === "admin" && profile?.role === "admin" && (
-              <div className="vip-admin-dashboard">
-                <section className="vip-admin-hero vip-admin-hero-premium">
+              <div className="vip-admin-dashboard vip-master-admin">
+                <section className="vip-admin-page-head">
                   <div>
-                    <span>AI PROCESS VIP · ADMIN CONSOLE</span>
+                    <span>ADMIN DASHBOARD</span>
                     <h2>관리자 대시보드</h2>
-                    <p>회원 승인부터 AI PROCESS, 이벤트, 상담까지 현재 운영 상태를 한 화면에서 관리합니다.</p>
+                    <p>회원, AI PROCESS, 이벤트, 문의 상태를 한 화면에서 확인합니다.</p>
                   </div>
                   <div className="vip-admin-status"><i></i> SYSTEM ONLINE</div>
                 </section>
 
                 <section className="vip-admin-kpis vip-admin-kpis-premium">
-                  <button type="button" onClick={() => { setAdminMemberFilter("approved"); setMemberSearch(""); changeTab("members"); }}><span>승인 회원</span><strong>{adminApprovedMembers.length.toLocaleString("ko-KR")}명</strong><small>관리자 제외 · 승인 완료</small></button>
-                  <button type="button" onClick={() => { setAdminMemberFilter("pending"); setMemberSearch(""); changeTab("members"); }}><span>승인 대기</span><strong>{adminPendingMembers.length.toLocaleString("ko-KR")}명</strong><small>가입 신청 확인</small></button>
-                  <button type="button" onClick={() => changeTab("ai")}><span>AI PROCESS 진행</span><strong>{aiPublicSessions.length.toLocaleString("ko-KR")}명</strong><small>현재 진행 세션</small></button>
-                  <button type="button" onClick={() => changeTab("private")}><span>읽지 않은 문의</span><strong>{unreadPrivate.toLocaleString("ko-KR")}건</strong><small>1:1 상담함 바로가기</small></button>
+                  <button type="button" onClick={() => { setAdminMemberFilter("approved"); setMemberSearch(""); changeTab("members"); }}>
+                    <span>전체 회원</span><strong>{adminApprovedMembers.length.toLocaleString("ko-KR")}명</strong><small>승인된 일반 회원</small>
+                  </button>
+                  <button type="button" onClick={() => { setAdminMemberFilter("pending"); setMemberSearch(""); changeTab("members"); }}>
+                    <span>승인 대기</span><strong>{adminPendingMembers.length.toLocaleString("ko-KR")}명</strong><small>신규 가입 신청</small>
+                  </button>
+                  <button type="button" onClick={() => changeTab("ai")}>
+                    <span>진행 중 프로젝트</span><strong>{aiPublicSessions.length.toLocaleString("ko-KR")}개</strong><small>AI PROCESS LIVE</small>
+                  </button>
+                  <button type="button" onClick={() => changeTab("private")}>
+                    <span>읽지 않은 문의</span><strong>{unreadPrivate.toLocaleString("ko-KR")}건</strong><small>1:1 상담 확인</small>
+                  </button>
                 </section>
 
                 <section className="vip-admin-overview-grid">
+                  <div className="vip-admin-panel vip-admin-metric-panel">
+                    <div className="vip-admin-panel-head">
+                      <div><span>OPERATIONS</span><strong>운영 현황 추이</strong></div>
+                      <small>실시간 기준</small>
+                    </div>
+                    <div className="vip-admin-metric-bars vip-admin-trend-bars">
+                      {[
+                        ["회원", adminApprovedMembers.length, "approved"],
+                        ["대기", adminPendingMembers.length, "pending"],
+                        ["PROCESS", aiPublicSessions.length, "process"],
+                        ["문의", unreadPrivate, "unread"],
+                      ].map(([label,count,tone]) => {
+                        const maxValue = Math.max(1, adminApprovedMembers.length, adminPendingMembers.length, aiPublicSessions.length, unreadPrivate);
+                        const height = Math.max(14, Math.round((Number(count || 0) / maxValue) * 100));
+                        return (
+                          <div className="vip-admin-metric-item" key={label}>
+                            <div className="vip-admin-metric-track"><i className={`is-${tone}`} style={{height:`${height}%`}}></i></div>
+                            <b>{Number(count || 0).toLocaleString("ko-KR")}</b>
+                            <span>{label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <div className="vip-admin-panel vip-admin-status-panel">
-                    <div className="vip-admin-panel-head"><div><span>MEMBER STATUS</span><strong>회원 현황</strong></div><button type="button" onClick={() => { setAdminMemberFilter("all"); changeTab("members"); }}>전체 보기</button></div>
+                    <div className="vip-admin-panel-head">
+                      <div><span>MEMBER STATUS</span><strong>회원 현황</strong></div>
+                      <button type="button" onClick={() => { setAdminMemberFilter("all"); changeTab("members"); }}>전체 보기</button>
+                    </div>
                     <div className="vip-admin-status-body">
                       <div className="vip-admin-donut" style={{background:`conic-gradient(#4c9cff 0 ${Math.round((adminApprovedMembers.length / Math.max(1, adminApprovedMembers.length + adminPendingMembers.length + adminRejectedMembers.length)) * 100)}%, #f1b84c 0 ${Math.round(((adminApprovedMembers.length + adminPendingMembers.length) / Math.max(1, adminApprovedMembers.length + adminPendingMembers.length + adminRejectedMembers.length)) * 100)}%, #e76d7a 0 100%)`}}>
                         <div><strong>{(adminApprovedMembers.length + adminPendingMembers.length + adminRejectedMembers.length).toLocaleString("ko-KR")}</strong><span>전체 회원</span></div>
@@ -2843,19 +2958,24 @@ export default function Home() {
                   </div>
 
                   <div className="vip-admin-panel vip-admin-requests-panel">
-                    <div className="vip-admin-panel-head"><div><span>MEMBER APPROVAL</span><strong>최근 가입 신청</strong></div><small>{adminPendingMembers.length}명 대기</small></div>
-                    <div className="vip-admin-mini-list">
+                    <div className="vip-admin-panel-head">
+                      <div><span>NEW MEMBER REQUEST</span><strong>최근 가입 신청</strong></div>
+                      <button type="button" onClick={() => { setAdminMemberFilter("pending"); changeTab("members"); }}>전체 보기 ›</button>
+                    </div>
+                    <div className="vip-admin-request-table">
+                      <div className="vip-admin-request-head"><span>회원</span><span>가입일</span><span>상태</span><span>관리</span></div>
                       {adminPendingMembers.slice(0, 5).map((member) => (
-                        <div key={member.member_id} className="is-pending">
-                          <img src={avatarSrc(member.avatar)} alt=""/>
-                          <span><b>{member.nickname}</b><small>{member.real_name || "성함 미입력"} · 승인 대기</small></span>
-                          <div className="vip-admin-approval-actions">
+                        <div key={member.member_id} className="vip-admin-request-row">
+                          <div className="vip-admin-request-user"><img src={avatarSrc(member.avatar)} alt=""/><span><b>{member.nickname}</b><small>{member.real_name || "성함 미입력"}</small></span></div>
+                          <span>{member.created_at ? new Intl.DateTimeFormat("ko-KR", {year:"2-digit",month:"2-digit",day:"2-digit"}).format(new Date(member.created_at)) : "-"}</span>
+                          <i>승인 대기</i>
+                          <div>
                             <button type="button" disabled={working} onClick={() => setMemberApproval(member.member_id, "approved")}>승인</button>
-                            <button type="button" disabled={working} onClick={() => setMemberApproval(member.member_id, "rejected")}>거절</button>
+                            <button type="button" className="is-danger" disabled={working} onClick={() => setMemberApproval(member.member_id, "rejected")}>거절</button>
                           </div>
                         </div>
                       ))}
-                      {!adminPendingMembers.length && <p>현재 승인 대기 회원이 없습니다.</p>}
+                      {!adminPendingMembers.length && <p className="vip-admin-request-empty">현재 승인 대기 회원이 없습니다.</p>}
                     </div>
                   </div>
                 </section>
@@ -3152,7 +3272,17 @@ export default function Home() {
                         {adminMembers.map((member) => <option key={member.member_id} value={member.member_id}>{member.nickname}</option>)}
                       </select>
                       <input value={aiAdminAmount} onChange={(e) => setAiAdminAmount(e.target.value.replace(/[^0-9]/g,""))} inputMode="numeric" placeholder="운용금액"/>
-                      <input value={aiAdminDurationHours} onChange={(e) => setAiAdminDurationHours(e.target.value.replace(/[^0-9]/g,""))} inputMode="numeric" placeholder="시간"/>
+                      <div className="ai-v2-duration-control">
+                        <div className="ai-v2-duration-tabs">
+                          <button type="button" className={!aiAdminIndefinite ? "is-active" : ""} onClick={() => setAiAdminIndefinite(false)}>시간 지정</button>
+                          <button type="button" className={aiAdminIndefinite ? "is-active" : ""} onClick={() => setAiAdminIndefinite(true)}>기간 미정</button>
+                        </div>
+                        {!aiAdminIndefinite ? (
+                          <input value={aiAdminDurationHours} onChange={(e) => setAiAdminDurationHours(e.target.value.replace(/[^0-9]/g,""))} inputMode="numeric" placeholder="진행 시간"/>
+                        ) : (
+                          <div className="ai-v2-indefinite-label"><b>∞ 기간 미정</b><span>관리자가 종료할 때까지 진행</span></div>
+                        )}
+                      </div>
                       <button type="button" onClick={adminStartAiProcess} disabled={aiAdminWorking || !aiAdminMemberId}>{aiAdminWorking ? "처리 중" : "PROCESS START"}</button>
                     </div>
                   </section>
@@ -3162,7 +3292,7 @@ export default function Home() {
                   <div className="ai-v2-summary-card"><span>시작 운용금액</span><strong>{aiSession?.status === "running" ? aiKrw(aiCurrentStartMoney) : "대기"}</strong><small>프로세스 시작 기준</small></div>
                   <div className="ai-v2-summary-card"><span>현재 평가금액</span><strong>{aiSession?.status === "running" ? aiKrw(aiSession?.current_amount || aiCurrentStartMoney) : "-"}</strong><small>최근 5분 결과 반영</small></div>
                   <div className="ai-v2-summary-card"><span>누적 손익</span><strong className={(aiSession?.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSession?.status === "running" ? aiSignedKrw(aiSession?.total_profit || 0) : "-"}</strong><small>{aiSession?.status === "running" ? aiSignedPct(aiSession?.total_return || 0) : "PROCESS WAIT"}</small></div>
-                  <div className="ai-v2-summary-card"><span>남은 시간</span><strong>{aiSession?.status === "running" ? aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours}) : "대기"}</strong><small>최대 30일 진행</small></div>
+                  <div className="ai-v2-summary-card"><span>진행 기간</span><strong>{aiSession?.status === "running" ? (aiSession?.ends_at ? aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours}) : "기간 미정") : "대기"}</strong><small>{aiSession?.status === "running" && !aiSession?.ends_at ? "관리자 종료 시까지 진행" : "최대 30일 진행"}</small></div>
                   <div className="ai-v2-summary-card"><span>5분 시장</span><strong>{aiPositiveMarkets}↑ / {aiNegativeMarkets}↓</strong><small>주식·코인 8종 · 5분</small></div>
                 </div>
 
