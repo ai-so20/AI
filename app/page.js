@@ -2695,20 +2695,6 @@ export default function Home() {
                     <span>AI PROCESS VIP · PRIVATE MEMBER</span>
                     <h2>안녕하세요, {profile.nickname}님!</h2>
                     <p>오늘도 AI와 함께 운용 현황을 확인하고, 진행 중인 PROCESS를 한눈에 관리하세요.</p>
-                    <div className="vip-member-hero-finance">
-                      <button type="button" onClick={() => changeTab("ai")}>
-                        <span>총 투자금</span>
-                        <strong>{aiSession?.status === "running" ? aiKrw(aiCurrentStartMoney) : "대기 중"}</strong>
-                        <small>{aiSession?.status === "running" ? "AI PROCESS 운용 기준금액" : "PROCESS가 시작되면 표시됩니다"}</small>
-                      </button>
-                      <button type="button" onClick={() => changeTab("ai")}>
-                        <span>누적 수익</span>
-                        <strong className={(aiSession?.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>
-                          {aiSession?.status === "running" ? aiSignedKrw(aiSession?.total_profit || 0) : "-"}
-                        </strong>
-                        <small>{aiSession?.status === "running" ? aiSignedPct(aiSession?.total_return || 0, 2) : "PROCESS WAIT"}</small>
-                      </button>
-                    </div>
                   </div>
                   <div className="vip-member-hero-mascot vip-master-mascot">
                     <span className="vip-master-mascot-crown">♛</span>

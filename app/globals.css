@@ -816,3 +816,18 @@
     max-width:none!important;
   }
 }
+
+
+/* ============================================================
+   V14 — member home hero cleanup
+   - Removes the duplicated total-investment / cumulative-profit strip from Home.
+   - Keeps Home focused on status/navigation; financial detail remains in AI PROCESS.
+   - Reduces the mobile hero height after the strip removal to avoid dead space.
+   ============================================================ */
+.vip-master-member .vip-member-hero-finance{display:none!important}
+@media(max-width:999px){
+  .vip-master-member .vip-member-hero-master{min-height:154px!important}
+}
+@media(max-width:420px){
+  .vip-master-member .vip-member-hero-master{min-height:148px!important}
+}
