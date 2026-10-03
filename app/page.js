@@ -2571,8 +2571,8 @@ export default function Home() {
                 />
                 <span>내 정보</span>
               </button>
-              <button type="button" onClick={handleLogout} style={styles.refLogoutButton} className="vip-logout-button" title="로그아웃">
-                <span>↪</span><small>로그아웃</small>
+              <button type="button" onClick={handleLogout} style={styles.refLogoutButton} className="vip-logout-button" title="로그아웃" aria-label="로그아웃">
+                <span className="vip-logout-label">로그아웃</span>
               </button>
             </div>
           </header>
@@ -2701,7 +2701,7 @@ export default function Home() {
                     <div className="vip-member-hero-spark s1">✦</div>
                     <div className="vip-member-hero-spark s2">✦</div>
                     <div className="vip-member-hero-ring"></div>
-                    <img src="/avatars/40/profile-21.jpg" alt="AI PROCESS VIP 캐릭터"/>
+                    <img src={avatarSrc(profile.avatar)} alt={`${profile.nickname || "회원"}님의 프로필`}/>
                     <em>VIP</em>
                   </div>
                 </section>

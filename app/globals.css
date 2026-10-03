@@ -447,6 +447,7 @@
 }
 
 @media(max-width:430px){
+  .vip-logout-button{min-width:46px!important;padding:0 7px!important;font-size:7px!important}
   .vip-member-hero{padding:17px 15px}.vip-member-hero-copy h2{font-size:21px}.vip-member-hero-copy p{font-size:9px}.vip-member-hero-mascot{width:82px;height:82px;flex-basis:82px}.vip-member-hero-mascot img{width:70px;height:70px}.vip-member-hero-ring{inset:3px}.vip-member-kpis strong{font-size:16px}.vip-member-panel-head strong{font-size:13px}.vip-member-mini-chart{height:160px}.vip-admin-kpis strong{font-size:18px!important}.vip-admin-status-body{align-items:stretch;flex-direction:column}.vip-admin-donut{margin:auto}.vip-admin-quick-grid{grid-template-columns:1fr}.vip-app-shell.is-admin .vip-app-nav>button{font-size:6px!important}
 }
 
@@ -582,7 +583,7 @@
   .vip-page-shell{padding:0!important;background:#efe5d8!important}
   .vip-app-shell{width:100%!important;max-width:520px!important;height:100dvh!important;max-height:100dvh!important;border-radius:0!important;box-shadow:0 0 34px rgba(47,31,17,.10)!important}
   .vip-app-header{height:58px!important;min-height:58px!important;padding:0 10px!important}
-  .vip-brand-title{font-size:13px!important}.vip-brand-sub{font-size:6px!important}.vip-myinfo-button{height:34px!important;padding:0 8px!important}.vip-myinfo-button span{display:none}.vip-logout-button{width:34px!important;height:34px!important}.vip-logout-button small{display:none}
+  .vip-brand-title{font-size:13px!important}.vip-brand-sub{font-size:6px!important}.vip-myinfo-button{height:34px!important;padding:0 8px!important}.vip-myinfo-button span{display:none}.vip-logout-button{width:auto!important;min-width:58px!important;height:34px!important;padding:0 10px!important;justify-content:center!important;font-size:8px!important;font-weight:900!important;white-space:nowrap!important}.vip-logout-label{display:inline-block!important}
   .vip-member-dashboard{padding:9px 10px 16px!important}
   .vip-member-hero-master{min-height:210px!important;padding:18px 16px 14px!important;border-radius:18px!important;align-items:flex-start!important}
   .vip-member-hero-copy{max-width:68%!important}.vip-member-hero-copy>span{font-size:6px!important}.vip-member-hero-copy h2{font-size:22px!important;line-height:1.13!important;margin:7px 0 5px!important}.vip-member-hero-copy p{font-size:8px!important;line-height:1.55!important}
@@ -596,6 +597,7 @@
 }
 
 @media(max-width:430px){
+  .vip-logout-button{min-width:46px!important;padding:0 7px!important;font-size:7px!important}
   .vip-member-hero-master{min-height:202px!important}.vip-member-hero-copy{max-width:65%!important}.vip-member-hero-copy h2{font-size:20px!important}.vip-member-hero-mascot{width:82px!important;height:82px!important;right:10px!important}.vip-member-hero-mascot img{width:70px!important;height:70px!important}.vip-member-hero-finance strong{font-size:14px!important}.vip-member-kpis strong{font-size:12px!important}.vip-member-mini-chart{height:150px!important}.vip-admin-kpis strong{font-size:16px!important}.vip-admin-metric-bars{height:135px!important}
 }
 
@@ -732,7 +734,7 @@
   .vip-page-shell{background:#f3eadf!important}
   .vip-app-shell{max-width:500px!important;background:#fff!important}
   .vip-app-header{height:56px!important;min-height:56px!important;padding:0 10px!important}
-  .vip-app-header .vip-brand-title{font-size:12px!important}.vip-app-header .vip-brand-sub{font-size:5.5px!important}.vip-app-header .vip-myinfo-button{height:32px!important}.vip-app-header .vip-logout-button{height:32px!important;width:32px!important}
+  .vip-app-header .vip-brand-title{font-size:12px!important}.vip-app-header .vip-brand-sub{font-size:5.5px!important}.vip-app-header .vip-myinfo-button{height:32px!important}.vip-app-header .vip-logout-button{height:32px!important;width:auto!important;min-width:54px!important;padding:0 9px!important}
   .vip-master-member{padding:8px 9px 12px!important;background:#fbf7ef!important}
   .vip-master-member .vip-member-hero-master{min-height:226px!important;border-radius:15px!important;padding:15px 13px 12px!important;align-items:flex-start!important}
   .vip-master-member .vip-member-hero-copy{max-width:64%!important}.vip-master-member .vip-member-hero-copy>span{font-size:5px!important}.vip-master-member .vip-member-hero-copy h2{font-size:20px!important;margin:6px 0 4px!important}.vip-master-member .vip-member-hero-copy p{font-size:7px!important}
