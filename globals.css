@@ -1,0 +1,21 @@
+# AI PROCESS VIP V9 MASTER UI
+
+## 이번 버전 핵심
+- 승인된 UI 쇼케이스를 실제 화면 기준으로 재구성
+- PC 유저: 밝은 크림/골드 사이드바 + 넓은 대시보드 + Hero + 운용금액/손익 + 그래프 + 진행 PROCESS
+- PC 관리자: 딥 네이비/블루 운영 콘솔 + KPI + 운영 지표 + 회원 현황 + 최근 가입 신청
+- 모바일 유저/관리자: PC 축소가 아니라 별도 세로형 레이아웃
+- 최초 승인 후 첫 로그인 환영창의 `확인했어요` 클릭 시 1:1 문의 화면으로 이동
+- AI PROCESS `기간 미정` 복구
+  - 관리자에서 `시간 지정 / 기간 미정` 선택 가능
+  - 기간 미정은 관리자 종료 전까지 계속 진행
+  - 사용자 화면에는 남은시간 대신 `기간 미정` 표시
+
+## 적용
+1. GitHub에서 `app/page.js`, `app/globals.css` 교체
+2. Supabase SQL Editor에서 `supabase/07_ai_process_indefinite_duration.sql` 1회 실행
+3. Vercel 자동 배포 완료 후 강력 새로고침
+
+## 검증
+- page.js TypeScript JSX 파서 진단: 0개
+- globals.css 중괄호 균형: 정상
