@@ -135,9 +135,9 @@ async function loadSettings(db) {
     welcome_min: 3,
     welcome_max: 4,
     celebration_min: 5,
-    autonomous_gap_min_minutes: 12,
-    autonomous_gap_max_minutes: 25,
-    human_quiet_minutes: 7,
+    autonomous_gap_min_minutes: 6,
+    autonomous_gap_max_minutes: 14,
+    human_quiet_minutes: 4,
   };
 }
 
@@ -263,12 +263,16 @@ async function unmarkHumanHandled(db, rows) {
   }
 }
 
-async function cancelInterruptibleQueues(db) {
+async function cancelInterruptibleQueues(db, threadTypes = ["autonomous", "welcome"]) {
+  const safeTypes = Array.isArray(threadTypes) && threadTypes.length
+    ? threadTypes
+    : ["autonomous", "welcome"];
+
   const { data: threads } = await db
     .from("ai_conversation_threads")
     .select("id,thread_type")
     .eq("status", "active")
-    .in("thread_type", ["autonomous", "human_reply", "welcome"]);
+    .in("thread_type", safeTypes);
 
   const ids = (threads || []).map((row) => row.id);
   if (!ids.length) return;
@@ -448,12 +452,14 @@ function scheduleTimes(count, mode, now = new Date()) {
   const result = [];
   let cursor = now.getTime();
 
-  if (mode === "celebration") cursor += randInt(10, 40) * 1000;
-  else cursor += randInt(20, 70) * 1000;
+  if (mode === "celebration") cursor += randInt(10, 35) * 1000;
+  else if (mode === "human") cursor += randInt(35, 55) * 1000;
+  else cursor += randInt(45, 90) * 1000;
 
   for (let index = 0; index < count; index += 1) {
     if (index > 0) {
-      if (mode === "celebration") cursor += randInt(30, 100) * 1000;
+      if (mode === "celebration") cursor += randInt(25, 75) * 1000;
+      else if (mode === "human") cursor += randInt(50, 85) * 1000;
       else cursor += randInt(60, 180) * 1000;
     }
     result.push(new Date(cursor));
@@ -729,6 +735,51 @@ JSON 배열만 출력:
   return { scheduled: queued, situation, usedFallback };
 }
 
+function fallbackWelcomeReplies(selected, memberNickname) {
+  const pool = [
+    `오 ${memberNickname || "새로 오신 분"}님 반가워요 ㅎㅎ`,
+    "어서오세요~ 편하게 이야기하세요",
+    "오 새로 오셨네요 :) 반갑습니다",
+    "반가워요! 오늘 처음 들어오신 거예요?",
+  ];
+  return selected.map((character, index) => ({
+    key: character.character_key,
+    message: pool[index % pool.length],
+  }));
+}
+
+function fallbackAutonomousConversation(selected, topic, turnCount) {
+  const characters = selected.length ? selected : [];
+  if (!characters.length) return [];
+
+  const starters = [
+    `${topic?.title || "요즘 일상"} 얘기 갑자기 생각났는데요 ㅎㅎ`,
+    `저 오늘 ${topic?.title || "사소한 것"} 쪽으로 좀 웃긴 일이 있었어요`,
+    `${topic?.title || "이런 소소한 얘기"} 은근 사람마다 다르지 않아요?`,
+  ];
+  const replies = [
+    "오 그거 뭔지 알 것 같아요 ㅋㅋ",
+    "저는 오히려 반대인 것 같아요 ㅎㅎ",
+    "그런 거 한 번 신경 쓰이면 계속 생각나더라고요",
+    "저도 비슷한 적 있어요. 은근 사소한데 기억에 남아요",
+    "ㅋㅋ 이런 얘기 나오면 각자 하나씩은 꼭 있네요",
+    "저는 그럴 때 그냥 마음 가는 쪽으로 해버려요",
+  ];
+
+  const rows = [];
+  const total = Math.max(4, Math.min(9, Number(turnCount || 5)));
+  for (let index = 0; index < total; index += 1) {
+    const character = characters[index % characters.length];
+    rows.push({
+      key: character.character_key,
+      message: index === 0
+        ? starters[Math.floor(Math.random() * starters.length)]
+        : replies[(index - 1) % replies.length],
+    });
+  }
+  return rows;
+}
+
 async function scheduleWelcome(db, event, characters, settings) {
   const { data: member } = await db
     .from("profiles")
@@ -778,8 +829,14 @@ JSON 배열만 출력:
 ]
 `.trim();
 
-  const generated = await generateGemini(prompt, 1800);
-  const queued = await queueGenerated(db, threadId, selected, generated, "human");
+  let generated;
+  try {
+    generated = await generateGemini(prompt, 1800);
+  } catch (error) {
+    console.error("Gemini welcome fallback:", error);
+    generated = fallbackWelcomeReplies(selected, member.nickname);
+  }
+  const queued = await queueGenerated(db, threadId, selected, generated, "human", null, { immediateFirst: true });
 
   await db
     .from("ai_community_events")
@@ -944,11 +1001,8 @@ JSON 배열만 출력:
   try {
     generated = await generateGemini(prompt, 3200);
   } catch (error) {
-    await db
-      .from("ai_conversation_threads")
-      .update({ status: "cancelled", completed_at: new Date().toISOString() })
-      .eq("id", threadId);
-    throw error;
+    console.error("Gemini autonomous fallback:", error);
+    generated = fallbackAutonomousConversation(selected, topic, turnCount);
   }
 
   const queued = await queueGenerated(db, threadId, selected, generated, "autonomous", topic.category);
