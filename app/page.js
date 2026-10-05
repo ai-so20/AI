@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 
 const ROOM_ID = "0a495a02-bcb8-4e38-b3ef-4e7059c2a883";
@@ -113,6 +113,7 @@ export default function Home() {
   const [aiAdminDurationHours, setAiAdminDurationHours] = useState("24");
   const [aiAdminIndefinite, setAiAdminIndefinite] = useState(false);
   const [aiAdminWorking, setAiAdminWorking] = useState(false);
+  const [aiAccountsWorking, setAiAccountsWorking] = useState(false);
 
   const [autoEvents, setAutoEvents] = useState([]);
   const [eventWorkingId, setEventWorkingId] = useState(null);
@@ -941,7 +942,7 @@ export default function Home() {
             return [...current, newMessage];
           });
 
-          await loadOneMemberName(newMessage.member_id);
+          await loadOneMemberName(newMessage.member_id, newMessage.ai_character_id);
         }
       )
       .on(
@@ -1007,6 +1008,20 @@ export default function Home() {
       supabase.removeChannel(privateMessageChannel);
     };
   }, [user, profile?.role, privateChatId]);
+
+  useEffect(() => {
+    if (!user || !profile || chatTab !== "group") return;
+
+    const aiCommunityHeartbeat = () => {
+      fetch("/api/ai-chat", { method: "POST" }).catch(() => {});
+    };
+
+    // 그룹방을 보고 있는 동안에도 1분마다 예약 큐를 깨웁니다.
+    // 서버의 분당 중복방지 장치가 있어 market cron과 겹쳐도 한 번만 처리됩니다.
+    aiCommunityHeartbeat();
+    const timer = setInterval(aiCommunityHeartbeat, 60 * 1000);
+    return () => clearInterval(timer);
+  }, [user?.id, profile?.role, chatTab]);
 
   useEffect(() => {
     if (chatTab !== "group") return;
@@ -1411,16 +1426,16 @@ export default function Home() {
   }
 
   async function loadMemberNames() {
-    const { data, error } = await supabase
+    const { data: members, error } = await supabase
       .from("members")
       .select("id,nickname,status,role");
 
-    if (error || !data) return;
+    if (error) return;
 
     const map = {};
     let approvedCount = 0;
 
-    data.forEach((member) => {
+    (members || []).forEach((member) => {
       map[member.id] = member.nickname;
       if (member.status === "approved" && member.role !== "admin") approvedCount += 1;
       if (member.role === "admin") {
@@ -1432,11 +1447,25 @@ export default function Home() {
     });
 
     setMemberNames(map);
+    // V17: AI 캐릭터/가라계정도 실제 members 계정이므로 별도 숫자를 더하지 않습니다.
     setApprovedMemberCount(approvedCount);
   }
 
-  async function loadOneMemberName(memberId) {
-    if (!memberId) return;
+  async function loadOneMemberName(memberId, aiCharacterId = null) {
+    const targetId = aiCharacterId || memberId;
+    if (!targetId) return;
+
+    if (aiCharacterId) {
+      const { data, error } = await supabase
+        .from("ai_characters")
+        .select("id,nickname")
+        .eq("id", aiCharacterId)
+        .single();
+
+      if (error || !data) return;
+      setMemberNames((current) => ({ ...current, [data.id]: data.nickname }));
+      return;
+    }
 
     const { data, error } = await supabase
       .from("members")
@@ -1453,17 +1482,13 @@ export default function Home() {
   }
 
   async function loadMemberAvatars() {
-    const { data, error } =
-      await supabase.rpc("get_chat_avatars");
-
+    const { data, error } = await supabase.rpc("get_chat_avatars");
     if (error || !data) return;
 
     const map = {};
-
     data.forEach((member) => {
       map[member.id] = member.avatar || "profile-01";
     });
-
     setMemberAvatars(map);
   }
 
@@ -1536,6 +1561,26 @@ export default function Home() {
       hour: "numeric",
       minute: "2-digit",
       hour12: true,
+    }).format(new Date(value));
+  }
+
+  function chatDateKey(value) {
+    if (!value) return "";
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(value));
+  }
+
+  function formatChatDate(value) {
+    if (!value) return "";
+    return new Intl.DateTimeFormat("ko-KR", {
+      timeZone: "Asia/Seoul",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
     }).format(new Date(value));
   }
 
@@ -1879,6 +1924,102 @@ export default function Home() {
     } finally {
       setWorking(false);
     }
+  }
+
+  async function syncAiCharacterAccounts() {
+    if (!user || profile?.role !== "admin" || aiAccountsWorking) return;
+    setAiAccountsWorking(true);
+    setNotice("");
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("관리자 로그인 정보를 찾을 수 없습니다.");
+
+      const response = await fetch("/api/admin/ai-accounts", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result) {
+        throw new Error(result?.error || "AI 캐릭터 계정 생성에 실패했습니다.");
+      }
+
+      await Promise.all([
+        loadAdminAllMembers(),
+        loadAdminMembers(),
+        loadMemberNames(),
+        loadMemberAvatars(),
+        loadAiProcessState(),
+      ]);
+
+      if (result.failed?.length) {
+        setNotice(`AI 계정 ${result.createdOrSynced}/${result.total}명 적용 · 실패 ${result.failed.length}명`);
+      } else {
+        setNotice(`AI 캐릭터 ${result.createdOrSynced}명 실제 회원계정 생성/동기화 완료`);
+      }
+    } catch (error) {
+      setNotice(`AI 캐릭터 계정 생성 실패: ${error.message || "오류"}`);
+    } finally {
+      setAiAccountsWorking(false);
+    }
+  }
+
+  async function changeMemberAccountType(member, nextType) {
+    if (!user || profile?.role !== "admin" || !member?.member_id) return;
+    const label = nextType === "ai_character"
+      ? "AI 캐릭터"
+      : nextType === "managed"
+        ? "가라계정"
+        : "일반회원";
+
+    const { error } = await supabase.rpc("admin_set_account_type", {
+      target_member_id: member.member_id,
+      target_account_type: nextType,
+      target_ai_chat_enabled: nextType === "ai_character",
+    });
+
+    if (error) {
+      setNotice(`계정 종류 변경 실패: ${error.message}`);
+      return;
+    }
+
+    setNotice(`${member.nickname} 계정을 '${label}'으로 변경했습니다.`);
+    await Promise.all([loadAdminAllMembers(), loadAdminMembers(), loadMemberNames()]);
+  }
+
+  function accountTypeLabel(value) {
+    if (value === "ai_character") return "AI 캐릭터";
+    if (value === "managed") return "가라계정";
+    return "일반회원";
+  }
+
+  function adminAccountBadge(memberId) {
+    if (profile?.role !== "admin" || !memberId) return null;
+    const member = adminAllMembers.find((item) => item.member_id === memberId);
+    if (!member || member.account_type === "human") return null;
+    const isAi = member.account_type === "ai_character";
+    return (
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          marginLeft: "6px",
+          padding: "2px 6px",
+          borderRadius: "999px",
+          fontSize: "10px",
+          fontWeight: 800,
+          color: isAi ? "#315e9b" : "#8a5a22",
+          background: isAi ? "#eaf3ff" : "#fff2dc",
+          border: `1px solid ${isAi ? "#c8ddfb" : "#efd2a4"}`,
+          verticalAlign: "middle",
+        }}
+      >
+        {isAi ? "AI" : "가라"}
+      </span>
+    );
   }
 
   async function openAdminMemberChat(member) {
@@ -2230,13 +2371,13 @@ export default function Home() {
           !aiResult.success
         ) {
           console.error(
-            "유나 AI 오류:",
+            "AI 커뮤니티 오류:",
             aiResult.error
           );
         }
       } catch (aiError) {
         console.error(
-          "유나 AI 호출 오류:",
+          "AI 커뮤니티 호출 오류:",
           aiError
         );
       }
@@ -2297,9 +2438,8 @@ export default function Home() {
       return profile?.nickname || "나";
     }
 
-    return (
-      memberNames[item.member_id] || "VIP 회원"
-    );
+    const senderId = item.ai_character_id || item.member_id;
+    return memberNames[senderId] || (item.ai_character_id ? "AI 캐릭터" : "VIP 회원");
   }
 
 
@@ -2890,7 +3030,17 @@ export default function Home() {
               <div className="vip-admin-members-screen">
                 <section className="vip-admin-members-head">
                   <div><span>MEMBER MANAGEMENT</span><h2>회원 관리</h2><p>회원 승인 상태와 AI PROCESS 진행 여부를 확인하고 1:1 상담으로 바로 이동합니다.</p></div>
-                  <div className="vip-admin-members-total"><span>승인 회원</span><strong>{adminApprovedMembers.length}명</strong></div>
+                  <div style={{display:"flex",gap:"10px",alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end"}}>
+                    <button
+                      type="button"
+                      disabled={aiAccountsWorking}
+                      onClick={syncAiCharacterAccounts}
+                      style={{border:"1px solid #d8c8b5",background:"#fffaf2",color:"#6e5234",borderRadius:"12px",padding:"10px 13px",fontWeight:800,cursor:"pointer"}}
+                    >
+                      {aiAccountsWorking ? "30명 생성 중..." : "AI 캐릭터 30명 생성/동기화"}
+                    </button>
+                    <div className="vip-admin-members-total"><span>승인 회원</span><strong>{adminApprovedMembers.length}명</strong></div>
+                  </div>
                 </section>
 
                 <section className="vip-admin-member-toolbar">
@@ -2913,11 +3063,21 @@ export default function Home() {
                     const running = aiPublicSessions.some((session) => session.user_id === member.member_id);
                     return (
                       <div className="vip-admin-member-row" key={member.member_id}>
-                        <div className="vip-admin-member-identity"><img src={avatarSrc(member.avatar)} alt=""/><span><b>{member.nickname}</b><small>{member.real_name || "성함 미입력"}</small></span></div>
+                        <div className="vip-admin-member-identity"><img src={avatarSrc(member.avatar)} alt=""/><span><b>{member.nickname}{member.account_type && member.account_type !== "human" && <em style={{marginLeft:"6px",fontStyle:"normal",fontSize:"10px",padding:"2px 6px",borderRadius:"999px",background:member.account_type==="ai_character"?"#eaf3ff":"#fff2dc",color:member.account_type==="ai_character"?"#315e9b":"#8a5a22"}}>{accountTypeLabel(member.account_type)}</em>}</b><small>{member.real_name || "성함 미입력"}</small></span></div>
                         <span className="vip-admin-member-date">{member.created_at ? new Intl.DateTimeFormat("ko-KR", {year:"2-digit",month:"2-digit",day:"2-digit"}).format(new Date(member.created_at)) : "-"}</span>
                         <span className={`vip-admin-member-state is-${member.approval_status}`}>{member.approval_status === "approved" ? "승인 완료" : member.approval_status === "pending" ? "승인 대기" : "거절"}</span>
                         <span className={`vip-admin-process-state ${running ? "is-running" : ""}`}>{running ? "진행 중" : "대기"}</span>
                         <div className="vip-admin-member-actions">
+                          <select
+                            value={member.account_type || "human"}
+                            onChange={(e) => changeMemberAccountType(member, e.target.value)}
+                            style={{border:"1px solid #ddd0c2",borderRadius:"9px",padding:"7px 8px",background:"#fff",fontSize:"11px",fontWeight:700}}
+                            title="관리자에게만 보이는 계정 종류"
+                          >
+                            <option value="human">일반회원</option>
+                            <option value="ai_character">AI 캐릭터</option>
+                            <option value="managed">가라계정</option>
+                          </select>
                           {member.approval_status === "pending" && <><button type="button" disabled={working} onClick={() => setMemberApproval(member.member_id, "approved")}>승인</button><button type="button" className="is-danger" disabled={working} onClick={() => setMemberApproval(member.member_id, "rejected")}>거절</button></>}
                           {member.approval_status === "approved" && <button type="button" onClick={() => openAdminMemberChat(member)}>1:1 문의</button>}
                           {member.approval_status === "rejected" && <button type="button" disabled={working} onClick={() => setMemberApproval(member.member_id, "approved")}>다시 승인</button>}
@@ -2969,35 +3129,40 @@ export default function Home() {
                 )}
 
                 <div ref={groupMessagesRef} style={styles.refMessages}>
-                  <div style={styles.refDateChip}>오늘</div>
                   {messages.length === 0 ? (
                     <div style={styles.refEmpty}>아직 대화가 없습니다.<br/>첫 메시지를 남겨보세요.</div>
-                  ) : messages.map((item) => {
+                  ) : messages.map((item, index) => {
                     const mine = item.member_id === user.id;
-                    const avatar = memberAvatars[item.member_id] || "profile-01";
+                    const senderId = item.ai_character_id || item.member_id;
+                    const avatar = memberAvatars[senderId] || "profile-01";
+                    const previous = index > 0 ? messages[index - 1] : null;
+                    const showDate = !previous || chatDateKey(previous.created_at) !== chatDateKey(item.created_at);
                     return (
-                      <div key={item.id} style={{...styles.refMsgRow, justifyContent: mine ? "flex-end" : "flex-start"}}>
-                        {!mine && (
-                          <img
-                            src={avatarSrc(avatar)}
-                            alt=""
-                            style={styles.refMsgAvatar}
-                            onClick={() => profile?.role === "admin" && adminKickMember(item.member_id, getMessageNickname(item))}
-                          />
-                        )}
-                        <div style={{maxWidth:"76%"}}>
-                          {!mine && <div style={styles.refMsgName}>{getMessageNickname(item)}</div>}
-                          <div style={{display:"flex",gap:"6px",alignItems:"flex-end",flexDirection:mine?"row-reverse":"row"}}>
-                            <div style={{...styles.refBubble,...(mine?styles.refMyBubble:styles.refOtherBubble)}}>
-                              {renderMessageContent(item.content)}
+                      <Fragment key={item.id}>
+                        {showDate && <div style={styles.refDateChip}>{formatChatDate(item.created_at)}</div>}
+                        <div style={{...styles.refMsgRow, justifyContent: mine ? "flex-end" : "flex-start"}}>
+                          {!mine && (
+                            <img
+                              src={avatarSrc(avatar)}
+                              alt=""
+                              style={styles.refMsgAvatar}
+                              onClick={() => profile?.role === "admin" && !item.ai_character_id && adminKickMember(item.member_id, getMessageNickname(item))}
+                            />
+                          )}
+                          <div style={{maxWidth:"76%"}}>
+                            {!mine && <div style={styles.refMsgName}>{getMessageNickname(item)}{adminAccountBadge(item.member_id)}</div>}
+                            <div style={{display:"flex",gap:"6px",alignItems:"flex-end",flexDirection:mine?"row-reverse":"row"}}>
+                              <div style={{...styles.refBubble,...(mine?styles.refMyBubble:styles.refOtherBubble)}}>
+                                {renderMessageContent(item.content)}
+                              </div>
+                              <span style={styles.refMsgTime}>{formatChatTime(item.created_at)}</span>
+                              {profile?.role === "admin" && (
+                                <button type="button" onClick={() => adminDeleteGroupMessage(item.id)} style={styles.refDelete}>×</button>
+                              )}
                             </div>
-                            <span style={styles.refMsgTime}>{formatChatTime(item.created_at)}</span>
-                            {profile?.role === "admin" && (
-                              <button type="button" onClick={() => adminDeleteGroupMessage(item.id)} style={styles.refDelete}>×</button>
-                            )}
                           </div>
                         </div>
-                      </div>
+                      </Fragment>
                     );
                   })}
                   <div ref={groupBottomRef} style={{height:"1px",width:"100%"}} />
@@ -3195,7 +3360,7 @@ export default function Home() {
                     <div className="ai-v2-admin-form">
                       <select value={aiAdminMemberId} onChange={(e) => setAiAdminMemberId(e.target.value)}>
                         <option value="">회원 선택</option>
-                        {adminMembers.map((member) => <option key={member.member_id} value={member.member_id}>{member.nickname}</option>)}
+                        {adminApprovedMembers.map((member) => <option key={member.member_id} value={member.member_id}>{member.nickname}{member.account_type === "ai_character" ? " · AI" : member.account_type === "managed" ? " · 가라" : ""}</option>)}
                       </select>
                       <input value={aiAdminAmount} onChange={(e) => setAiAdminAmount(e.target.value.replace(/[^0-9]/g,""))} inputMode="numeric" placeholder="운용금액"/>
                       <div className="ai-v2-duration-control">
