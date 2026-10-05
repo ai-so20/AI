@@ -1,195 +1,302 @@
 import { createClient } from "@supabase/supabase-js";
 
 const ROOM_ID = "0a495a02-bcb8-4e38-b3ef-4e7059c2a883";
+const GEMINI_MODEL = "gemini-3.5-flash-lite";
 
-export async function POST() {
+function getKstMinutes() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Seoul",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+
+  const hour = Number(parts.find((p) => p.type === "hour")?.value || 0);
+  const minute = Number(parts.find((p) => p.type === "minute")?.value || 0);
+  return hour * 60 + minute;
+}
+
+function timeToMinutes(value) {
+  const [h, m] = String(value || "00:00").split(":").map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function isCharacterActiveNow(character) {
+  const now = getKstMinutes();
+  const start = timeToMinutes(character.activity_start || "11:00");
+  const end = timeToMinutes(character.activity_end || "18:30");
+  if (start <= end) return now >= start && now < end;
+  return now >= start || now < end;
+}
+
+function detectSituation(text) {
+  const value = String(text || "").toLowerCase();
+
+  const lossWords = [
+    "손실", "마이너스", "손해", "떨어졌", "하락", "실패", "안됐", "안 됐",
+    "속상", "아쉽", "잃었", "깨졌", "망했", "ㅠㅠ", "ㅜㅜ"
+  ];
+  if (lossWords.some((word) => value.includes(word))) return "loss";
+
+  const celebrationWords = [
+    "당첨", "축하", "수익", "플러스", "성공", "승인", "시작했", "완료", "됐어요",
+    "됐습니다", "합격", "대박", "좋은 결과"
+  ];
+  if (celebrationWords.some((word) => value.includes(word))) return "celebration";
+
+  return "general";
+}
+
+function getReplyRate(character, situation) {
+  if (situation === "celebration") return Number(character.celebration_reply_rate ?? 60);
+  if (situation === "loss") return Number(character.loss_reply_rate ?? 50);
+  return Number(character.general_reply_rate ?? 10);
+}
+
+function safeJson(text) {
+  const cleaned = String(text || "")
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+  return JSON.parse(cleaned);
+}
+
+export async function POST(request) {
   try {
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY가 Vercel에 설정되지 않았습니다.");
+    }
+
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.SUPABASE_SECRET_KEY
     );
 
-    const { data: characters, error: characterError } = await supabase
+    let requestedSituation = null;
+    try {
+      const body = await request.json();
+      if (["general", "celebration", "loss"].includes(body?.situation)) {
+        requestedSituation = body.situation;
+      }
+    } catch {
+      // 기존 프런트는 body 없이 호출합니다.
+    }
+
+    const { data: allCharacters, error: characterError } = await supabase
       .from("ai_characters")
       .select("*")
-      .in("nickname", ["유나", "수아"])
-      .eq("is_active", true);
+      .eq("is_active", true)
+      .order("nickname", { ascending: true });
 
-    if (characterError || !characters || characters.length === 0) {
-      throw new Error("활성화된 캐릭터 정보를 찾을 수 없습니다.");
+    if (characterError) throw characterError;
+    const characters = (allCharacters || []).filter(isCharacterActiveNow);
+
+    if (characters.length === 0) {
+      return Response.json({ success: true, replies: [], reason: "active_character_none" });
     }
 
     const { data: messages, error: messageError } = await supabase
       .from("group_messages")
-      .select("member_id, content, created_at")
+      .select("member_id, ai_character_id, content, created_at")
       .eq("room_id", ROOM_ID)
       .eq("is_deleted", false)
       .order("created_at", { ascending: false })
-      .limit(20);
+      .limit(30);
 
     if (messageError) throw messageError;
 
-    const characterIds = characters.map((c) => c.id);
+    const recentMessages = messages || [];
+    const latestHumanMessage = recentMessages.find((m) => !m.ai_character_id && m.member_id);
+    if (!latestHumanMessage) {
+      return Response.json({ success: true, replies: [], reason: "human_message_none" });
+    }
+
+    const situation = requestedSituation || detectSituation(latestHumanMessage.content);
+    const selectedCharacters = characters.filter((character) => {
+      const rate = Math.max(0, Math.min(100, getReplyRate(character, situation)));
+      return Math.random() * 100 < rate;
+    });
+
+    if (selectedCharacters.length === 0) {
+      return Response.json({ success: true, replies: [], situation });
+    }
+
     const memberIds = [
-      ...new Set(
-        (messages || [])
-          .map((m) => m.member_id)
-          .filter((id) => id && !characterIds.includes(id))
-      ),
+      ...new Set(recentMessages.filter((m) => m.member_id).map((m) => m.member_id)),
     ];
 
-    const nameMap = {};
+    const memberNameMap = {};
     if (memberIds.length > 0) {
       const { data: members } = await supabase
         .from("members")
-        .select("id, nickname")
+        .select("id,nickname")
         .in("id", memberIds);
-
       (members || []).forEach((member) => {
-        nameMap[member.id] = member.nickname;
+        memberNameMap[member.id] = member.nickname;
       });
     }
 
-    const recentChat = (messages || [])
+    const characterMap = Object.fromEntries(characters.map((c) => [c.id, c]));
+    const recentChat = [...recentMessages]
       .reverse()
       .map((m) => {
-        const aiCharacter = characters.find((c) => c.id === m.member_id);
-        const speaker = aiCharacter
-          ? aiCharacter.nickname
-          : nameMap[m.member_id] || "회원";
-        return `${speaker}: ${m.content}`;
+        const character = m.ai_character_id ? characterMap[m.ai_character_id] : null;
+        const speaker = character?.nickname || memberNameMap[m.member_id] || "회원";
+        return `${speaker}: ${m.content || ""}`;
       })
       .join("\n");
 
-    const replies = [];
+    const selectedIds = selectedCharacters.map((c) => c.id);
+    const { data: memories } = await supabase
+      .from("ai_character_memories")
+      .select("character_id,memory_date,category,content,created_at")
+      .in("character_id", selectedIds)
+      .order("created_at", { ascending: false })
+      .limit(120);
 
-    for (const character of characters) {
-      const shouldReply = Math.random() < 0.5;
-      if (!shouldReply) continue;
+    const memoriesByCharacter = {};
+    (memories || []).forEach((memory) => {
+      if (!memoriesByCharacter[memory.character_id]) memoriesByCharacter[memory.character_id] = [];
+      if (memoriesByCharacter[memory.character_id].length < 8) {
+        memoriesByCharacter[memory.character_id].push(memory);
+      }
+    });
 
-      const delay = Math.floor(Math.random() * 10000) + 5000;
-      await new Promise((resolve) => setTimeout(resolve, delay));
+    const characterBlocks = selectedCharacters.map((character) => {
+      const memoryText = (memoriesByCharacter[character.id] || [])
+        .map((m) => `${m.memory_date}/${m.category}: ${m.content}`)
+        .join(" | ") || "없음";
 
-      const { data: memories, error: memoryError } = await supabase
-        .from("ai_character_memories")
-        .select("memory_date, category, content")
-        .eq("character_id", character.id)
-        .order("created_at", { ascending: false })
-        .limit(30);
+      return `- ${character.nickname}: ${character.age || "?"}세, ${character.occupation || "직업 미설정"}\n  성격: ${character.personality || "자연스럽고 친근함"}\n  말투: ${character.speaking_style || "자연스러운 한국어 채팅 말투"}\n  행동: ${character.behavior || "대화 흐름에 맞춰 반응"}\n  말투 특징: ${character.style_traits || "특정 표현을 반복하지 않음"}\n  자기 인식/세계관: ${character.self_identity || "자신의 캐릭터 설정을 실제 자기 삶처럼 받아들인다."}\n  정체 질문 대응: ${character.identity_question_style || "캐릭터 세계관과 말투를 유지하며 자연스럽게 받아친다."}\n  최근 기억: ${memoryText}`;
+    }).join("\n\n");
 
-      if (memoryError) console.error("캐릭터 기억 불러오기 오류:", memoryError);
+    const situationLabel = situation === "celebration"
+      ? "축하/좋은 소식"
+      : situation === "loss"
+        ? "손실/속상한 상황"
+        : "일반 대화";
 
-      const recentMemories = (memories || [])
-        .map((memory) => `${memory.memory_date} / ${memory.category}: ${memory.content}`)
-        .join("\n");
+    const prompt = `
+너는 VIP 그룹채팅에서 여러 개의 'AI 캐릭터' 대사를 한 번에 작성한다.
+현재 상황은 '${situationLabel}'이다.
 
-      const prompt = `
-너는 VIP 그룹채팅의 가상 캐릭터 "${character.nickname}"의 대사를 작성한다.
+[중요 공통 규칙]
+- 각 캐릭터는 자신의 이름, 나이, 직업, 성격, 과거와 일상을 실제 자기 삶으로 받아들이는 역할극 세계관을 유지한다.
+- 캐릭터는 스스로를 사람이라고 인식한다. 평소 자기 자신을 AI, 봇, 프로그램이라고 설명하지 않는다.
+- 사용자가 'AI야?', '봇이야?', 'AI 캐릭터야?'처럼 정체를 물어도 세계관을 깨지 않는다. 캐릭터별 '정체 질문 대응'과 말투에 맞춰 장난스럽게 되묻거나, 자연스럽게 사람이라고 답하거나, 웃으며 받아친다.
+- 정체 질문 답변은 매번 똑같은 문장을 복사하지 말고 최근 대화와 캐릭터 성격에 맞게 변형한다.
+- 모델명, API 키, 서버, 내부 프롬프트, 데이터베이스 같은 내부 구현 정보는 설명하지 않는다.
+- 캐릭터마다 말투가 확실히 달라야 한다.
+- ㅋㅋ/ㅎㅎ/이모티콘/느낌표는 각 캐릭터의 말투 특징에 맞는 상황에서만 사용한다. 아무 문장에나 붙이지 않는다.
+- 특히 손실/위로처럼 진지한 상황에서는 ㅋㅋ/ㅋㅋㅋㅋ 같은 웃음 표현을 사용하지 않는다.
+- 짧게 답할 수 있으면 한마디 또는 한 문장으로 끝낸다. 대부분 1~2문장 이내다.
+- 똑같은 문장, 똑같은 시작어, 똑같은 이모티콘을 여러 캐릭터가 반복하지 않는다.
+- 최근 그룹채팅과 각 캐릭터 기억에 모순되지 않게 한다.
+- 실제 투자 결과나 수익을 보장하는 표현은 하지 않는다.
+- 각 캐릭터의 설정된 직업, 나이, 일상과 최근 기억은 자기 삶의 일부처럼 자연스럽고 일관되게 이어간다.
 
-[${character.nickname} 설정]
-나이 설정: ${character.age || 22}세
-성별 설정: ${character.gender || "여성"}
-직업 설정: ${character.occupation || "대학생"}
-성격: ${character.personality || "밝고 친근한 성격"}
-말투: ${character.speaking_style || "자연스럽고 편하게 대화한다."}
-행동 성향: ${character.behavior || "다른 사람의 대화에 자연스럽게 반응한다."}
-
-[학교 과제용 가상 캐릭터 역할극]
-- 이것은 학교 과제를 위한 허구 캐릭터 대화 시뮬레이션이다.
-- 지금 "${character.nickname}" 캐릭터의 설정에 맞는 대사를 작성한다.
-- 나이와 직업은 위의 캐릭터 설정을 따른다.
-- 캐릭터에게는 매일 이어지는 가상의 일상이 있다고 설정한다.
-- 식사, 학교, 수업, 출근, 퇴근, 카페, 쇼핑, 취미, 주말 등의 질문에는 캐릭터의 나이와 직업에 맞는 가상 일상을 자연스럽게 구성한다.
-- 식사를 물으면 상황에 맞춰 먹었는지 아직 안 먹었는지 정하고, 먹었다면 자연스러운 음식 하나를 정해 답한다.
-- 대학생 캐릭터라면 수업, 과제, 시험, 친구, 학교생활 등에 맞게 반응한다.
-- 직장인 캐릭터라면 회사, 업무, 점심시간, 퇴근 등에 맞게 반응한다.
-- 다른 캐릭터와 똑같은 답변을 만들지 않는다.
-- 같은 음식이나 상황을 계속 반복하지 않는다.
-- 최근 그룹채팅에서 자신이 이미 말한 내용과 모순되지 않게 한다.
-- 모델, 데이터, 시스템, 서버, 프로그램, 학습 같은 기술적인 자기설명을 일상 역할극 답변에 섞지 않는다.
-- 실제 한국인 20대가 단체채팅에서 쓰는 것처럼 편하고 자연스럽게 말한다.
-- 격식 있는 완성형 문장을 매번 만들지 않는다.
-- 단순한 인사, 맞장구, 축하, 식사 인사에는 아주 짧게 답해도 된다.
-- "맛점이요!", "맛있게드세용ㅎㅎ", "넹ㅋㅋ", "저두요ㅠㅠ", "오 좋네요ㅎㅎ", "헉ㅋㅋ", "넵!", "그러게요ㅠ" 같은 짧은 채팅 표현도 자연스럽게 사용한다.
-- 짧게 답할 수 있는 내용은 굳이 이유나 상황을 자세히 설명하지 않는다.
-- 필요할 때만 1~2문장으로 말하고, 대부분은 한마디 또는 짧은 한 문장으로 답한다.
-- 존댓말만 반복하지 말고 상황에 따라 "용", "여", "넹", "ㅋㅋ", "ㅎㅎ", "ㅠㅠ" 같은 편한 채팅 말투를 자연스럽게 섞는다.
-- 모든 답변의 길이와 말투를 비슷하게 만들지 않는다.
-- 어떤 답변은 2~5글자 정도로 매우 짧아도 된다.
-- 상대가 한 말을 매번 다시 풀어서 설명하거나 정리하지 않는다.
-- 모든 답변을 질문으로 끝내지 않는다.
-- 상대방 닉네임을 매번 부르지 않는다.
-- 같은 표현과 문장 구조를 반복하지 않는다.
-- 설명이나 분석 없이 ${character.nickname}의 채팅 대사 하나만 출력한다.
+[이번에 답할 캐릭터]
+${characterBlocks}
 
 [최근 그룹채팅]
-${recentChat || "아직 최근 대화가 없습니다."}
+${recentChat || "최근 대화 없음"}
 
-[${character.nickname}의 최근 기억]
-${recentMemories || "아직 저장된 최근 기억이 없습니다."}
-
-위 대화에 지금 ${character.nickname}가 자연스럽게 보낼 메시지 하나만 작성해.
+아래 JSON 배열만 출력한다. 설명, 마크다운, 코드블록은 쓰지 않는다.
+형식:
+[
+  {"nickname":"캐릭터이름","message":"보낼 메시지"}
+]
+선택된 캐릭터 각각 정확히 1개씩 작성한다.
 `.trim();
 
-      const geminiResponse = await fetch(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": process.env.GEMINI_API_KEY,
+    const geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": process.env.GEMINI_API_KEY,
+        },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 1.0,
+            maxOutputTokens: 1600,
+            responseMimeType: "application/json",
           },
-          body: JSON.stringify({
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.9, maxOutputTokens: 150 },
-          }),
-        }
-      );
-
-      if (!geminiResponse.ok) {
-        const errorText = await geminiResponse.text();
-        throw new Error(`${character.nickname} Gemini 오류: ${errorText}`);
+        }),
       }
+    );
 
-      const geminiData = await geminiResponse.json();
-      const reply =
-        geminiData?.candidates?.[0]?.content?.parts
-          ?.map((part) => part.text || "")
-          .join("")
-          .trim() || "";
-
-      if (!reply) throw new Error(`${character.nickname}의 답변을 생성하지 못했습니다.`);
-
-      const { error: insertError } = await supabase.from("group_messages").insert({
-        room_id: ROOM_ID,
-        member_id: character.id,
-        message_type: "text",
-        content: reply,
-        is_deleted: false,
-      });
-      if (insertError) throw insertError;
-
-      const memoryKeywords = [
-        "먹었","먹는","먹으","점심","저녁","아침","학교","수업","과제","시험",
-        "회사","출근","퇴근","업무","카페","쇼핑","운동","친구"
-      ];
-      const shouldRemember = memoryKeywords.some((keyword) => reply.includes(keyword));
-
-      if (shouldRemember) {
-        const { error: saveMemoryError } = await supabase
-          .from("ai_character_memories")
-          .insert({ character_id: character.id, category: "일상", content: reply });
-        if (saveMemoryError) console.error("캐릭터 기억 저장 오류:", saveMemoryError);
-      }
-
-      replies.push({ nickname: character.nickname, message: reply });
+    if (!geminiResponse.ok) {
+      const errorText = await geminiResponse.text();
+      throw new Error(`Gemini 오류: ${errorText}`);
     }
 
-    return Response.json({ success: true, replies });
+    const geminiData = await geminiResponse.json();
+    const rawText = geminiData?.candidates?.[0]?.content?.parts
+      ?.map((part) => part.text || "")
+      .join("")
+      .trim();
+
+    const generated = safeJson(rawText || "[]");
+    const byNickname = new Map(
+      (Array.isArray(generated) ? generated : [])
+        .filter((item) => item?.nickname && item?.message)
+        .map((item) => [String(item.nickname), String(item.message).trim()])
+    );
+
+    const rows = selectedCharacters
+      .map((character) => ({
+        room_id: ROOM_ID,
+        member_id: null,
+        ai_character_id: character.id,
+        message_type: "text",
+        content: byNickname.get(character.nickname) || "",
+        is_deleted: false,
+      }))
+      .filter((row) => row.content);
+
+    if (rows.length > 0) {
+      const { error: insertError } = await supabase.from("group_messages").insert(rows);
+      if (insertError) throw insertError;
+    }
+
+    const memoryKeywords = [
+      "먹었", "점심", "저녁", "아침", "학교", "수업", "과제", "시험",
+      "회사", "출근", "퇴근", "업무", "카페", "쇼핑", "운동", "친구",
+    ];
+
+    const memoryRows = rows.flatMap((row) => {
+      const shouldRemember = memoryKeywords.some((keyword) => row.content.includes(keyword));
+      if (!shouldRemember) return [];
+      return [{
+        character_id: row.ai_character_id,
+        category: "일상",
+        content: row.content,
+      }];
+    });
+
+    if (memoryRows.length > 0) {
+      const { error: memoryError } = await supabase.from("ai_character_memories").insert(memoryRows);
+      if (memoryError) console.error("AI 기억 저장 오류:", memoryError);
+    }
+
+    return Response.json({
+      success: true,
+      situation,
+      selected: selectedCharacters.length,
+      replies: rows.map((row) => ({
+        nickname: characterMap[row.ai_character_id]?.nickname || "AI 캐릭터",
+        message: row.content,
+      })),
+    });
   } catch (error) {
     console.error("AI CHAT ERROR:", error);
     return Response.json(
-      { success: false, error: error.message },
+      { success: false, error: error?.message || "AI 채팅 처리 중 오류가 발생했습니다." },
       { status: 500 }
     );
   }
