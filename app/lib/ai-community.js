@@ -680,9 +680,14 @@ ${sourceProfile?.nickname || "회원"}: ${source.content || ""}
 
 규칙:
 - 선택된 캐릭터 각각 정확히 1번씩 반응한다.
-- 실제회원의 마지막 말에 직접 이어지는 답으로 쓴다.
+- 여러 개의 독립 답변을 만들지 말고, 처음부터 끝까지 '하나의 짧은 그룹 대화'로 작성한다.
+- 1번째 캐릭터는 실제회원의 마지막 말에 직접 답한다.
+- 2번째 캐릭터부터는 실제회원의 말 + 바로 앞 캐릭터가 한 말을 함께 보고 자연스럽게 이어간다.
+- 앞사람이 꺼낸 구체적인 단어/상황/감정을 받아서 한 단계만 더 이어간다. 갑자기 다른 화제로 이동하지 않는다.
+- 인사 한마디에도 모두 똑같이 인사만 반복하지 않는다. 첫 인사 뒤에는 '저도 인사할게요', '편하게 얘기해요'처럼 흐름을 연결한다.
 - 서로 같은 말을 반복하지 않는다.
 - 캐릭터들이 모두 회원에게 질문만 던지지 않는다. 공감, 자기 경험, 짧은 농담, 짧은 질문을 섞는다.
+- 한 묶음 안에서 질문은 많아도 1개 정도만 사용한다.
 - 축하 상황에서는 기쁜 분위기를 살리되 모두 똑같이 '축하해요'만 반복하지 않는다.
 - 손실/속상한 상황에서는 가볍게 비웃거나 웃음 표현을 쓰지 않는다.
 
@@ -748,36 +753,47 @@ function fallbackWelcomeReplies(selected, memberNickname) {
   }));
 }
 
-function fallbackAutonomousConversation(selected, topic, turnCount) {
-  const characters = selected.length ? selected : [];
-  if (!characters.length) return [];
+function normalizeAutonomousRows(selected, generated, turnCount) {
+  const allowed = new Set(selected.map((character) => character.character_key));
+  const target = Math.max(4, Math.min(9, Number(turnCount || 5)));
+  const rows = (Array.isArray(generated) ? generated : [])
+    .map((row) => ({
+      key: String(row?.key || "").trim(),
+      message: String(row?.message || "").trim().replace(/\s+/g, " "),
+    }))
+    .filter((row) => allowed.has(row.key) && row.message.length >= 4)
+    .slice(0, target);
 
-  const starters = [
-    `${topic?.title || "요즘 일상"} 얘기 갑자기 생각났는데요 ㅎㅎ`,
-    `저 오늘 ${topic?.title || "사소한 것"} 쪽으로 좀 웃긴 일이 있었어요`,
-    `${topic?.title || "이런 소소한 얘기"} 은근 사람마다 다르지 않아요?`,
-  ];
-  const replies = [
-    "오 그거 뭔지 알 것 같아요 ㅋㅋ",
-    "저는 오히려 반대인 것 같아요 ㅎㅎ",
-    "그런 거 한 번 신경 쓰이면 계속 생각나더라고요",
-    "저도 비슷한 적 있어요. 은근 사소한데 기억에 남아요",
-    "ㅋㅋ 이런 얘기 나오면 각자 하나씩은 꼭 있네요",
-    "저는 그럴 때 그냥 마음 가는 쪽으로 해버려요",
-  ];
+  if (rows.length < Math.min(4, target)) return [];
 
-  const rows = [];
-  const total = Math.max(4, Math.min(9, Number(turnCount || 5)));
-  for (let index = 0; index < total; index += 1) {
-    const character = characters[index % characters.length];
-    rows.push({
-      key: character.character_key,
-      message: index === 0
-        ? starters[Math.floor(Math.random() * starters.length)]
-        : replies[(index - 1) % replies.length],
-    });
-  }
+  const normalizedMessages = rows.map((row) =>
+    row.message.toLowerCase().replace(/[ㅋㅋㅎㅎ~!?.\s]/g, "")
+  );
+  if (new Set(normalizedMessages).size < rows.length - 1) return [];
+
+  // 예전 V17.2의 비상용 문장처럼 내용 없이 독립된 맞장구만 이어지는 대화는 버립니다.
+  const weakPatterns = [
+    /^오 그거 뭔지 알 것 같아요/,
+    /^저는 오히려 반대인 것 같아요/,
+    /^맞아요[~!. ]*$/,
+    /^그러게요[~!. ]*$/,
+    /^저도요[~!. ]*$/,
+  ];
+  const weakCount = rows.filter((row) => weakPatterns.some((pattern) => pattern.test(row.message))).length;
+  if (weakCount >= 2) return [];
+
   return rows;
+}
+
+async function deferAutonomousRetry(db, now = new Date()) {
+  const retryMinutes = randInt(3, 6);
+  await db
+    .from("ai_community_state")
+    .update({
+      next_autonomous_at: new Date(now.getTime() + retryMinutes * 60 * 1000).toISOString(),
+      updated_at: now.toISOString(),
+    })
+    .eq("id", 1);
 }
 
 async function scheduleWelcome(db, event, characters, settings) {
@@ -980,15 +996,22 @@ ${blocks}
 [최근 채팅 - 반복 금지 참고]
 ${context.text || "최근 대화 없음"}
 
-정확히 ${turnCount}개의 메시지로 하나의 짧은 대화를 만든다.
+정확히 ${turnCount}개의 메시지로 '하나의 이어지는 대화'를 만든다.
 규칙:
 - 참여자는 ${selected.length}명이며, 모든 사람이 꼭 같은 횟수로 말할 필요는 없다.
-- 첫 사람이 자연스럽게 화제를 꺼내고 다른 사람이 자기 경험/공감/장난/질문으로 이어간다.
-- '맞아요', '그러게요', '저도요'만 이어지는 빈 대화를 만들지 않는다.
+- 첫 메시지는 추상적인 질문이 아니라 주제와 관련된 구체적인 상황/경험/관찰 하나를 꺼낸다.
+- 2번째 메시지부터는 반드시 '바로 앞 메시지'의 구체적인 내용을 받아서 답한다.
+- 각 메시지는 앞 메시지에서 나온 음식, 물건, 행동, 기분, 선택 같은 요소를 하나 이상 이어받아야 한다.
+- 중간에 자기 경험을 더하거나 살짝 다른 의견을 낼 수 있지만, 왜 그런지 한마디 붙여 같은 화제 안에 머문다.
+- '오 그거 뭔지 알 것 같아요', '저는 오히려 반대인 것 같아요', '맞아요', '그러게요', '저도요'처럼 단독으로 어디에나 붙는 빈 맞장구를 쓰지 않는다.
+- 갑자기 관련 없는 새 주제를 시작하지 않는다.
+- 질문만 연속해서 던지지 않는다. 전체 대화에서 질문은 0~2개면 충분하다.
+- 마지막 1~2개 메시지는 새 화제를 던지지 말고 자연스럽게 한 번 웃거나 경험을 정리하며 끝낸다.
 - 4~9개 메시지 안에서 자연스럽게 끝난다.
 - 매일 점심→커피→저녁 같은 고정 순서를 만들지 않는다.
 - 최근 채팅에 이미 나온 주제나 시작문장을 그대로 재사용하지 않는다.
 - 직업 이야기를 억지로 꺼내지 않는다. 쉬는 커뮤니티의 사적인 잡담처럼 말한다.
+- JSON을 만들기 전에 내부적으로 전체 대화 흐름을 먼저 구성한 뒤 출력한다.
 
 JSON 배열만 출력:
 [
@@ -1001,11 +1024,30 @@ JSON 배열만 출력:
   try {
     generated = await generateGemini(prompt, 3200);
   } catch (error) {
-    console.error("Gemini autonomous fallback:", error);
-    generated = fallbackAutonomousConversation(selected, topic, turnCount);
+    // 자발대화는 Gemini 실패 시 억지 비상문장을 올리지 않습니다.
+    // V17.2의 고정 fallback이 서로 안 이어지는 대화를 만든 원인이었으므로,
+    // 실패한 스레드는 취소하고 몇 분 뒤 새로 시도합니다.
+    console.error("Gemini autonomous generation failed:", error);
+    await db
+      .from("ai_conversation_threads")
+      .update({ status: "cancelled", completed_at: now.toISOString() })
+      .eq("id", threadId);
+    await deferAutonomousRetry(db, now);
+    return 0;
   }
 
-  const queued = await queueGenerated(db, threadId, selected, generated, "autonomous", topic.category);
+  const coherentRows = normalizeAutonomousRows(selected, generated, turnCount);
+  if (!coherentRows.length) {
+    console.error("Gemini autonomous generation rejected: low coherence/invalid rows");
+    await db
+      .from("ai_conversation_threads")
+      .update({ status: "cancelled", completed_at: now.toISOString() })
+      .eq("id", threadId);
+    await deferAutonomousRetry(db, now);
+    return 0;
+  }
+
+  const queued = await queueGenerated(db, threadId, selected, coherentRows, "autonomous", topic.category);
 
   if (queued > 0) {
     await db.from("ai_topic_history").insert({
