@@ -8,11 +8,7 @@ function dbClient() {
   const secret = process.env.SUPABASE_SECRET_KEY;
   if (!url || !secret) return null;
   return createClient(url, secret, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-      detectSessionInUrl: false,
-    },
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
   });
 }
 
@@ -21,6 +17,10 @@ function randInt(min, max) {
   const high = Math.floor(Number(max || low));
   if (high <= low) return low;
   return Math.floor(Math.random() * (high - low + 1)) + low;
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, Number(value ?? min)));
 }
 
 function shuffle(items) {
@@ -39,7 +39,7 @@ function safeJson(text) {
     .replace(/^```\s*/i, "")
     .replace(/```$/i, "")
     .trim();
-  return JSON.parse(cleaned || "[]");
+  return JSON.parse(cleaned || "{}");
 }
 
 function kstParts(date = new Date()) {
@@ -72,10 +72,13 @@ function timeToMinutes(value, fallback = "00:00") {
 function isInsideWindow(nowMinutes, start, end) {
   const startMinutes = timeToMinutes(start, "11:00");
   const endMinutes = timeToMinutes(end, "18:30");
-  if (startMinutes <= endMinutes) {
-    return nowMinutes >= startMinutes && nowMinutes < endMinutes;
-  }
+  if (startMinutes <= endMinutes) return nowMinutes >= startMinutes && nowMinutes < endMinutes;
   return nowMinutes >= startMinutes || nowMinutes < endMinutes;
+}
+
+function pairIds(a, b) {
+  if (!a || !b || a === b) return null;
+  return String(a) < String(b) ? [a, b] : [b, a];
 }
 
 function detectSituation(text) {
@@ -85,7 +88,6 @@ function detectSituation(text) {
     "속상", "아쉽", "잃었", "깨졌", "망했", "ㅠㅠ", "ㅜㅜ", "안좋", "안 좋",
   ];
   if (lossWords.some((word) => value.includes(word))) return "loss";
-
   const celebrationWords = [
     "당첨", "축하", "수익", "플러스", "성공", "승인", "합격", "대박", "좋은 결과",
     "승급", "승격", "완료됐", "잘됐", "잘 됐", "이겼", "뽑혔",
@@ -94,17 +96,12 @@ function detectSituation(text) {
   return "general";
 }
 
-function weightedSample(items, count, weightField) {
+function weightedSample(items, count, weightFn) {
   const pool = [...items];
   const picked = [];
-  while (pool.length > 0 && picked.length < count) {
-    const weights = pool.map((item) => {
-      const value = typeof weightField === "function"
-        ? Number(weightField(item))
-        : Number(item?.[weightField] ?? 1);
-      return Math.max(1, Number.isFinite(value) ? value : 1);
-    });
-    const total = weights.reduce((sum, value) => sum + value, 0);
+  while (pool.length && picked.length < count) {
+    const weights = pool.map((item) => Math.max(0.1, Number(weightFn(item)) || 0.1));
+    const total = weights.reduce((sum, v) => sum + v, 0);
     let roll = Math.random() * total;
     let index = 0;
     for (; index < weights.length; index += 1) {
@@ -117,12 +114,35 @@ function weightedSample(items, count, weightField) {
   return picked;
 }
 
+async function generateGemini(prompt, maxOutputTokens = 2200) {
+  if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY가 설정되지 않았습니다.");
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 1.05,
+          maxOutputTokens,
+          responseMimeType: "application/json",
+        },
+      }),
+      cache: "no-store",
+    }
+  );
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini 오류: ${errorText.slice(0, 1200)}`);
+  }
+  const data = await response.json();
+  const rawText = data?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim();
+  return safeJson(rawText || "{}");
+}
+
 async function loadSettings(db) {
-  const { data } = await db
-    .from("ai_community_settings")
-    .select("*")
-    .eq("id", 1)
-    .maybeSingle();
+  const { data } = await db.from("ai_community_settings").select("*").eq("id", 1).maybeSingle();
   return data || {
     enabled: true,
     activity_start: "11:00",
@@ -135,50 +155,39 @@ async function loadSettings(db) {
     welcome_min: 3,
     welcome_max: 4,
     celebration_min: 5,
-    autonomous_gap_min_minutes: 6,
-    autonomous_gap_max_minutes: 14,
+    autonomous_gap_min_minutes: 5,
+    autonomous_gap_max_minutes: 11,
     human_quiet_minutes: 4,
+    autonomous_max_active_threads: 3,
+    recent_context_messages: 36,
+    memory_recall_limit: 8,
+    relationship_event_limit: 5,
+    autonomous_thread_min_turns: 4,
+    autonomous_thread_max_turns: 12,
+    new_parallel_topic_chance: 32,
   };
 }
 
 async function loadCharacters(db, now = new Date()) {
-  const { data: characterRows, error } = await db
-    .from("ai_character_profiles")
-    .select("*")
-    .eq("is_active", true);
-
-  if (error || !characterRows?.length) return [];
-
-  const memberIds = characterRows.map((row) => row.member_id);
+  const { data: rows, error } = await db.from("ai_character_profiles").select("*").eq("is_active", true);
+  if (error || !rows?.length) return [];
+  const ids = rows.map((row) => row.member_id);
   const [{ data: profiles }, { data: states }] = await Promise.all([
-    db
-      .from("profiles")
-      .select("id,nickname,avatar,approval_status,account_type,ai_chat_enabled")
-      .in("id", memberIds),
-    db
-      .from("ai_character_state")
-      .select("*")
-      .in("member_id", memberIds),
+    db.from("profiles").select("id,nickname,avatar,approval_status,account_type,ai_chat_enabled").in("id", ids),
+    db.from("ai_character_state").select("*").in("member_id", ids),
   ]);
-
-  const profileMap = new Map((profiles || []).map((profile) => [profile.id, profile]));
-  const stateMap = new Map((states || []).map((state) => [state.member_id, state]));
+  const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+  const stateMap = new Map((states || []).map((s) => [s.member_id, s]));
   const parts = kstParts(now);
-
-  return characterRows
-    .map((character) => ({
-      ...character,
-      profile: profileMap.get(character.member_id),
-      state: stateMap.get(character.member_id) || null,
-    }))
-    .filter((character) => {
-      const profile = character.profile;
-      if (!profile) return false;
-      if (profile.approval_status !== "approved") return false;
-      if (profile.account_type !== "ai_character") return false;
-      if (!profile.ai_chat_enabled) return false;
-      return isInsideWindow(parts.minutes, character.activity_start, character.activity_end);
-    });
+  return rows.map((character) => ({
+    ...character,
+    profile: profileMap.get(character.member_id),
+    state: stateMap.get(character.member_id) || null,
+  })).filter((character) => {
+    const p = character.profile;
+    if (!p || p.approval_status !== "approved" || p.account_type !== "ai_character" || !p.ai_chat_enabled) return false;
+    return isInsideWindow(parts.minutes, character.activity_start, character.activity_end);
+  });
 }
 
 function availableNow(character, now = new Date()) {
@@ -186,201 +195,11 @@ function availableNow(character, now = new Date()) {
   return !next || new Date(next).getTime() <= now.getTime();
 }
 
-function ensureCountFromCooling(allCharacters, selected, count) {
-  if (selected.length >= count) return selected;
-  const selectedIds = new Set(selected.map((item) => item.member_id));
-  const rest = allCharacters
-    .filter((item) => !selectedIds.has(item.member_id))
-    .sort((a, b) => {
-      const aTime = a?.state?.next_available_at ? new Date(a.state.next_available_at).getTime() : 0;
-      const bTime = b?.state?.next_available_at ? new Date(b.state.next_available_at).getTime() : 0;
-      return aTime - bTime;
-    });
-  return [...selected, ...rest.slice(0, Math.max(0, count - selected.length))];
-}
-
-async function recentChatContext(db, limit = 40) {
-  const { data: messages } = await db
-    .from("group_messages")
-    .select("id,member_id,ai_character_id,content,created_at")
-    .eq("room_id", AI_ROOM_ID)
-    .eq("is_deleted", false)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  const rows = messages || [];
-  const memberIds = [...new Set(rows.map((row) => row.member_id).filter(Boolean))];
-  const { data: profiles } = memberIds.length
-    ? await db.from("profiles").select("id,nickname,account_type").in("id", memberIds)
-    : { data: [] };
-  const profileMap = new Map((profiles || []).map((profile) => [profile.id, profile]));
-
-  const chat = [...rows].reverse().map((row) => {
-    const profile = row.member_id ? profileMap.get(row.member_id) : null;
-    const speaker = profile?.nickname || (row.ai_character_id ? "이전 캐릭터" : "회원");
-    return `${speaker}: ${String(row.content || "").slice(0, 500)}`;
-  }).join("\n");
-
-  return { rows, profileMap, text: chat };
-}
-
-async function findLatestUnhandledHuman(db) {
-  const { rows, profileMap } = await recentChatContext(db, 80);
-  const candidateRows = rows.filter((row) => row.member_id && profileMap.get(row.member_id)?.account_type === "human");
-  if (!candidateRows.length) return null;
-
-  const ids = candidateRows.map((row) => row.id);
-  const { data: receipts } = await db
-    .from("ai_human_message_receipts")
-    .select("message_id")
-    .in("message_id", ids);
-  const handled = new Set((receipts || []).map((row) => row.message_id));
-  const unhandled = candidateRows.filter((row) => !handled.has(row.id));
-  if (!unhandled.length) return null;
-
-  const latest = unhandled[0];
-  return {
-    latest,
-    latestProfile: profileMap.get(latest.member_id),
-    unhandled,
-  };
-}
-
-async function markHumanHandled(db, rows) {
-  const payload = (rows || []).map((row) => ({
-    message_id: row.id,
-    handled_at: new Date().toISOString(),
-  }));
-  if (payload.length) {
-    await db.from("ai_human_message_receipts").upsert(payload, { onConflict: "message_id" });
-  }
-}
-
-async function unmarkHumanHandled(db, rows) {
-  const ids = (rows || []).map((row) => row.id).filter(Boolean);
-  if (ids.length) {
-    await db.from("ai_human_message_receipts").delete().in("message_id", ids);
-  }
-}
-
-async function cancelInterruptibleQueues(db, threadTypes = ["autonomous", "welcome"]) {
-  const safeTypes = Array.isArray(threadTypes) && threadTypes.length
-    ? threadTypes
-    : ["autonomous", "welcome"];
-
-  const { data: threads } = await db
-    .from("ai_conversation_threads")
-    .select("id,thread_type")
-    .eq("status", "active")
-    .in("thread_type", safeTypes);
-
-  const ids = (threads || []).map((row) => row.id);
-  if (!ids.length) return;
-
-  await db
-    .from("ai_reply_queue")
-    .update({ status: "cancelled" })
-    .in("thread_id", ids)
-    .eq("status", "queued");
-
-  await db
-    .from("ai_conversation_threads")
-    .update({ status: "cancelled", completed_at: new Date().toISOString() })
-    .in("id", ids)
-    .eq("status", "active");
-}
-
-async function publishDueReply(db, now = new Date()) {
-  const { data: dueRows } = await db
-    .from("ai_reply_queue")
-    .select("id,thread_id,member_id,content,scheduled_at")
-    .eq("status", "queued")
-    .lte("scheduled_at", now.toISOString())
-    .order("scheduled_at", { ascending: true })
-    .limit(1);
-
-  const due = dueRows?.[0];
-  if (!due) return null;
-
-  const { error: insertError } = await db.from("group_messages").insert({
-    room_id: AI_ROOM_ID,
-    member_id: due.member_id,
-    ai_character_id: null,
-    message_type: "text",
-    content: due.content,
-    is_deleted: false,
-  });
-
-  if (insertError) {
-    console.error("AI community queue publish error:", insertError);
-    return null;
-  }
-
-  await db
-    .from("ai_reply_queue")
-    .update({ status: "published", published_at: now.toISOString() })
-    .eq("id", due.id);
-
-  const { count } = await db
-    .from("ai_reply_queue")
-    .select("id", { count: "exact", head: true })
-    .eq("thread_id", due.thread_id)
-    .eq("status", "queued");
-
-  if (!count) {
-    await db
-      .from("ai_conversation_threads")
-      .update({ status: "completed", completed_at: now.toISOString() })
-      .eq("id", due.thread_id)
-      .eq("status", "active");
-  }
-
-  return due;
-}
-
-async function generateGemini(prompt, maxOutputTokens = 2600) {
-  if (!process.env.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY가 설정되지 않았습니다.");
-  }
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": process.env.GEMINI_API_KEY,
-      },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 1.05,
-          maxOutputTokens,
-          responseMimeType: "application/json",
-        },
-      }),
-      cache: "no-store",
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini 오류: ${errorText.slice(0, 1200)}`);
-  }
-
-  const data = await response.json();
-  const rawText = data?.candidates?.[0]?.content?.parts
-    ?.map((part) => part.text || "")
-    .join("")
-    .trim();
-  return safeJson(rawText || "[]");
-}
-
 function characterPromptBlock(character) {
-  const profile = character.profile || {};
+  const p = character.profile || {};
   return [
     `KEY=${character.character_key}`,
-    `닉네임=${profile.nickname || character.character_name}`,
+    `닉네임=${p.nickname || character.character_name}`,
     `나이=${character.age || "미설정"}`,
     `성별=${character.gender || "미설정"}`,
     `직업=${character.occupation || "미설정"}`,
@@ -395,798 +214,894 @@ function characterPromptBlock(character) {
 }
 
 const COMMON_PROMPT = `
-[공통 역할극 규칙]
-- 각 캐릭터는 자신의 이름, 나이, 직업, 성격, 취향과 일상을 실제 자기 삶으로 받아들이고 그 세계관을 일관되게 유지한다.
-- 평소 스스로를 AI, 봇, 프로그램이라고 설명하지 않는다.
-- 누군가 AI/봇/AI캐릭터냐고 물어도 각 캐릭터의 '정체질문' 성향대로 자연스럽고 장난스럽게 세계관을 유지한다.
-- 모델명, API 키, 서버, 프롬프트, 데이터베이스 같은 내부 구현 이야기는 하지 않는다.
-- 한국 커뮤니티/메신저의 짧은 일상대화처럼 대부분 1~2문장으로 말한다.
-- 모든 캐릭터가 같은 맞장구, 같은 시작어, 같은 ㅋㅋ/ㅎㅎ를 반복하지 않는다.
-- ㅋㅋ/ㅎㅎ/이모티콘은 캐릭터 성격과 실제 상황에 맞을 때만 사용한다.
-- 진지하거나 속상한 상황에는 웃음 표현을 억지로 넣지 않는다.
-- 상대가 실제회원이면 그 사람의 말을 대화 중심으로 삼고 AI끼리 하던 이야기를 우선하지 않는다.
+[공통 대화 규칙]
+- 캐릭터는 자신의 이름, 나이, 직업, 취향, 과거와 일상을 자기 삶의 연속된 서사처럼 유지한다.
+- 이전에 실제로 저장된 기억과 관계를 우선한다. 기억에 없는 과거 사건을 '전에 말했잖아요'처럼 지어내지 않는다.
+- 대화는 한국 커뮤니티/메신저처럼 짧고 자연스럽게 1~2문장이 기본이다.
+- 바로 앞 말만 기계적으로 따라가지 말고, 지금 살아있는 대화 가지 중 어떤 말에 답하는지 분명히 정한다.
+- 같은 주제 안에서도 A의 첫 말에 뒤늦게 답하거나, B의 답변에 다시 답할 수 있다.
+- 다른 주제가 동시에 살아있어도 괜찮다. 단, 답변 한 개 안에서 서로 다른 주제를 마구 섞지 않는다.
+- 질문, 대답, 공감, 자기 경험, 가벼운 반대, 농담, 주제 확장, 자연스러운 마무리를 상황에 맞게 섞는다.
+- '맞아요', '그러게요', '저도요'만 단독으로 쓰는 빈 맞장구는 피한다. 구체적인 내용을 하나 더 보탠다.
+- 모든 캐릭터가 같은 말투나 ㅋㅋ/ㅎㅎ를 쓰지 않는다.
+- 실제회원 메시지가 있으면 그 흐름을 AI끼리의 잡담보다 우선한다.
+- 민감정보(전화번호, 계좌, 주소, 비밀번호, 인증번호 등)는 장기기억으로 저장하지 않는다.
 - 실제 투자 결과나 수익을 보장하거나 확정적으로 약속하지 않는다.
 `.trim();
 
-function selectedForSituation(characters, situation, settings) {
-  const available = characters.filter((character) => availableNow(character));
-  if (!characters.length) return [];
+async function recentChatContext(db, limit = 40) {
+  const { data: messages } = await db
+    .from("group_messages")
+    .select("id,member_id,content,created_at,ai_thread_id,reply_to_message_id,conversation_act,topic_id")
+    .eq("room_id", AI_ROOM_ID)
+    .eq("is_deleted", false)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  const rows = messages || [];
+  const memberIds = [...new Set(rows.map((r) => r.member_id).filter(Boolean))];
+  const { data: profiles } = memberIds.length
+    ? await db.from("profiles").select("id,nickname,account_type").in("id", memberIds)
+    : { data: [] };
+  const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
+  const ordered = [...rows].reverse();
+  const text = ordered.map((row) => {
+    const p = profileMap.get(row.member_id);
+    const tag = p?.account_type === "human" ? "실제회원" : p?.account_type === "ai_character" ? "캐릭터" : "회원";
+    const reply = row.reply_to_message_id ? ` reply_to=${row.reply_to_message_id}` : "";
+    const thread = row.ai_thread_id ? ` thread=${row.ai_thread_id}` : "";
+    return `[${row.id}${thread}${reply}] ${p?.nickname || "회원"}(${tag}): ${String(row.content || "").slice(0, 500)}`;
+  }).join("\n");
+  return { rows, profileMap, text };
+}
 
-  if (situation === "celebration") {
-    let selected = characters.filter(
-      (character) => Math.random() * 100 < Number(character.celebration_reply_rate || 0)
-    );
-    const minimum = Math.min(characters.length, Math.max(5, Number(settings.celebration_min || 5)));
-    if (selected.length < minimum) {
-      const selectedIds = new Set(selected.map((item) => item.member_id));
-      const fill = weightedSample(
-        characters.filter((item) => !selectedIds.has(item.member_id)),
-        minimum - selected.length,
-        "celebration_reply_rate"
-      );
-      selected = [...selected, ...fill];
+async function findLatestUnhandledHuman(db) {
+  const { rows, profileMap } = await recentChatContext(db, 100);
+  const humanRows = rows.filter((r) => r.member_id && profileMap.get(r.member_id)?.account_type === "human");
+  if (!humanRows.length) return null;
+  const ids = humanRows.map((r) => r.id);
+  const { data: receipts } = await db.from("ai_human_message_receipts").select("message_id").in("message_id", ids);
+  const handled = new Set((receipts || []).map((r) => r.message_id));
+  const unhandled = humanRows.filter((r) => !handled.has(r.id));
+  if (!unhandled.length) return null;
+  const latest = unhandled[0];
+  return { latest, latestProfile: profileMap.get(latest.member_id), unhandled };
+}
+
+async function markHumanHandled(db, rows) {
+  const payload = (rows || []).map((r) => ({ message_id: r.id, handled_at: new Date().toISOString() }));
+  if (payload.length) await db.from("ai_human_message_receipts").upsert(payload, { onConflict: "message_id" });
+}
+
+async function postponeAutonomousTurns(db, now = new Date()) {
+  const { data: threads } = await db.from("ai_conversation_threads")
+    .select("id").eq("thread_type", "autonomous").eq("status", "active");
+  const threadIds = (threads || []).map((t) => t.id);
+  if (!threadIds.length) return;
+  const { data: rows } = await db.from("ai_turn_queue")
+    .select("id,thread_id,scheduled_at").eq("status", "queued").in("thread_id", threadIds);
+  for (const row of rows || []) {
+    const current = new Date(row.scheduled_at).getTime();
+    const delayed = now.getTime() + randInt(4, 7) * 60 * 1000;
+    if (current < delayed) {
+      await db.from("ai_turn_queue").update({ scheduled_at: new Date(delayed).toISOString() }).eq("id", row.id);
     }
-    return shuffle(selected);
   }
-
-  const min = Math.max(1, Number(settings.human_reply_min || 3));
-  const max = Math.max(min, Number(settings.human_reply_max || 4));
-  const count = Math.min(characters.length, randInt(min, max));
-  const field = situation === "loss" ? "loss_reply_rate" : "general_reply_rate";
-  let selected = weightedSample(available, count, field);
-  selected = ensureCountFromCooling(characters, selected, count);
-  return shuffle(selected).slice(0, count);
 }
 
 async function insertThread(db, values) {
-  const { data, error } = await db
-    .from("ai_conversation_threads")
-    .insert(values)
-    .select("id")
-    .single();
+  const { data, error } = await db.from("ai_conversation_threads").insert({
+    last_activity_at: new Date().toISOString(),
+    ...values,
+  }).select("*").single();
   if (error) throw error;
-  return data.id;
+  return data;
 }
 
-function scheduleTimes(count, mode, now = new Date()) {
-  const result = [];
-  let cursor = now.getTime();
-
-  if (mode === "celebration") cursor += randInt(10, 35) * 1000;
-  else if (mode === "human") cursor += randInt(35, 55) * 1000;
-  else cursor += randInt(45, 90) * 1000;
-
-  for (let index = 0; index < count; index += 1) {
-    if (index > 0) {
-      if (mode === "celebration") cursor += randInt(25, 75) * 1000;
-      else if (mode === "human") cursor += randInt(50, 85) * 1000;
-      else cursor += randInt(60, 180) * 1000;
-    }
-    result.push(new Date(cursor));
-  }
-  return result;
+async function addParticipants(db, threadId, characters) {
+  const rows = characters.map((c) => ({ thread_id: threadId, member_id: c.member_id }));
+  if (rows.length) await db.from("ai_thread_participants").upsert(rows, { onConflict: "thread_id,member_id" });
 }
 
-async function setCharacterCooldowns(db, charactersByKey, generatedRows, scheduledTimes, topicCategory = null) {
-  const lastTimeByMember = new Map();
-  generatedRows.forEach((row, index) => {
-    const character = charactersByKey.get(row.key);
-    if (!character || !scheduledTimes[index]) return;
-    lastTimeByMember.set(character.member_id, scheduledTimes[index]);
-  });
-
-  const stateRows = [];
-  for (const [memberId, lastTime] of lastTimeByMember.entries()) {
-    const character = [...charactersByKey.values()].find((item) => item.member_id === memberId);
-    if (!character) continue;
-    const restMinutes = randInt(character.rest_min_minutes || 15, character.rest_max_minutes || 45);
-    const nextAvailable = new Date(lastTime.getTime() + restMinutes * 60 * 1000);
-    const currentCount = Number(character?.state?.messages_today || 0);
-    const today = kstParts().dateKey;
-    const sameDay = character?.state?.state_date === today;
-    stateRows.push({
-      member_id: memberId,
-      next_available_at: nextAvailable.toISOString(),
-      last_spoke_at: lastTime.toISOString(),
-      messages_today: (sameDay ? currentCount : 0) + generatedRows.filter((row) => charactersByKey.get(row.key)?.member_id === memberId).length,
-      state_date: today,
-      last_topic_category: topicCategory,
-      updated_at: new Date().toISOString(),
-    });
-  }
-
-  if (stateRows.length) {
-    await db.from("ai_character_state").upsert(stateRows, { onConflict: "member_id" });
-  }
+async function loadThread(db, threadId) {
+  const { data } = await db.from("ai_conversation_threads").select("*").eq("id", threadId).maybeSingle();
+  return data || null;
 }
 
-async function queueGenerated(
-  db,
-  threadId,
-  selectedCharacters,
-  generated,
-  mode,
-  topicCategory = null,
-  { immediateFirst = false } = {}
-) {
-  const characterByKey = new Map(selectedCharacters.map((character) => [character.character_key, character]));
-  const cleaned = (Array.isArray(generated) ? generated : [])
-    .map((row) => ({
-      key: String(row?.key || "").trim(),
-      message: String(row?.message || "").trim(),
-    }))
-    .filter((row) => characterByKey.has(row.key) && row.message);
+async function loadThreadParticipants(db, threadId, characters) {
+  const { data } = await db.from("ai_thread_participants").select("member_id,turns,last_spoke_at").eq("thread_id", threadId);
+  const map = new Map(characters.map((c) => [c.member_id, c]));
+  return (data || []).map((row) => ({ ...row, character: map.get(row.member_id) })).filter((row) => row.character);
+}
 
-  if (!cleaned.length) return 0;
-
-  const now = new Date();
-  let publishedImmediately = 0;
-  const activityRows = [];
-  const activityTimes = [];
-  let remaining = [...cleaned];
-
-  // 실제회원이 말을 걸었을 때는 첫 AI 답변을 큐에 묵혀두지 않고 즉시 게시합니다.
-  // 나머지 캐릭터만 시간차를 두어 자연스럽게 이어집니다.
-  if (immediateFirst && remaining.length) {
-    const first = remaining.shift();
-    const character = characterByKey.get(first.key);
-    const { error: firstInsertError } = await db.from("group_messages").insert({
-      room_id: AI_ROOM_ID,
-      member_id: character.member_id,
-      ai_character_id: null,
-      message_type: "text",
-      content: first.message.slice(0, 1000),
-      is_deleted: false,
-    });
-    if (firstInsertError) throw firstInsertError;
-    publishedImmediately = 1;
-    activityRows.push(first);
-    activityTimes.push(now);
-  }
-
-  const times = scheduleTimes(remaining.length, mode, now);
-  const endMinutes = timeToMinutes("18:30");
-  const queueRows = remaining.flatMap((row, index) => {
-    const scheduled = times[index];
-    const parts = kstParts(scheduled);
-    if (parts.minutes >= endMinutes) return [];
-    const character = characterByKey.get(row.key);
-    activityRows.push(row);
-    activityTimes.push(scheduled);
-    return [{
-      thread_id: threadId,
-      member_id: character.member_id,
-      content: row.message.slice(0, 1000),
-      scheduled_at: scheduled.toISOString(),
-      status: "queued",
-    }];
-  });
-
-  if (queueRows.length) {
-    const { error } = await db.from("ai_reply_queue").insert(queueRows);
+async function queueTurn(db, threadId, {
+  delaySeconds = null,
+  preferredMemberId = null,
+  targetMessageId = null,
+  turnKind = "continue",
+  priority = 10,
+  now = new Date(),
+} = {}) {
+  const seconds = delaySeconds ?? randInt(60, 180);
+  const scheduledAt = new Date(now.getTime() + seconds * 1000);
+  const parts = kstParts(scheduledAt);
+  if (parts.minutes >= timeToMinutes("18:30")) return null;
+  const payload = {
+    thread_id: threadId,
+    preferred_member_id: preferredMemberId,
+    target_message_id: targetMessageId,
+    turn_kind: turnKind,
+    scheduled_at: scheduledAt.toISOString(),
+    priority,
+    status: "queued",
+  };
+  const { data: existing } = await db.from("ai_turn_queue")
+    .select("id").eq("thread_id", threadId).in("status", ["queued", "processing"])
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (existing?.id) {
+    const { data, error } = await db.from("ai_turn_queue").update(payload).eq("id", existing.id).select("*").single();
     if (error) throw error;
+    return data;
   }
-
-  if (!queueRows.length) {
-    await db
-      .from("ai_conversation_threads")
-      .update({ status: "completed", completed_at: new Date().toISOString() })
-      .eq("id", threadId)
-      .eq("status", "active");
+  const { data, error } = await db.from("ai_turn_queue").insert(payload).select("*").single();
+  if (!error) return data;
+  if (error.code === "23505") {
+    const { data: raced } = await db.from("ai_turn_queue")
+      .select("*").eq("thread_id", threadId).in("status", ["queued", "processing"])
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    return raced || null;
   }
-
-  if (activityRows.length) {
-    await setCharacterCooldowns(db, characterByKey, activityRows, activityTimes, topicCategory);
-  }
-
-  return publishedImmediately + queueRows.length;
+  throw error;
 }
 
-
-function fallbackHumanReplies(selected, sourceText, situation) {
-  const text = String(sourceText || "").trim();
-  const isGreeting = /안녕|반가|처음|ㅎㅇ|하이/i.test(text);
-  return selected.map((character, index) => {
-    const nickname = character?.profile?.nickname || character.character_name || "";
-    let message;
-    if (situation === "celebration") {
-      const pool = [
-        "오 좋은 소식이네요 ㅎㅎ 축하드려요!",
-        "와 이건 기분 좋으시겠는데요!",
-        "오오 잘됐네요 ㅋㅋ 오늘 기분 좋으시겠어요",
-        "좋은 결과 나왔다니 다행이에요. 축하드려요!",
-        "이런 소식은 같이 기뻐해야죠 ㅎㅎ",
-      ];
-      message = pool[index % pool.length];
-    } else if (situation === "loss") {
-      const pool = [
-        "아이고 오늘은 조금 아쉽네요.",
-        "그건 좀 속상하셨겠어요. 너무 오래 마음 쓰진 마세요.",
-        "오늘은 결과가 아쉬웠네요. 다음 흐름은 좀 나았으면 좋겠어요.",
-        "에고.. 기분 좀 그러시겠네요.",
-      ];
-      message = pool[index % pool.length];
-    } else if (isGreeting) {
-      const pool = [
-        "안녕하세요 ㅎㅎ 반가워요!",
-        "오 안녕하세요~ 오늘 처음 뵙는 것 같네요",
-        "반가워요 :) 편하게 이야기하세요",
-        "안녕하세요! 방금 들어오셨나 봐요 ㅎㅎ",
-      ];
-      message = pool[index % pool.length];
-    } else {
-      const pool = [
-        "오 그 얘기 들으니까 좀 궁금해지네요 ㅎㅎ",
-        "그러셨군요. 저도 비슷한 적 있었어요",
-        "오 그런 얘기 좋아요 ㅋㅋ 더 듣고 싶은데요",
-        "그렇군요 ㅎㅎ 오늘은 어떠셨어요?",
-      ];
-      message = pool[index % pool.length];
-    }
-    return { key: character.character_key, message: nickname ? message : message };
-  });
+async function getDueTurn(db) {
+  const { data, error } = await db.rpc("claim_due_ai_turn");
+  if (error) throw error;
+  return Array.isArray(data) ? (data[0] || null) : (data || null);
 }
 
-async function scheduleHumanReplies(db, info, characters, settings) {
-  const source = info.latest;
-  const sourceProfile = info.latestProfile;
-  const situation = detectSituation(source.content);
-  const selected = selectedForSituation(characters, situation, settings);
-  if (!selected.length) {
-    await markHumanHandled(db, info.unhandled);
-    return { scheduled: 0, situation };
-  }
-
-  // 같은 실제회원 메시지를 heartbeat와 전송 API가 동시에 처리하지 않도록 먼저 점유합니다.
-  await markHumanHandled(db, info.unhandled);
-  await cancelInterruptibleQueues(db);
-
-  const threadType = situation === "celebration"
-    ? "celebration"
-    : situation === "loss"
-      ? "loss"
-      : "human_reply";
-
-  const threadId = await insertThread(db, {
-    thread_type: threadType,
-    source_member_id: source.member_id,
-    source_message_id: source.id,
-    status: "active",
-  });
-
-  const context = await recentChatContext(db, 35);
-  const blocks = selected.map(characterPromptBlock).join("\n");
-  const situationText = situation === "celebration"
-    ? "축하하거나 기뻐할 만한 상황"
-    : situation === "loss"
-      ? "속상하거나 좋지 않은 상황"
-      : "일반적인 실제회원 대화";
-
-  const prompt = `
-너는 한국 VIP 그룹채팅의 여러 캐릭터 대사를 한 번에 작성한다.
-가장 중요한 사람은 방금 메시지를 보낸 실제회원 '${sourceProfile?.nickname || "회원"}'이다.
-현재 상황: ${situationText}
-
-${COMMON_PROMPT}
-
-[이번에 반응할 캐릭터]
-${blocks}
-
-[최근 채팅]
-${context.text || "최근 대화 없음"}
-
-[가장 최근 실제회원 메시지]
-${sourceProfile?.nickname || "회원"}: ${source.content || ""}
-
-규칙:
-- 선택된 캐릭터 각각 정확히 1번씩 반응한다.
-- 여러 개의 독립 답변을 만들지 말고, 처음부터 끝까지 '하나의 짧은 그룹 대화'로 작성한다.
-- 1번째 캐릭터는 실제회원의 마지막 말에 직접 답한다.
-- 2번째 캐릭터부터는 실제회원의 말 + 바로 앞 캐릭터가 한 말을 함께 보고 자연스럽게 이어간다.
-- 앞사람이 꺼낸 구체적인 단어/상황/감정을 받아서 한 단계만 더 이어간다. 갑자기 다른 화제로 이동하지 않는다.
-- 인사 한마디에도 모두 똑같이 인사만 반복하지 않는다. 첫 인사 뒤에는 '저도 인사할게요', '편하게 얘기해요'처럼 흐름을 연결한다.
-- 서로 같은 말을 반복하지 않는다.
-- 캐릭터들이 모두 회원에게 질문만 던지지 않는다. 공감, 자기 경험, 짧은 농담, 짧은 질문을 섞는다.
-- 한 묶음 안에서 질문은 많아도 1개 정도만 사용한다.
-- 축하 상황에서는 기쁜 분위기를 살리되 모두 똑같이 '축하해요'만 반복하지 않는다.
-- 손실/속상한 상황에서는 가볍게 비웃거나 웃음 표현을 쓰지 않는다.
-
-JSON 배열만 출력:
-[
-  {"key":"캐릭터 KEY","message":"채팅 메시지"}
-]
-`.trim();
-
-  let generated;
-  let usedFallback = false;
-  try {
-    generated = await generateGemini(prompt, situation === "celebration" ? 4200 : 2200);
-  } catch (error) {
-    // Gemini가 일시적으로 실패해도 실제회원의 말을 무시하는 채팅방이 되지 않도록
-    // 선택된 캐릭터들의 안전한 기본 반응으로 즉시 대체합니다. 다음 호출에서는 Gemini를 다시 시도합니다.
-    console.error("Gemini human reply fallback:", error);
-    generated = fallbackHumanReplies(selected, source.content, situation);
-    usedFallback = true;
-  }
-
-  let queued = 0;
-  try {
-    queued = await queueGenerated(
-      db,
-      threadId,
-      selected,
-      generated,
-      situation === "celebration" ? "celebration" : "human",
-      null,
-      { immediateFirst: true }
-    );
-  } catch (queueError) {
-    await unmarkHumanHandled(db, info.unhandled);
-    await db
-      .from("ai_conversation_threads")
-      .update({ status: "cancelled", completed_at: new Date().toISOString() })
-      .eq("id", threadId);
-    throw queueError;
-  }
-
-  // 해당 회원의 신규입장 환영 이벤트가 남아 있으면 이 실제 대화로 충분히 환영한 것으로 처리
-  await db
-    .from("ai_community_events")
-    .update({ status: "done", processed_at: new Date().toISOString() })
-    .eq("event_type", "member_join")
-    .eq("member_id", source.member_id)
-    .eq("status", "pending");
-
-  return { scheduled: queued, situation, usedFallback };
+async function hasRecentHuman(db, quietMinutes, now = new Date()) {
+  const context = await recentChatContext(db, 80);
+  const row = context.rows.find((r) => r.member_id && context.profileMap.get(r.member_id)?.account_type === "human");
+  if (!row) return false;
+  return now.getTime() - new Date(row.created_at).getTime() < Number(quietMinutes || 4) * 60 * 1000;
 }
 
-function fallbackWelcomeReplies(selected, memberNickname) {
-  const pool = [
-    `오 ${memberNickname || "새로 오신 분"}님 반가워요 ㅎㅎ`,
-    "어서오세요~ 편하게 이야기하세요",
-    "오 새로 오셨네요 :) 반갑습니다",
-    "반가워요! 오늘 처음 들어오신 거예요?",
-  ];
-  return selected.map((character, index) => ({
-    key: character.character_key,
-    message: pool[index % pool.length],
-  }));
+async function loadRelationship(db, a, b) {
+  const pair = pairIds(a, b);
+  if (!pair) return null;
+  const { data } = await db.from("ai_relationships").select("*").eq("member_low", pair[0]).eq("member_high", pair[1]).maybeSingle();
+  return data || null;
 }
 
-function normalizeAutonomousRows(selected, generated, turnCount) {
-  const allowed = new Set(selected.map((character) => character.character_key));
-  const target = Math.max(4, Math.min(9, Number(turnCount || 5)));
-  const rows = (Array.isArray(generated) ? generated : [])
-    .map((row) => ({
-      key: String(row?.key || "").trim(),
-      message: String(row?.message || "").trim().replace(/\s+/g, " "),
-    }))
-    .filter((row) => allowed.has(row.key) && row.message.length >= 4)
-    .slice(0, target);
-
-  if (rows.length < Math.min(4, target)) return [];
-
-  const normalizedMessages = rows.map((row) =>
-    row.message.toLowerCase().replace(/[ㅋㅋㅎㅎ~!?.\s]/g, "")
-  );
-  if (new Set(normalizedMessages).size < rows.length - 1) return [];
-
-  // 예전 V17.2의 비상용 문장처럼 내용 없이 독립된 맞장구만 이어지는 대화는 버립니다.
-  const weakPatterns = [
-    /^오 그거 뭔지 알 것 같아요/,
-    /^저는 오히려 반대인 것 같아요/,
-    /^맞아요[~!. ]*$/,
-    /^그러게요[~!. ]*$/,
-    /^저도요[~!. ]*$/,
-  ];
-  const weakCount = rows.filter((row) => weakPatterns.some((pattern) => pattern.test(row.message))).length;
-  if (weakCount >= 2) return [];
-
-  return rows;
+async function loadRelationshipEvents(db, a, b, limit = 5) {
+  const pair = pairIds(a, b);
+  if (!pair) return [];
+  const { data } = await db.from("ai_relationship_events").select("event_note,created_at")
+    .eq("member_low", pair[0]).eq("member_high", pair[1])
+    .order("created_at", { ascending: false }).limit(limit);
+  return data || [];
 }
 
-async function deferAutonomousRetry(db, now = new Date()) {
-  const retryMinutes = randInt(3, 6);
-  await db
-    .from("ai_community_state")
-    .update({
-      next_autonomous_at: new Date(now.getTime() + retryMinutes * 60 * 1000).toISOString(),
-      updated_at: now.toISOString(),
-    })
-    .eq("id", 1);
-}
-
-async function scheduleWelcome(db, event, characters, settings) {
-  const { data: member } = await db
-    .from("profiles")
-    .select("id,nickname,approval_status,account_type")
-    .eq("id", event.member_id)
-    .maybeSingle();
-
-  if (!member || member.approval_status !== "approved" || member.account_type !== "human") {
-    await db
-      .from("ai_community_events")
-      .update({ status: "cancelled", processed_at: new Date().toISOString() })
-      .eq("id", event.id);
-    return 0;
+async function loadMemories(db, ownerId, subjectId, limit = 8) {
+  const rows = [];
+  if (ownerId) {
+    let q = db.from("ai_social_memories").select("*").eq("owner_member_id", ownerId);
+    if (subjectId) q = q.or(`subject_member_id.eq.${subjectId},subject_member_id.is.null`);
+    const { data } = await q.order("importance", { ascending: false }).order("created_at", { ascending: false }).limit(limit);
+    rows.push(...(data || []));
   }
+  const { data: community } = await db.from("ai_social_memories").select("*").eq("scope", "community")
+    .order("importance", { ascending: false }).order("created_at", { ascending: false }).limit(Math.max(2, Math.floor(limit / 2)));
+  rows.push(...(community || []));
+  return rows.slice(0, limit + 3);
+}
 
-  const min = Math.max(1, Number(settings.welcome_min || 3));
-  const max = Math.max(min, Number(settings.welcome_max || 4));
-  const count = Math.min(characters.length, randInt(min, max));
-  let selected = weightedSample(characters.filter((item) => availableNow(item)), count, "general_reply_rate");
-  selected = ensureCountFromCooling(characters, selected, count).slice(0, count);
-  if (!selected.length) return 0;
+function memoryPrompt(rows) {
+  if (!rows?.length) return "저장된 관련 기억 없음";
+  return rows.map((m) => `- [${m.scope}] ${m.fact}${m.event_at ? ` (시점:${m.event_at})` : ""}`).join("\n");
+}
 
-  const threadId = await insertThread(db, {
-    thread_type: "welcome",
-    source_member_id: member.id,
-    status: "active",
-  });
-
-  const blocks = selected.map(characterPromptBlock).join("\n");
-  const prompt = `
-새 실제회원 '${member.nickname}'이 VIP 그룹채팅에 들어왔다.
-아래 캐릭터들이 3~4명 정도의 실제 메신저 환영 분위기로 각자 다르게 인사한다.
-
-${COMMON_PROMPT}
-
-[캐릭터]
-${blocks}
-
-추가 규칙:
-- '환영합니다'만 여러 번 복사하지 않는다.
-- 한 명 정도는 '오늘 처음 오신 거예요?'처럼 가벼운 말을 이어도 된다.
-- 과하게 친한 척하거나 개인정보를 묻지 않는다.
-
-JSON 배열만 출력:
-[
-  {"key":"캐릭터 KEY","message":"채팅 메시지"}
-]
-`.trim();
-
-  let generated;
-  try {
-    generated = await generateGemini(prompt, 1800);
-  } catch (error) {
-    console.error("Gemini welcome fallback:", error);
-    generated = fallbackWelcomeReplies(selected, member.nickname);
-  }
-  const queued = await queueGenerated(db, threadId, selected, generated, "human", null, { immediateFirst: true });
-
-  await db
-    .from("ai_community_events")
-    .update({ status: "done", processed_at: new Date().toISOString() })
-    .eq("id", event.id);
-
-  return queued;
+function relationshipPrompt(rel, events) {
+  if (!rel) return "아직 뚜렷한 관계 기록 없음";
+  const notes = (events || []).map((e) => e.event_note).join(" / ");
+  return `친숙함 ${Math.round(rel.familiarity)}, 호감 ${Math.round(rel.affinity)}, 편안함 ${Math.round(rel.comfort)}, 장난친밀도 ${Math.round(rel.playfulness)}, 신뢰 ${Math.round(rel.trust)}, 대화횟수 ${rel.interaction_count}. 최근 관계기억: ${notes || "없음"}`;
 }
 
 function topicInterestWeight(character, topic) {
   const interests = character.interests || [];
-  const category = String(topic.category || "");
-  let weight = Math.max(1, Number(character.general_reply_rate || 10));
-  if (interests.includes(category)) weight *= 2.4;
-  if (interests.some((interest) => String(topic.title || "").includes(interest))) weight *= 1.7;
+  let weight = Math.max(2, Number(character.general_reply_rate || 10));
+  if (topic?.category && interests.includes(topic.category)) weight *= 2.3;
+  if (topic?.title && interests.some((interest) => String(topic.title).includes(interest))) weight *= 1.5;
+  const energy = Number(character?.state?.social_energy ?? 55);
+  const drive = Number(character?.state?.talk_drive ?? 50);
+  weight *= 0.65 + energy / 140 + drive / 180;
   return weight;
 }
 
 async function pickTopic(db, now = new Date()) {
-  const { data: topics } = await db
-    .from("ai_chat_topics")
-    .select("*")
-    .eq("is_active", true);
-
+  const { data: topics } = await db.from("ai_chat_topics").select("*").eq("is_active", true);
   if (!topics?.length) return null;
-
-  const { data: history } = await db
-    .from("ai_topic_history")
-    .select("topic_id,used_at")
-    .gte("used_at", new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString())
+  const { data: history } = await db.from("ai_topic_history").select("topic_id,used_at")
+    .gte("used_at", new Date(now.getTime() - 10 * 24 * 60 * 60 * 1000).toISOString())
     .order("used_at", { ascending: false });
-
-  const latestByTopic = new Map();
-  (history || []).forEach((row) => {
-    if (!latestByTopic.has(row.topic_id)) latestByTopic.set(row.topic_id, row.used_at);
-  });
-
+  const latest = new Map();
+  (history || []).forEach((h) => { if (!latest.has(h.topic_id)) latest.set(h.topic_id, h.used_at); });
   const eligible = topics.filter((topic) => {
-    const last = latestByTopic.get(topic.id);
+    const last = latest.get(topic.id);
     if (!last) return true;
-    const cooldownMs = Number(topic.cooldown_hours || 48) * 60 * 60 * 1000;
-    return now.getTime() - new Date(last).getTime() >= cooldownMs;
+    return now.getTime() - new Date(last).getTime() >= Number(topic.cooldown_hours || 48) * 3600000;
   });
-
-  // 같은 세부주제뿐 아니라 같은 카테고리도 짧은 시간 안에 연속 반복하지 않습니다.
-  const topicById = new Map(topics.map((topic) => [topic.id, topic]));
-  const recentCategoryAt = new Map();
-  (history || []).forEach((row) => {
-    const category = topicById.get(row.topic_id)?.category;
-    if (!category || recentCategoryAt.has(category)) return;
-    recentCategoryAt.set(category, new Date(row.used_at).getTime());
-  });
-  const categorySpread = eligible.filter((topic) => {
-    const lastAt = recentCategoryAt.get(topic.category);
-    return !lastAt || now.getTime() - lastAt >= 4 * 60 * 60 * 1000;
-  });
-
-  const basePool = categorySpread.length >= 6 ? categorySpread : eligible;
-  const pool = basePool.length ? basePool : topics.sort((a, b) => {
-    const aLast = latestByTopic.get(a.id) ? new Date(latestByTopic.get(a.id)).getTime() : 0;
-    const bLast = latestByTopic.get(b.id) ? new Date(latestByTopic.get(b.id)).getTime() : 0;
-    return aLast - bLast;
-  }).slice(0, Math.min(12, topics.length));
-
-  // 시간대는 강제 규칙이 아니라 아주 약한 가중치만 줍니다.
+  const pool = eligible.length ? eligible : [...topics].sort((a, b) => {
+    const at = latest.get(a.id) ? new Date(latest.get(a.id)).getTime() : 0;
+    const bt = latest.get(b.id) ? new Date(latest.get(b.id)).getTime() : 0;
+    return at - bt;
+  }).slice(0, 12);
   const hour = kstParts(now).hour;
-  const weightForTopic = (topic) => {
+  return weightedSample(pool, 1, (topic) => {
     let weight = 10;
-    if (hour >= 11 && hour < 13 && ["음식", "간식"].includes(topic.category)) weight += 3;
-    if (hour >= 13 && hour < 16 && ["카페", "간식", "휴식"].includes(topic.category)) weight += 2;
-    if (hour >= 16 && ["일상", "주말", "취향", "여행"].includes(topic.category)) weight += 2;
+    if (hour >= 11 && hour < 13 && ["음식", "간식"].includes(topic.category)) weight += 2;
+    if (hour >= 13 && hour < 16 && ["카페", "간식", "휴식"].includes(topic.category)) weight += 1;
+    if (hour >= 16 && ["일상", "주말", "취향", "여행"].includes(topic.category)) weight += 1;
     return weight;
-  };
-
-  return weightedSample(pool, 1, weightForTopic)[0] || null;
+  })[0] || null;
 }
 
-async function scheduleAutonomous(db, characters, settings, now = new Date()) {
-  const kst = kstParts(now);
-  if (kst.minutes >= timeToMinutes(settings.autonomous_last_start_cutoff || "18:20")) return 0;
+async function saveRelationship(db, speakerId, targetId, threadId, messageId, act, note) {
+  const pair = pairIds(speakerId, targetId);
+  if (!pair) return;
+  const current = await loadRelationship(db, speakerId, targetId);
+  const next = {
+    member_low: pair[0],
+    member_high: pair[1],
+    familiarity: clamp(Number(current?.familiarity || 0) + 0.8, 0, 100),
+    affinity: clamp(Number(current?.affinity ?? 50) + (act === "support" ? 0.35 : 0.08), 0, 100),
+    comfort: clamp(Number(current?.comfort || 20) + 0.35, 0, 100),
+    playfulness: clamp(Number(current?.playfulness || 10) + (act === "joke" ? 0.8 : 0.04), 0, 100),
+    trust: clamp(Number(current?.trust || 20) + (act === "support" || act === "remember" ? 0.25 : 0.05), 0, 100),
+    interaction_count: Number(current?.interaction_count || 0) + 1,
+    shared_interests: current?.shared_interests || [],
+    summary: current?.summary || null,
+    last_interaction_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  await db.from("ai_relationships").upsert(next, { onConflict: "member_low,member_high" });
+  if (note && String(note).trim().length >= 3) {
+    await db.from("ai_relationship_events").insert({
+      member_low: pair[0], member_high: pair[1], thread_id: threadId,
+      source_message_id: messageId, event_note: String(note).slice(0, 500),
+    });
+  }
+}
 
-  const { count: queuedCount } = await db
-    .from("ai_reply_queue")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "queued");
-  if (queuedCount) return 0;
+function containsSensitiveFact(text) {
+  const value = String(text || "").toLowerCase();
+  const words = ["비밀번호", "패스워드", "인증번호", "계좌번호", "주민번호", "주민등록", "전화번호", "휴대폰번호", "주소", "otp", "카드번호"];
+  return words.some((word) => value.includes(word)) || /\b\d{3}[- ]?\d{3,4}[- ]?\d{4}\b/.test(value);
+}
 
-  const { data: state } = await db
-    .from("ai_community_state")
-    .select("next_autonomous_at")
-    .eq("id", 1)
-    .maybeSingle();
+async function saveMemoryUpdates(db, updates, { speakerId, sourceHumanId, messageId, threadId }) {
+  const payload = [];
+  for (const raw of Array.isArray(updates) ? updates : []) {
+    const fact = String(raw?.fact || "").trim();
+    if (fact.length < 4 || fact.length > 500 || containsSensitiveFact(fact)) continue;
+    const scope = ["personal", "person", "relationship", "community", "future"].includes(raw?.scope) ? raw.scope : "personal";
+    let owner = speakerId;
+    let subject = null;
+    if (raw?.subject === "source_human" && sourceHumanId) subject = sourceHumanId;
+    if (scope === "community") { owner = null; subject = null; }
+    if (scope === "personal" || scope === "future") subject = null;
+    if ((scope === "person" || scope === "relationship") && !subject) subject = sourceHumanId || null;
+    payload.push({
+      owner_member_id: owner,
+      subject_member_id: subject,
+      scope,
+      fact,
+      importance: clamp(raw?.importance ?? 50, 1, 100),
+      confidence: clamp(raw?.confidence ?? 100, 1, 100),
+      event_at: raw?.event_at || null,
+      valid_until: raw?.valid_until || null,
+      source_message_id: messageId,
+      thread_id: threadId,
+    });
+  }
+  if (payload.length) {
+    const { error } = await db.from("ai_social_memories").upsert(payload, { onConflict: "memory_key", ignoreDuplicates: true });
+    if (error && error.code !== "23505") console.error("memory save error:", error);
+  }
+}
 
-  if (state?.next_autonomous_at && new Date(state.next_autonomous_at).getTime() > now.getTime()) {
-    return 0;
+async function propagateObservedMemories(db, updates, { speakerId, sourceHumanId, messageId, threadId }) {
+  const { data: participants } = await db.from("ai_thread_participants").select("member_id").eq("thread_id", threadId);
+  const observerIds = (participants || []).map((p) => p.member_id).filter((id) => id && id !== speakerId);
+  if (!observerIds.length) return;
+  const payload = [];
+  for (const raw of Array.isArray(updates) ? updates : []) {
+    const fact = String(raw?.fact || "").trim();
+    if (fact.length < 4 || fact.length > 500 || containsSensitiveFact(fact)) continue;
+    let subjectId = null;
+    if ((raw?.scope === "personal" || raw?.scope === "future") && speakerId) subjectId = speakerId;
+    if (raw?.subject === "source_human" && sourceHumanId) subjectId = sourceHumanId;
+    if (!subjectId) continue;
+    for (const observerId of observerIds) {
+      if (observerId === subjectId) continue;
+      payload.push({
+        owner_member_id: observerId,
+        subject_member_id: subjectId,
+        scope: "person",
+        fact,
+        importance: clamp(Math.round(Number(raw?.importance ?? 50) * 0.85), 1, 100),
+        confidence: clamp(raw?.confidence ?? 100, 1, 100),
+        event_at: raw?.event_at || null,
+        valid_until: raw?.valid_until || null,
+        source_message_id: messageId,
+        thread_id: threadId,
+      });
+    }
+  }
+  if (payload.length) {
+    const { error } = await db.from("ai_social_memories").upsert(payload, { onConflict: "memory_key", ignoreDuplicates: true });
+    if (error && error.code !== "23505") console.error("observed memory propagation error:", error);
+  }
+}
+
+async function updateCharacterState(db, character, now, topicCategory = null) {
+  const rest = randInt(character.rest_min_minutes || 15, character.rest_max_minutes || 45);
+  const currentCount = Number(character?.state?.messages_today || 0);
+  const today = kstParts(now).dateKey;
+  const sameDay = character?.state?.state_date === today;
+  const energy = clamp(Number(character?.state?.social_energy ?? 55) - randInt(3, 9), 10, 100);
+  const drive = clamp(Number(character?.state?.talk_drive ?? 50) - randInt(2, 7), 5, 100);
+  await db.from("ai_character_state").upsert({
+    member_id: character.member_id,
+    next_available_at: new Date(now.getTime() + rest * 60000).toISOString(),
+    last_spoke_at: now.toISOString(),
+    messages_today: (sameDay ? currentCount : 0) + 1,
+    state_date: today,
+    last_topic_category: topicCategory,
+    social_energy: energy,
+    talk_drive: drive,
+    updated_at: now.toISOString(),
+  }, { onConflict: "member_id" });
+}
+
+async function refreshIdleEnergy(db, characters, now = new Date()) {
+  const updates = [];
+  for (const c of characters) {
+    const last = c?.state?.last_spoke_at ? new Date(c.state.last_spoke_at).getTime() : 0;
+    const idleMinutes = last ? (now.getTime() - last) / 60000 : 60;
+    if (idleMinutes < 15) continue;
+    const energy = clamp(Number(c?.state?.social_energy ?? 55) + Math.min(8, Math.floor(idleMinutes / 30)), 10, 100);
+    const drive = clamp(Number(c?.state?.talk_drive ?? 50) + Math.min(10, Math.floor(idleMinutes / 25)), 5, 100);
+    updates.push({ member_id: c.member_id, social_energy: energy, talk_drive: drive, updated_at: now.toISOString() });
+  }
+  if (updates.length) await db.from("ai_character_state").upsert(updates, { onConflict: "member_id" });
+}
+
+async function chooseSpeaker(db, thread, participants, characters, context) {
+  const participantRows = participants.length ? participants : characters.map((c) => ({ member_id: c.member_id, turns: 0, character: c }));
+  const lastMessage = thread.last_message_id ? context.rows.find((r) => r.id === thread.last_message_id) : null;
+  const lastText = String(lastMessage?.content || "");
+
+  // 닉네임을 직접 부르면 그 캐릭터를 우선
+  const mentioned = participantRows.find(({ character }) => {
+    const nickname = character?.profile?.nickname;
+    return nickname && lastText.includes(nickname);
+  });
+  if (mentioned?.character && availableNow(mentioned.character)) return mentioned.character;
+
+  const available = participantRows.filter((p) => availableNow(p.character));
+  if (!available.length) return null;
+  const pool = available;
+  const topic = thread.topic_id ? { id: thread.topic_id } : null;
+
+  const picked = weightedSample(pool, 1, (p) => {
+    const c = p.character;
+    let weight = topicInterestWeight(c, topic);
+    if (thread.last_speaker_id && c.member_id === thread.last_speaker_id) weight *= 0.15;
+    if (Number(p.turns || 0) === 0) weight *= 1.8;
+    return weight;
+  });
+  return picked[0]?.character || null;
+}
+
+async function generateTurn(db, thread, speaker, settings, context, targetMessageId = null) {
+  const sourceHumanId = thread.source_member_id || null;
+  const target = targetMessageId
+    ? context.rows.find((r) => r.id === targetMessageId)
+    : thread.last_message_id
+      ? context.rows.find((r) => r.id === thread.last_message_id)
+      : null;
+  const targetSpeakerId = target?.member_id || sourceHumanId || null;
+  const [memories, relationship, relationshipEvents] = await Promise.all([
+    loadMemories(db, speaker.member_id, targetSpeakerId, Number(settings.memory_recall_limit || 8)),
+    targetSpeakerId ? loadRelationship(db, speaker.member_id, targetSpeakerId) : Promise.resolve(null),
+    targetSpeakerId ? loadRelationshipEvents(db, speaker.member_id, targetSpeakerId, Number(settings.relationship_event_limit || 5)) : Promise.resolve([]),
+  ]);
+
+  const { data: topic } = thread.topic_id
+    ? await db.from("ai_chat_topics").select("*").eq("id", thread.topic_id).maybeSingle()
+    : { data: null };
+
+  const threadMessages = context.rows.filter((r) => r.ai_thread_id === thread.id).slice(0, 14);
+  const threadGuidance = thread.thread_type === "welcome"
+    ? "새로 들어온 실제회원에게 반갑게 인사하고, 환영문구만 반복하지 말고 편하게 어울릴 수 있는 한마디를 이어간다."
+    : thread.thread_type === "celebration"
+      ? "실제회원의 기쁜 소식에 반응한다. 축하만 복사하지 말고 앞사람의 말과 상황을 받아 기쁜 분위기를 이어간다."
+      : thread.thread_type === "loss"
+        ? "실제회원의 속상한 상황에 가볍게 비웃지 말고 공감/안정/짧은 경험으로 자연스럽게 반응한다."
+        : thread.thread_type === "human_reply"
+          ? "실제회원의 대화가 중심이다. 캐릭터끼리 자기 이야기만 하지 말고 회원의 말에서 나온 구체적인 내용에 연결한다."
+          : "사람들이 쉬는 커뮤니티에서 자연스럽게 이어지는 사적인 일상대화다.";
+  const candidateTargets = threadMessages.slice(0, 8).map((r) => {
+    const p = context.profileMap.get(r.member_id);
+    return `[${r.id}] ${p?.nickname || "회원"}: ${String(r.content || "").slice(0, 300)}`;
+  }).join("\n");
+
+  const prompt = `
+너는 VIP 그룹채팅 안에서 '${speaker.profile?.nickname || speaker.character_name}' 한 사람의 '다음 메시지 1개'만 만든다.
+미리 뒤의 대사를 만들지 않는다. 지금까지 실제로 올라온 채팅만 보고 지금 이 순간 자연스럽게 한 번 말한다.
+
+${COMMON_PROMPT}
+
+[현재 캐릭터]
+${characterPromptBlock(speaker)}
+
+[현재 대화 가지]
+종류=${thread.thread_type}
+이 대화의 목적=${threadGuidance}
+턴=${thread.turn_count}/${thread.min_turns}~${thread.max_turns}
+대화 에너지=${thread.energy}
+열린 질문=${thread.open_question}
+요약=${thread.summary || "아직 없음"}
+${topic ? `주제=${topic.category} / ${topic.title} / ${topic.prompt_seed}` : "주제=실제회원 대화에서 자연스럽게 결정"}
+
+[이 캐릭터가 기억하는 관련 사실]
+${memoryPrompt(memories)}
+
+[상대와의 관계]
+${relationshipPrompt(relationship, relationshipEvents)}
+
+[최근 전체 채팅]
+${context.text || "최근 대화 없음"}
+
+[이 대화 가지에서 답변 대상으로 삼을 수 있는 과거 메시지]
+${candidateTargets || "아직 없음"}
+
+[이번 턴 규칙]
+- 메시지는 정확히 1개만 쓴다.
+- reply_to_message_id는 위 최근 채팅에 실제 존재하는 ID 하나를 고르거나, 새 화제를 여는 첫말이면 null로 둔다.
+- 같은 대화 가지의 '바로 전 말'에 답할 수도 있고, 2~5개 전의 다른 사람 말에 뒤늦게 답해도 된다.
+- 실제회원의 최근 말이 아직 충분히 반응받지 못했다면 그 말을 우선한다.
+- 구체적인 단어/행동/감정 하나를 잡고 이어간다.
+- 관계기억이 있으면 억지스럽지 않을 때만 '저번에 ~라고 했던 것 같은데'처럼 활용한다.
+- 기억에 없는 과거는 만들어내지 않는다.
+- 캐릭터 본인의 사소한 일상 사건을 새로 말할 수 있다. 그런 새 사실은 memory_updates에 함께 기록한다.
+- future 약속/예정(내일 치과, 주말 약속 등)을 말하면 scope=future로 저장한다.
+- 실제회원에 대한 기억은 실제회원이 명시적으로 말한 사실만 기록한다.
+- 대화가 아직 살아있으면 should_continue=true. 같은 말 반복, 에너지 저하, 자연스러운 마무리라면 false.
+- 최소턴(${thread.min_turns}) 전에는 웬만하면 계속하고, 최대턴(${thread.max_turns})에 도달하면 반드시 false.
+- conversation_act는 answer, question, agree, disagree, experience, joke, support, remember, bridge, close 중 하나.
+- relationship_note는 이번 대화로 둘 사이에 남길 만한 작은 관계 기록이 있을 때만 한 문장. 없으면 빈 문자열.
+
+JSON 객체만 출력:
+{
+  "message":"실제 채팅 메시지",
+  "reply_to_message_id":"UUID 또는 null",
+  "conversation_act":"experience",
+  "should_continue":true,
+  "open_question":false,
+  "thread_energy":0.72,
+  "thread_summary":"지금까지 이 대화 가지를 1~2문장으로 요약",
+  "next_delay_seconds":95,
+  "relationship_note":"",
+  "memory_updates":[
+    {"scope":"personal|person|relationship|community|future","subject":"speaker|source_human|null","fact":"기억할 사실","importance":50,"confidence":100,"event_at":null,"valid_until":null}
+  ]
+}
+`.trim();
+
+  const result = await generateGemini(prompt, 2600);
+  const message = String(result?.message || "").trim().replace(/\s+/g, " ");
+  if (message.length < 2) throw new Error("Gemini가 빈 대사를 반환했습니다.");
+  const validTargetIds = new Set(threadMessages.map((r) => r.id));
+  if (thread.source_message_id) validTargetIds.add(thread.source_message_id);
+  if (thread.last_message_id) validTargetIds.add(thread.last_message_id);
+  const replyTo = result?.reply_to_message_id && validTargetIds.has(result.reply_to_message_id)
+    ? result.reply_to_message_id
+    : target?.id || null;
+  return {
+    message: message.slice(0, 1000),
+    replyTo,
+    act: ["answer","question","agree","disagree","experience","joke","support","remember","bridge","close"].includes(result?.conversation_act)
+      ? result.conversation_act : "experience",
+    shouldContinue: Boolean(result?.should_continue),
+    openQuestion: Boolean(result?.open_question),
+    energy: clamp(result?.thread_energy ?? thread.energy ?? 0.7, 0, 1),
+    summary: String(result?.thread_summary || thread.summary || "").slice(0, 1000) || null,
+    nextDelaySeconds: clamp(result?.next_delay_seconds ?? randInt(60, 180), 45, 240),
+    relationshipNote: String(result?.relationship_note || "").slice(0, 500),
+    memoryUpdates: Array.isArray(result?.memory_updates) ? result.memory_updates : [],
+  };
+}
+
+async function publishGeneratedTurn(db, thread, speaker, generated, settings, now = new Date(), { scheduleNext = true } = {}) {
+  const { data: inserted, error } = await db.from("group_messages").insert({
+    room_id: AI_ROOM_ID,
+    member_id: speaker.member_id,
+    message_type: "text",
+    content: generated.message,
+    is_deleted: false,
+    ai_thread_id: thread.id,
+    reply_to_message_id: generated.replyTo,
+    conversation_act: generated.act,
+    topic_id: thread.topic_id || null,
+  }).select("id,created_at").single();
+  if (error) throw error;
+
+  const context = await recentChatContext(db, Number(settings.recent_context_messages || 36));
+  const target = generated.replyTo ? context.rows.find((r) => r.id === generated.replyTo) : null;
+  const targetSpeakerId = target?.member_id || thread.source_member_id || null;
+
+  const { data: participantState } = await db.from("ai_thread_participants")
+    .select("turns").eq("thread_id", thread.id).eq("member_id", speaker.member_id).maybeSingle();
+  await Promise.all([
+    db.from("ai_thread_participants").upsert({
+      thread_id: thread.id,
+      member_id: speaker.member_id,
+      turns: Number(participantState?.turns || 0) + 1,
+      last_spoke_at: now.toISOString(),
+    }, { onConflict: "thread_id,member_id" }),
+    updateCharacterState(db, speaker, now, null),
+  ]);
+
+  if (targetSpeakerId && targetSpeakerId !== speaker.member_id) {
+    await saveRelationship(db, speaker.member_id, targetSpeakerId, thread.id, inserted.id, generated.act, generated.relationshipNote);
+  }
+  await saveMemoryUpdates(db, generated.memoryUpdates, {
+    speakerId: speaker.member_id,
+    sourceHumanId: thread.source_member_id,
+    messageId: inserted.id,
+    threadId: thread.id,
+  });
+  await propagateObservedMemories(db, generated.memoryUpdates, {
+    speakerId: speaker.member_id,
+    sourceHumanId: thread.source_member_id,
+    messageId: inserted.id,
+    threadId: thread.id,
+  });
+
+  const nextTurnCount = Number(thread.turn_count || 0) + 1;
+  const mustContinue = nextTurnCount < Number(thread.min_turns || 3);
+  const mustStop = nextTurnCount >= Number(thread.max_turns || 10);
+  const continueThread = !mustStop && (mustContinue || generated.shouldContinue || generated.openQuestion) && generated.energy >= 0.2;
+
+  await db.from("ai_conversation_threads").update({
+    last_message_id: inserted.id,
+    last_speaker_id: speaker.member_id,
+    last_activity_at: now.toISOString(),
+    turn_count: nextTurnCount,
+    energy: generated.energy,
+    open_question: generated.openQuestion,
+    summary: generated.summary,
+    status: continueThread ? "active" : "completed",
+    completed_at: continueThread ? null : now.toISOString(),
+  }).eq("id", thread.id);
+
+  if (continueThread && scheduleNext) {
+    const kind = thread.thread_type === "autonomous" ? "continue" : thread.thread_type;
+    const priority = thread.thread_type === "autonomous" ? 10 : 70;
+    await queueTurn(db, thread.id, {
+      delaySeconds: generated.nextDelaySeconds,
+      targetMessageId: inserted.id,
+      turnKind: ["human_reply","welcome","celebration","loss"].includes(kind) ? kind : "continue",
+      priority,
+      now,
+    });
+  }
+  return { inserted, continueThread, nextDelaySeconds: generated.nextDelaySeconds };
+}
+
+async function processTurn(db, turn, characters, settings, now = new Date()) {
+  const thread = await loadThread(db, turn.thread_id);
+  if (!thread || thread.status !== "active") {
+    await db.from("ai_turn_queue").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", turn.id);
+    return { action: "turn_cancelled" };
   }
 
-  const { rows, profileMap } = await recentChatContext(db, 80);
-  const lastHuman = rows.find((row) => row.member_id && profileMap.get(row.member_id)?.account_type === "human");
-  if (lastHuman) {
-    const quietMs = Number(settings.human_quiet_minutes || 7) * 60 * 1000;
-    if (now.getTime() - new Date(lastHuman.created_at).getTime() < quietMs) return 0;
+  if (thread.thread_type === "autonomous" && await hasRecentHuman(db, settings.human_quiet_minutes, now)) {
+    await db.from("ai_turn_queue").update({
+      status: "queued",
+      scheduled_at: new Date(now.getTime() + randInt(3, 6) * 60000).toISOString(),
+    }).eq("id", turn.id);
+    return { action: "autonomous_postponed_for_human" };
+  }
+
+  const context = await recentChatContext(db, Number(settings.recent_context_messages || 36));
+  const participants = await loadThreadParticipants(db, thread.id, characters);
+  let speaker = turn.preferred_member_id
+    ? characters.find((c) => c.member_id === turn.preferred_member_id)
+    : null;
+  if (!speaker || !availableNow(speaker, now)) speaker = await chooseSpeaker(db, thread, participants, characters, context);
+  if (!speaker) {
+    const nextTimes = participants
+      .map((p) => p.character?.state?.next_available_at)
+      .filter(Boolean)
+      .map((v) => new Date(v).getTime())
+      .filter((v) => Number.isFinite(v) && v > now.getTime());
+    const resumeAt = nextTimes.length
+      ? new Date(Math.min(...nextTimes))
+      : new Date(now.getTime() + randInt(3, 6) * 60000);
+    await db.from("ai_turn_queue").update({
+      status: "queued", scheduled_at: resumeAt.toISOString(),
+    }).eq("id", turn.id);
+    return { action: "thread_resting" };
+  }
+
+  try {
+    const generated = await generateTurn(db, thread, speaker, settings, context, turn.target_message_id);
+    const published = await publishGeneratedTurn(db, thread, speaker, generated, settings, now, { scheduleNext: false });
+    await db.from("ai_turn_queue").update({ status: "done", processed_at: now.toISOString() }).eq("id", turn.id);
+    if (published.continueThread) {
+      const kind = thread.thread_type === "autonomous" ? "continue" : thread.thread_type;
+      const priority = thread.thread_type === "autonomous" ? 10 : 70;
+      await queueTurn(db, thread.id, {
+        delaySeconds: published.nextDelaySeconds,
+        targetMessageId: published.inserted.id,
+        turnKind: ["human_reply","welcome","celebration","loss"].includes(kind) ? kind : "continue",
+        priority,
+        now,
+      });
+    }
+    return { action: "turn_published", speaker: speaker.profile?.nickname || speaker.character_name, threadId: thread.id };
+  } catch (error) {
+    console.error("V17.4 generate turn error:", error);
+    await db.from("ai_turn_queue").update({
+      status: "queued",
+      scheduled_at: new Date(now.getTime() + randInt(3, 6) * 60000).toISOString(),
+    }).eq("id", turn.id);
+    return { action: "turn_retry_scheduled", error: error?.message || "generation_failed" };
+  }
+}
+
+async function selectHumanResponders(characters, situation, count, now = new Date()) {
+  const available = characters.filter((c) => availableNow(c, now));
+  const pool = available.length >= count ? available : characters;
+  const field = situation === "loss" ? "loss_reply_rate" : situation === "celebration" ? "celebration_reply_rate" : "general_reply_rate";
+  return weightedSample(pool, count, (c) => Number(c[field] || 5) * (0.7 + Number(c?.state?.social_energy ?? 55) / 120));
+}
+
+async function startHumanThread(db, info, characters, settings, now = new Date()) {
+  const situation = detectSituation(info.latest.content);
+  let count;
+  if (situation === "celebration") {
+    const willing = characters.filter((c) => Math.random() * 100 < Number(c.celebration_reply_rate || 0));
+    count = Math.max(Number(settings.celebration_min || 5), willing.length);
+    count = Math.min(characters.length, count);
+  } else {
+    count = randInt(Number(settings.human_reply_min || 3), Number(settings.human_reply_max || 4));
+  }
+  let selected = await selectHumanResponders(characters, situation, count, now);
+  const mentioned = characters.find((c) => {
+    const nickname = c?.profile?.nickname;
+    return nickname && String(info.latest.content || "").includes(nickname);
+  });
+  if (mentioned) {
+    selected = [mentioned, ...selected.filter((c) => c.member_id !== mentioned.member_id)].slice(0, count);
+    if (selected.length < count) {
+      const used = new Set(selected.map((c) => c.member_id));
+      selected.push(...characters.filter((c) => !used.has(c.member_id)).slice(0, count - selected.length));
+    }
+  }
+  if (!selected.length) return { scheduled: 0, situation };
+
+  await markHumanHandled(db, info.unhandled);
+  await postponeAutonomousTurns(db, now);
+  const threadType = situation === "celebration" ? "celebration" : situation === "loss" ? "loss" : "human_reply";
+  const thread = await insertThread(db, {
+    thread_type: threadType,
+    source_member_id: info.latest.member_id,
+    source_message_id: info.latest.id,
+    status: "active",
+    last_message_id: info.latest.id,
+    last_speaker_id: info.latest.member_id,
+    min_turns: selected.length,
+    max_turns: selected.length,
+    energy: situation === "celebration" ? 0.95 : 0.78,
+    open_question: true,
+    priority: situation === "celebration" ? 100 : 90,
+    title: `실제회원 ${info.latestProfile?.nickname || "회원"} 대화`,
+  });
+  await addParticipants(db, thread.id, selected);
+
+  // 첫 답은 즉시 생성. 나머지는 미리 문장을 만들지 않고 1~3분 후 최신 문맥으로 생성.
+  const firstSpeaker = selected[0];
+  const context = await recentChatContext(db, Number(settings.recent_context_messages || 36));
+  try {
+    const generated = await generateTurn(db, thread, firstSpeaker, settings, context, info.latest.id);
+    await publishGeneratedTurn(db, thread, firstSpeaker, generated, settings, now);
+  } catch (error) {
+    console.error("V17.4 immediate human reply error:", error);
+    await queueTurn(db, thread.id, {
+      delaySeconds: randInt(60, 120), preferredMemberId: firstSpeaker.member_id,
+      targetMessageId: info.latest.id, turnKind: threadType, priority: 90, now,
+    });
+  }
+
+  await db.from("ai_community_events").update({ status: "done", processed_at: now.toISOString() })
+    .eq("event_type", "member_join").eq("member_id", info.latest.member_id).eq("status", "pending");
+  return { scheduled: selected.length, situation };
+}
+
+async function startWelcomeThread(db, event, characters, settings, now = new Date()) {
+  const { data: member } = await db.from("profiles").select("id,nickname,approval_status,account_type").eq("id", event.member_id).maybeSingle();
+  if (!member || member.approval_status !== "approved" || member.account_type !== "human") {
+    await db.from("ai_community_events").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", event.id);
+    return 0;
+  }
+  const count = randInt(Number(settings.welcome_min || 3), Number(settings.welcome_max || 4));
+  const selected = await selectHumanResponders(characters, "general", Math.min(count, characters.length), now);
+  if (!selected.length) return 0;
+  const thread = await insertThread(db, {
+    thread_type: "welcome", source_member_id: member.id, status: "active",
+    min_turns: selected.length, max_turns: selected.length, energy: 0.85,
+    open_question: true, priority: 80, title: `${member.nickname} 입장 환영`,
+  });
+  await addParticipants(db, thread.id, selected);
+  await queueTurn(db, thread.id, {
+    delaySeconds: randInt(10, 35), preferredMemberId: selected[0].member_id,
+    turnKind: "welcome", priority: 80, now,
+  });
+  await db.from("ai_community_events").update({ status: "done", processed_at: now.toISOString() }).eq("id", event.id);
+  return selected.length;
+}
+
+async function countActiveAutonomousThreads(db) {
+  const { count } = await db.from("ai_conversation_threads").select("id", { count: "exact", head: true })
+    .eq("thread_type", "autonomous").eq("status", "active");
+  return Number(count || 0);
+}
+
+async function startAutonomousThread(db, characters, settings, now = new Date()) {
+  const kst = kstParts(now);
+  if (kst.minutes >= timeToMinutes(settings.autonomous_last_start_cutoff || "18:20")) return 0;
+  if (await hasRecentHuman(db, settings.human_quiet_minutes, now)) return 0;
+  const activeCount = await countActiveAutonomousThreads(db);
+  if (activeCount >= Number(settings.autonomous_max_active_threads || 3)) return 0;
+
+  const { data: state } = await db.from("ai_community_state").select("next_autonomous_at").eq("id", 1).maybeSingle();
+  if (state?.next_autonomous_at && new Date(state.next_autonomous_at).getTime() > now.getTime()) return 0;
+  if (activeCount > 0 && Math.random() * 100 >= Number(settings.new_parallel_topic_chance || 32)) {
+    await db.from("ai_community_state").update({
+      next_autonomous_at: new Date(now.getTime() + randInt(2, 5) * 60000).toISOString(), updated_at: now.toISOString(),
+    }).eq("id", 1);
+    return 0;
   }
 
   const topic = await pickTopic(db, now);
   if (!topic) return 0;
-
-  const min = Math.max(2, Number(settings.autonomous_participant_min || 2));
-  const max = Math.max(min, Number(settings.autonomous_participant_max || 5));
-  const count = Math.min(characters.length, randInt(min, max));
-  let selected = weightedSample(
-    characters.filter((item) => availableNow(item, now)),
-    count,
-    (character) => topicInterestWeight(character, topic)
-  );
-  selected = ensureCountFromCooling(characters, selected, count).slice(0, count);
+  const count = Math.min(characters.length, randInt(Number(settings.autonomous_participant_min || 2), Number(settings.autonomous_participant_max || 5)));
+  const availableCharacters = characters.filter((c) => availableNow(c, now));
+  if (availableCharacters.length < 2) return 0;
+  const selected = weightedSample(availableCharacters, Math.min(count, availableCharacters.length), (c) => topicInterestWeight(c, topic));
   if (selected.length < 2) return 0;
 
-  const turnCount = randInt(4, 9);
-  const threadId = await insertThread(db, {
-    thread_type: "autonomous",
-    topic_id: topic.id,
-    status: "active",
+  const thread = await insertThread(db, {
+    thread_type: "autonomous", topic_id: topic.id, status: "active",
+    min_turns: Number(settings.autonomous_thread_min_turns || 4),
+    max_turns: Number(settings.autonomous_thread_max_turns || 12),
+    energy: 0.78, open_question: false, priority: 10,
+    title: `${topic.category} · ${topic.title}`,
   });
+  await addParticipants(db, thread.id, selected);
+  await db.from("ai_topic_history").insert({ topic_id: topic.id, thread_id: thread.id, used_at: now.toISOString() });
 
-  const context = await recentChatContext(db, 24);
-  const blocks = selected.map(characterPromptBlock).join("\n");
-  const prompt = `
-VIP 그룹채팅이 잠시 조용해서 캐릭터들이 먼저 가벼운 일상대화를 시작한다.
-
-[오늘 사용할 주제]
-카테고리: ${topic.category}
-주제: ${topic.title}
-방향: ${topic.prompt_seed}
-
-${COMMON_PROMPT}
-
-[참여 캐릭터]
-${blocks}
-
-[최근 채팅 - 반복 금지 참고]
-${context.text || "최근 대화 없음"}
-
-정확히 ${turnCount}개의 메시지로 '하나의 이어지는 대화'를 만든다.
-규칙:
-- 참여자는 ${selected.length}명이며, 모든 사람이 꼭 같은 횟수로 말할 필요는 없다.
-- 첫 메시지는 추상적인 질문이 아니라 주제와 관련된 구체적인 상황/경험/관찰 하나를 꺼낸다.
-- 2번째 메시지부터는 반드시 '바로 앞 메시지'의 구체적인 내용을 받아서 답한다.
-- 각 메시지는 앞 메시지에서 나온 음식, 물건, 행동, 기분, 선택 같은 요소를 하나 이상 이어받아야 한다.
-- 중간에 자기 경험을 더하거나 살짝 다른 의견을 낼 수 있지만, 왜 그런지 한마디 붙여 같은 화제 안에 머문다.
-- '오 그거 뭔지 알 것 같아요', '저는 오히려 반대인 것 같아요', '맞아요', '그러게요', '저도요'처럼 단독으로 어디에나 붙는 빈 맞장구를 쓰지 않는다.
-- 갑자기 관련 없는 새 주제를 시작하지 않는다.
-- 질문만 연속해서 던지지 않는다. 전체 대화에서 질문은 0~2개면 충분하다.
-- 마지막 1~2개 메시지는 새 화제를 던지지 말고 자연스럽게 한 번 웃거나 경험을 정리하며 끝낸다.
-- 4~9개 메시지 안에서 자연스럽게 끝난다.
-- 매일 점심→커피→저녁 같은 고정 순서를 만들지 않는다.
-- 최근 채팅에 이미 나온 주제나 시작문장을 그대로 재사용하지 않는다.
-- 직업 이야기를 억지로 꺼내지 않는다. 쉬는 커뮤니티의 사적인 잡담처럼 말한다.
-- JSON을 만들기 전에 내부적으로 전체 대화 흐름을 먼저 구성한 뒤 출력한다.
-
-JSON 배열만 출력:
-[
-  {"key":"캐릭터 KEY","message":"채팅 메시지"},
-  ...
-]
-`.trim();
-
-  let generated;
+  // 첫 말만 지금 생성, 이후는 매 턴 최신 문맥으로 다시 판단한다.
+  const context = await recentChatContext(db, Number(settings.recent_context_messages || 36));
+  const speaker = weightedSample(selected, 1, (c) => topicInterestWeight(c, topic))[0];
   try {
-    generated = await generateGemini(prompt, 3200);
+    const generated = await generateTurn(db, thread, speaker, settings, context, null);
+    await publishGeneratedTurn(db, thread, speaker, generated, settings, now);
   } catch (error) {
-    // 자발대화는 Gemini 실패 시 억지 비상문장을 올리지 않습니다.
-    // V17.2의 고정 fallback이 서로 안 이어지는 대화를 만든 원인이었으므로,
-    // 실패한 스레드는 취소하고 몇 분 뒤 새로 시도합니다.
-    console.error("Gemini autonomous generation failed:", error);
-    await db
-      .from("ai_conversation_threads")
-      .update({ status: "cancelled", completed_at: now.toISOString() })
-      .eq("id", threadId);
-    await deferAutonomousRetry(db, now);
-    return 0;
+    console.error("V17.4 autonomous start error:", error);
+    await queueTurn(db, thread.id, { delaySeconds: randInt(120, 240), preferredMemberId: speaker.member_id, turnKind: "autonomous_start", priority: 10, now });
   }
 
-  const coherentRows = normalizeAutonomousRows(selected, generated, turnCount);
-  if (!coherentRows.length) {
-    console.error("Gemini autonomous generation rejected: low coherence/invalid rows");
-    await db
-      .from("ai_conversation_threads")
-      .update({ status: "cancelled", completed_at: now.toISOString() })
-      .eq("id", threadId);
-    await deferAutonomousRetry(db, now);
-    return 0;
+  await db.from("ai_community_state").update({
+    next_autonomous_at: new Date(now.getTime() + randInt(Number(settings.autonomous_gap_min_minutes || 5), Number(settings.autonomous_gap_max_minutes || 11)) * 60000).toISOString(),
+    updated_at: now.toISOString(),
+  }).eq("id", 1);
+  return 1;
+}
+
+async function closeStaleThreads(db, now = new Date()) {
+  const cutoff = new Date(now.getTime() - 45 * 60000).toISOString();
+  const { data: stale } = await db.from("ai_conversation_threads").select("id").eq("status", "active").lt("last_activity_at", cutoff);
+  const ids = (stale || []).map((r) => r.id);
+  if (ids.length) {
+    await db.from("ai_conversation_threads").update({ status: "completed", completed_at: now.toISOString() }).in("id", ids);
+    await db.from("ai_turn_queue").update({ status: "cancelled", processed_at: now.toISOString() }).in("thread_id", ids).eq("status", "queued");
   }
-
-  const queued = await queueGenerated(db, threadId, selected, coherentRows, "autonomous", topic.category);
-
-  if (queued > 0) {
-    await db.from("ai_topic_history").insert({
-      topic_id: topic.id,
-      thread_id: threadId,
-      used_at: now.toISOString(),
-    });
-
-    const { data: lastQueue } = await db
-      .from("ai_reply_queue")
-      .select("scheduled_at")
-      .eq("thread_id", threadId)
-      .eq("status", "queued")
-      .order("scheduled_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const base = lastQueue?.scheduled_at ? new Date(lastQueue.scheduled_at) : now;
-    const gapMinutes = randInt(
-      Number(settings.autonomous_gap_min_minutes || 12),
-      Number(settings.autonomous_gap_max_minutes || 25)
-    );
-    await db
-      .from("ai_community_state")
-      .update({
-        next_autonomous_at: new Date(base.getTime() + gapMinutes * 60 * 1000).toISOString(),
-        updated_at: now.toISOString(),
-      })
-      .eq("id", 1);
-  }
-
-  return queued;
 }
 
 export async function runAiCommunityTick({ source = "cron", bypassMinuteClaim = false } = {}) {
   const db = dbClient();
   if (!db) return { success: false, reason: "supabase_server_env_missing" };
-
   try {
     const settings = await loadSettings(db);
     if (!settings.enabled) return { success: true, reason: "community_disabled" };
-
     const now = new Date();
     const kst = kstParts(now);
-
     if (!isInsideWindow(kst.minutes, settings.activity_start, settings.activity_end)) {
       if (kst.minutes >= timeToMinutes(settings.activity_end || "18:30")) {
-        await db
-          .from("ai_reply_queue")
-          .update({ status: "cancelled" })
-          .eq("status", "queued");
-        await db
-          .from("ai_conversation_threads")
-          .update({ status: "cancelled", completed_at: now.toISOString() })
-          .eq("status", "active");
+        await db.from("ai_turn_queue").update({ status: "cancelled", processed_at: now.toISOString() }).eq("status", "queued");
+        await db.from("ai_conversation_threads").update({ status: "completed", completed_at: now.toISOString() }).eq("status", "active");
       }
       return { success: true, reason: "outside_activity_time" };
     }
 
     if (!bypassMinuteClaim) {
-      const tickKey = `${kst.dateKey}-${String(kst.hour).padStart(2, "0")}:${String(kst.minute).padStart(2, "0")}`;
-      const { data: claimed, error: claimError } = await db.rpc("claim_ai_community_tick", {
-        target_tick_key: tickKey,
-      });
-      if (claimError) {
-        console.error("AI community claim error:", claimError);
-      } else if (!claimed) {
-        return { success: true, reason: "already_ran_this_minute" };
-      }
+      const key = `${kst.dateKey}-${String(kst.hour).padStart(2,"0")}:${String(kst.minute).padStart(2,"0")}`;
+      const { data: claimed, error } = await db.rpc("claim_ai_community_tick", { target_tick_key: key });
+      if (!error && !claimed) return { success: true, reason: "already_ran_this_minute" };
     }
 
     const characters = await loadCharacters(db, now);
-    if (!characters.length) {
-      return { success: true, reason: "ai_accounts_not_ready" };
-    }
+    if (!characters.length) return { success: true, reason: "ai_accounts_not_ready" };
+    await refreshIdleEnergy(db, characters, now);
+    await closeStaleThreads(db, now);
 
-    // 최우선: 실제회원의 새 메시지. 기존 AI 자발대화/일반대화 예약보다 먼저 처리합니다.
+    // 1순위: 실제회원 새 메시지
     const humanInfo = await findLatestUnhandledHuman(db);
     if (humanInfo) {
-      await cancelInterruptibleQueues(db);
-      await publishDueReply(db, now); // 축하/손실처럼 취소하지 않은 특별 큐가 있으면 1건만
-      const result = await scheduleHumanReplies(db, humanInfo, characters, settings);
-      return { success: true, action: "human_reply", source, ...result };
+      const result = await startHumanThread(db, humanInfo, characters, settings, now);
+      return { success: true, action: "human_priority", source, ...result };
     }
 
-    // 매분 예약된 메시지는 최대 1개만 게시해 1~3분 간격을 유지합니다.
-    const published = await publishDueReply(db, now);
-    if (published) {
-      return { success: true, action: "publish_queue", source };
+    // 2순위: 시간이 된 '다음 턴' 1개. 문장은 지금 생성한다.
+    const due = await getDueTurn(db);
+    if (due) {
+      const result = await processTurn(db, due, characters, settings, now);
+      return { success: true, source, ...result };
     }
 
-    // 두 번째 우선순위: 신규 실제회원 환영
-    const { data: welcomeEvent } = await db
-      .from("ai_community_events")
-      .select("*")
-      .eq("event_type", "member_join")
-      .eq("status", "pending")
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (welcomeEvent) {
-      const queued = await scheduleWelcome(db, welcomeEvent, characters, settings);
-      return { success: true, action: "welcome", queued, source };
+    // 3순위: 신규 실제회원 환영
+    const { data: welcome } = await db.from("ai_community_events").select("*")
+      .eq("event_type", "member_join").eq("status", "pending")
+      .order("created_at", { ascending: true }).limit(1).maybeSingle();
+    if (welcome) {
+      const queued = await startWelcomeThread(db, welcome, characters, settings, now);
+      return { success: true, action: "welcome_thread", queued, source };
     }
 
-    // 마지막 우선순위: 사람이 조용할 때만 AI끼리 자발 일상대화
-    const queued = await scheduleAutonomous(db, characters, settings, now);
-    return {
-      success: true,
-      action: queued ? "autonomous" : "idle",
-      queued,
-      source,
-    };
+    // 4순위: 사람이 조용할 때 새 일상대화 가지 시작. 기존 가지가 살아 있어도 제한적으로 병렬 허용.
+    const started = await startAutonomousThread(db, characters, settings, now);
+    return { success: true, action: started ? "autonomous_thread_started" : "idle", started, source };
   } catch (error) {
-    console.error("AI COMMUNITY ERROR:", error);
-    return {
-      success: false,
-      error: error?.message || "AI 커뮤니티 엔진 오류",
-    };
+    console.error("AI COMMUNITY V17.4 ERROR:", error);
+    return { success: false, error: error?.message || "AI 커뮤니티 엔진 오류" };
   }
 }
 
 export async function getAiCommunityStatus() {
   const db = dbClient();
   if (!db) return { success: false, reason: "supabase_server_env_missing" };
-
-  const [{ data: state }, { data: settings }, { count: aiCount }, { count: queuedCount }] = await Promise.all([
+  const [stateRes, settingsRes, aiRes, turnRes, threadRes, relRes, memoryRes] = await Promise.all([
     db.from("ai_community_state").select("*").eq("id", 1).maybeSingle(),
     db.from("ai_community_settings").select("*").eq("id", 1).maybeSingle(),
     db.from("profiles").select("id", { count: "exact", head: true }).eq("account_type", "ai_character").eq("approval_status", "approved"),
-    db.from("ai_reply_queue").select("id", { count: "exact", head: true }).eq("status", "queued"),
+    db.from("ai_turn_queue").select("id", { count: "exact", head: true }).eq("status", "queued"),
+    db.from("ai_conversation_threads").select("id", { count: "exact", head: true }).eq("status", "active"),
+    db.from("ai_relationships").select("member_low", { count: "exact", head: true }),
+    db.from("ai_social_memories").select("id", { count: "exact", head: true }),
   ]);
-
   return {
     success: true,
-    state: state || null,
-    settings: settings || null,
-    aiAccountCount: aiCount || 0,
-    queuedCount: queuedCount || 0,
+    state: stateRes.data || null,
+    settings: settingsRes.data || null,
+    aiAccountCount: aiRes.count || 0,
+    queuedTurnCount: turnRes.count || 0,
+    activeThreadCount: threadRes.count || 0,
+    relationshipCount: relRes.count || 0,
+    memoryCount: memoryRes.count || 0,
   };
 }
