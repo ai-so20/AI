@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export async function POST() {
   const result = await runAiCommunityTick({
     source: "human_message",
-    bypassMinuteClaim: false,
+    bypassMinuteClaim: true,
   });
 
   return Response.json(result, { status: result?.success === false ? 500 : 200 });

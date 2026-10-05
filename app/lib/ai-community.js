@@ -256,6 +256,13 @@ async function markHumanHandled(db, rows) {
   }
 }
 
+async function unmarkHumanHandled(db, rows) {
+  const ids = (rows || []).map((row) => row.id).filter(Boolean);
+  if (ids.length) {
+    await db.from("ai_human_message_receipts").delete().in("message_id", ids);
+  }
+}
+
 async function cancelInterruptibleQueues(db) {
   const { data: threads } = await db
     .from("ai_conversation_threads")
@@ -487,7 +494,15 @@ async function setCharacterCooldowns(db, charactersByKey, generatedRows, schedul
   }
 }
 
-async function queueGenerated(db, threadId, selectedCharacters, generated, mode, topicCategory = null) {
+async function queueGenerated(
+  db,
+  threadId,
+  selectedCharacters,
+  generated,
+  mode,
+  topicCategory = null,
+  { immediateFirst = false } = {}
+) {
   const characterByKey = new Map(selectedCharacters.map((character) => [character.character_key, character]));
   const cleaned = (Array.isArray(generated) ? generated : [])
     .map((row) => ({
@@ -498,13 +513,40 @@ async function queueGenerated(db, threadId, selectedCharacters, generated, mode,
 
   if (!cleaned.length) return 0;
 
-  const times = scheduleTimes(cleaned.length, mode);
+  const now = new Date();
+  let publishedImmediately = 0;
+  const activityRows = [];
+  const activityTimes = [];
+  let remaining = [...cleaned];
+
+  // 실제회원이 말을 걸었을 때는 첫 AI 답변을 큐에 묵혀두지 않고 즉시 게시합니다.
+  // 나머지 캐릭터만 시간차를 두어 자연스럽게 이어집니다.
+  if (immediateFirst && remaining.length) {
+    const first = remaining.shift();
+    const character = characterByKey.get(first.key);
+    const { error: firstInsertError } = await db.from("group_messages").insert({
+      room_id: AI_ROOM_ID,
+      member_id: character.member_id,
+      ai_character_id: null,
+      message_type: "text",
+      content: first.message.slice(0, 1000),
+      is_deleted: false,
+    });
+    if (firstInsertError) throw firstInsertError;
+    publishedImmediately = 1;
+    activityRows.push(first);
+    activityTimes.push(now);
+  }
+
+  const times = scheduleTimes(remaining.length, mode, now);
   const endMinutes = timeToMinutes("18:30");
-  const queueRows = cleaned.flatMap((row, index) => {
+  const queueRows = remaining.flatMap((row, index) => {
     const scheduled = times[index];
     const parts = kstParts(scheduled);
     if (parts.minutes >= endMinutes) return [];
     const character = characterByKey.get(row.key);
+    activityRows.push(row);
+    activityTimes.push(scheduled);
     return [{
       thread_id: threadId,
       member_id: character.member_id,
@@ -514,21 +556,69 @@ async function queueGenerated(db, threadId, selectedCharacters, generated, mode,
     }];
   });
 
+  if (queueRows.length) {
+    const { error } = await db.from("ai_reply_queue").insert(queueRows);
+    if (error) throw error;
+  }
+
   if (!queueRows.length) {
     await db
       .from("ai_conversation_threads")
-      .update({ status: "cancelled", completed_at: new Date().toISOString() })
-      .eq("id", threadId);
-    return 0;
+      .update({ status: "completed", completed_at: new Date().toISOString() })
+      .eq("id", threadId)
+      .eq("status", "active");
   }
 
-  const { error } = await db.from("ai_reply_queue").insert(queueRows);
-  if (error) throw error;
+  if (activityRows.length) {
+    await setCharacterCooldowns(db, characterByKey, activityRows, activityTimes, topicCategory);
+  }
 
-  const keptRows = cleaned.slice(0, queueRows.length);
-  const keptTimes = times.slice(0, queueRows.length);
-  await setCharacterCooldowns(db, characterByKey, keptRows, keptTimes, topicCategory);
-  return queueRows.length;
+  return publishedImmediately + queueRows.length;
+}
+
+
+function fallbackHumanReplies(selected, sourceText, situation) {
+  const text = String(sourceText || "").trim();
+  const isGreeting = /안녕|반가|처음|ㅎㅇ|하이/i.test(text);
+  return selected.map((character, index) => {
+    const nickname = character?.profile?.nickname || character.character_name || "";
+    let message;
+    if (situation === "celebration") {
+      const pool = [
+        "오 좋은 소식이네요 ㅎㅎ 축하드려요!",
+        "와 이건 기분 좋으시겠는데요!",
+        "오오 잘됐네요 ㅋㅋ 오늘 기분 좋으시겠어요",
+        "좋은 결과 나왔다니 다행이에요. 축하드려요!",
+        "이런 소식은 같이 기뻐해야죠 ㅎㅎ",
+      ];
+      message = pool[index % pool.length];
+    } else if (situation === "loss") {
+      const pool = [
+        "아이고 오늘은 조금 아쉽네요.",
+        "그건 좀 속상하셨겠어요. 너무 오래 마음 쓰진 마세요.",
+        "오늘은 결과가 아쉬웠네요. 다음 흐름은 좀 나았으면 좋겠어요.",
+        "에고.. 기분 좀 그러시겠네요.",
+      ];
+      message = pool[index % pool.length];
+    } else if (isGreeting) {
+      const pool = [
+        "안녕하세요 ㅎㅎ 반가워요!",
+        "오 안녕하세요~ 오늘 처음 뵙는 것 같네요",
+        "반가워요 :) 편하게 이야기하세요",
+        "안녕하세요! 방금 들어오셨나 봐요 ㅎㅎ",
+      ];
+      message = pool[index % pool.length];
+    } else {
+      const pool = [
+        "오 그 얘기 들으니까 좀 궁금해지네요 ㅎㅎ",
+        "그러셨군요. 저도 비슷한 적 있었어요",
+        "오 그런 얘기 좋아요 ㅋㅋ 더 듣고 싶은데요",
+        "그렇군요 ㅎㅎ 오늘은 어떠셨어요?",
+      ];
+      message = pool[index % pool.length];
+    }
+    return { key: character.character_key, message: nickname ? message : message };
+  });
 }
 
 async function scheduleHumanReplies(db, info, characters, settings) {
@@ -541,6 +631,8 @@ async function scheduleHumanReplies(db, info, characters, settings) {
     return { scheduled: 0, situation };
   }
 
+  // 같은 실제회원 메시지를 heartbeat와 전송 API가 동시에 처리하지 않도록 먼저 점유합니다.
+  await markHumanHandled(db, info.unhandled);
   await cancelInterruptibleQueues(db);
 
   const threadType = situation === "celebration"
@@ -595,18 +687,36 @@ JSON 배열만 출력:
 `.trim();
 
   let generated;
+  let usedFallback = false;
   try {
     generated = await generateGemini(prompt, situation === "celebration" ? 4200 : 2200);
   } catch (error) {
+    // Gemini가 일시적으로 실패해도 실제회원의 말을 무시하는 채팅방이 되지 않도록
+    // 선택된 캐릭터들의 안전한 기본 반응으로 즉시 대체합니다. 다음 호출에서는 Gemini를 다시 시도합니다.
+    console.error("Gemini human reply fallback:", error);
+    generated = fallbackHumanReplies(selected, source.content, situation);
+    usedFallback = true;
+  }
+
+  let queued = 0;
+  try {
+    queued = await queueGenerated(
+      db,
+      threadId,
+      selected,
+      generated,
+      situation === "celebration" ? "celebration" : "human",
+      null,
+      { immediateFirst: true }
+    );
+  } catch (queueError) {
+    await unmarkHumanHandled(db, info.unhandled);
     await db
       .from("ai_conversation_threads")
       .update({ status: "cancelled", completed_at: new Date().toISOString() })
       .eq("id", threadId);
-    throw error;
+    throw queueError;
   }
-
-  const queued = await queueGenerated(db, threadId, selected, generated, situation === "celebration" ? "celebration" : "human");
-  await markHumanHandled(db, info.unhandled);
 
   // 해당 회원의 신규입장 환영 이벤트가 남아 있으면 이 실제 대화로 충분히 환영한 것으로 처리
   await db
@@ -616,7 +726,7 @@ JSON 배열만 출력:
     .eq("member_id", source.member_id)
     .eq("status", "pending");
 
-  return { scheduled: queued, situation };
+  return { scheduled: queued, situation, usedFallback };
 }
 
 async function scheduleWelcome(db, event, characters, settings) {
