@@ -253,8 +253,9 @@ async function callCloudflare(prompt, maxOutputTokens) {
           model: CLOUDFLARE_MODEL,
           messages: [{ role: "user", content: prompt }],
           temperature: 0.8,
-          max_tokens: maxOutputTokens,
+          max_tokens: Math.min(Number(maxOutputTokens || 450), 700),
           response_format: { type: "json_object" },
+          reasoning_effort: "low",
         }),
         cache: "no-store",
       }
@@ -271,7 +272,12 @@ async function callCloudflare(prompt, maxOutputTokens) {
   const root = data?.result || data;
   const content = root?.choices?.[0]?.message?.content ?? root?.response ?? data?.response;
   if (!content) throw new AIProviderError("cloudflare", response.status, "AI_PROVIDER_EMPTY_RESPONSE", "Cloudflare가 빈 응답을 반환했습니다.");
-  try { return typeof content === "string" ? safeJson(content) : content; }
+  try {
+    return {
+      payload: typeof content === "string" ? safeJson(content) : content,
+      usage: root?.usage || data?.usage || null,
+    };
+  }
   catch { throw new AIProviderError("cloudflare", response.status, "AI_PROVIDER_BAD_JSON", "Cloudflare가 올바른 JSON 대사를 반환하지 않았습니다.", String(content).slice(0, 1200)); }
 }
 
@@ -309,11 +315,29 @@ async function callGroq(prompt, maxOutputTokens) {
   catch { throw new AIProviderError("groq", response.status, "AI_PROVIDER_BAD_RESPONSE", "Groq 응답 JSON을 읽을 수 없습니다.", text.slice(0, 1200)); }
   const content = data?.choices?.[0]?.message?.content;
   if (!content) throw new AIProviderError("groq", response.status, "AI_PROVIDER_EMPTY_RESPONSE", "Groq가 빈 응답을 반환했습니다.");
-  try { return safeJson(content); }
+  try {
+    return { payload: safeJson(content), usage: data?.usage || null };
+  }
   catch { throw new AIProviderError("groq", response.status, "AI_PROVIDER_BAD_JSON", "Groq가 올바른 JSON 대사를 반환하지 않았습니다.", String(content).slice(0, 1200)); }
 }
 
-async function generateAI(db, prompt, maxOutputTokens = 2200) {
+async function recordProviderUsage(db, provider, usage, purpose = "chat") {
+  try {
+    const promptTokens = Number(usage?.prompt_tokens ?? usage?.input_tokens ?? 0) || 0;
+    const completionTokens = Number(usage?.completion_tokens ?? usage?.output_tokens ?? 0) || 0;
+    const totalTokens = Number(usage?.total_tokens ?? (promptTokens + completionTokens)) || 0;
+    await db.from("ai_provider_usage").insert({
+      provider,
+      purpose,
+      prompt_tokens: promptTokens,
+      completion_tokens: completionTokens,
+      total_tokens: totalTokens,
+      created_at: new Date().toISOString(),
+    });
+  } catch {}
+}
+
+async function generateAI(db, prompt, maxOutputTokens = 450, purpose = "chat") {
   const configured = providerConfig();
   if (!configured.length) {
     throw new AIProviderError("none", 0, "AI_PROVIDER_NOT_CONFIGURED", "Cloudflare 또는 Groq API 환경변수가 필요합니다.");
@@ -323,10 +347,12 @@ async function generateAI(db, prompt, maxOutputTokens = 2200) {
   for (const provider of configured) {
     if (await providerPaused(db, provider)) continue;
     try {
-      const result = provider === "groq"
+      const called = provider === "groq"
         ? await callGroq(prompt, maxOutputTokens)
         : await callCloudflare(prompt, maxOutputTokens);
       await markProviderSuccess(db, provider);
+      await recordProviderUsage(db, provider, called?.usage || null, purpose);
+      const result = called?.payload;
       if (failures.length) {
         await logEngineEvent(db, {
           level: "warning",
@@ -386,9 +412,9 @@ async function loadSettings(db) {
     autonomous_gap_max_minutes: 1,
     human_quiet_minutes: 4,
     autonomous_max_active_threads: 3,
-    recent_context_messages: 36,
-    memory_recall_limit: 8,
-    relationship_event_limit: 5,
+    recent_context_messages: 10,
+    memory_recall_limit: 2,
+    relationship_event_limit: 2,
     autonomous_thread_min_turns: 2,
     autonomous_thread_max_turns: 5,
     new_parallel_topic_chance: 32,
@@ -504,7 +530,7 @@ async function findLatestUnhandledHuman(db) {
   const handled = new Set((receipts || []).map((r) => r.message_id));
   const unhandled = humanRows.filter((r) => !handled.has(r.id));
   if (!unhandled.length) return null;
-  const latest = unhandled[0];
+  const latest = unhandled[unhandled.length - 1];
   return { latest, latestProfile: profileMap.get(latest.member_id), unhandled };
 }
 
@@ -560,6 +586,9 @@ async function queueTurn(db, threadId, {
   targetMessageId = null,
   turnKind = "continue",
   priority = 10,
+  preparedPayload = null,
+  preparedProvider = null,
+  generationMode = null,
   now = new Date(),
 } = {}) {
   const seconds = delaySeconds ?? FIXED_AI_TURN_DELAY_SECONDS;
@@ -574,6 +603,9 @@ async function queueTurn(db, threadId, {
     scheduled_at: scheduledAt.toISOString(),
     priority,
     status: "queued",
+    prepared_payload: preparedPayload,
+    prepared_provider: preparedProvider,
+    generation_mode: generationMode,
   };
   const { data: existing } = await db.from("ai_turn_queue")
     .select("id").eq("thread_id", threadId).in("status", ["queued", "processing"])
@@ -905,6 +937,211 @@ async function refreshIdleEnergy(db, characters, now = new Date()) {
   if (updates.length) await db.from("ai_character_state").upsert(updates, { onConflict: "member_id" });
 }
 
+
+const LOCAL_REACTIONS = {
+  greeting: ["안녕하세요ㅎㅎ", "반가워요!", "오 안녕하세요", "어서오세요~", "안녕하세요 :)"],
+  thanks: ["별말씀을요ㅎㅎ", "아니에요 괜찮아요", "도움 됐다니 다행이에요", "ㅎㅎ 다행이네요"],
+  laugh: ["ㅋㅋㅋㅋ", "아 이건 좀 웃기네요ㅋㅋ", "ㅋㅋ 저도 빵터졌어요", "아 인정ㅋㅋ"],
+  celebration: ["와 축하해요!", "오 대박 축하드려요ㅎㅎ", "헉 축하해요ㅋㅋ", "와 이건 부럽네요", "좋은 소식이네요 축하해요!"],
+  loss: ["아이고 아쉽네요", "이건 좀 속상하겠어요", "ㅠㅠ 그래도 너무 마음 쓰진 마세요", "아쉽네요 진짜"],
+  agree: ["맞아요", "그러게요ㅎㅎ", "아 그건 인정", "저도 비슷해요"],
+};
+
+const LOCAL_SCENE_LINES = [
+  (t) => `${t} 얘기 나오니까 갑자기 생각나네요ㅎㅎ`,
+  (t) => `저는 ${t} 쪽은 가끔 생각날 때만 찾는 편이에요`,
+  (t) => `ㅋㅋ ${t}는 사람마다 취향 진짜 갈리는 것 같아요`,
+  (t) => `아 맞다 ${t} 얘기하니까 오늘 할 일 하나 생각났네요`,
+  (t) => `${t}도 좋지만 저는 요즘 그냥 집에서 쉬는 게 제일 좋더라고요`,
+  (t) => `저는 오히려 너무 파고들면 금방 질려서 적당히 즐겨요ㅋㅋ`,
+  (t) => `갑자기 다른 얘긴데 오늘 시간 진짜 빨리 가는 것 같아요`,
+  (t) => `이 얘기는 여기까지만 해도 충분한 듯요 ㅋㅋ`,
+];
+
+function pickOne(items) {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+function compactCharacter(character) {
+  const nick = character?.profile?.nickname || character?.nickname || character?.character_name || "회원";
+  const style = String(character?.speaking_style || "").slice(0, 90);
+  const traits = String(character?.style_traits || "").slice(0, 80);
+  const interests = Array.isArray(character?.interests) ? character.interests.slice(0, 4).join(",") : "";
+  return `${character.member_id}|${nick}|${character.age || ""}|${style}|${traits}|${interests}`;
+}
+
+function styleLocalText(character, base) {
+  let text = String(base || "").trim();
+  const style = `${character?.speaking_style || ""} ${character?.style_traits || ""}`;
+  if (/ㅋㅋ/.test(style) && Math.random() < 0.22 && !/ㅋㅋ/.test(text)) text += " ㅋㅋ";
+  else if (/ㅎㅎ/.test(style) && Math.random() < 0.22 && !/ㅎㅎ/.test(text)) text += "ㅎㅎ";
+  if (/느낌표/.test(style) && Math.random() < 0.15 && !/[!?]$/.test(text)) text += "!";
+  return trimChatMessage(text, 110);
+}
+
+function simpleHumanIntent(text) {
+  const value = String(text || "").trim().toLowerCase();
+  if (!value) return "other";
+  if (/^(안녕|안녕하세요|하이|ㅎㅇ|반가워)/.test(value)) return "greeting";
+  if (/(고마워|감사|땡큐|ㄳ)/.test(value)) return "thanks";
+  if (/^(ㅋ+|ㅎ+)$/.test(value) || /(ㅋㅋㅋ|ㅎㅎㅎ)/.test(value)) return "laugh";
+  if (detectSituation(value) === "celebration") return "celebration";
+  if (detectSituation(value) === "loss") return "loss";
+  if (value.length <= 12 && /(맞아|맞아요|인정|그러게|그렇죠|ㅇㅇ|네네|넵)/.test(value)) return "agree";
+  return "other";
+}
+
+function localReplyForHuman(character, intent, humanText = "") {
+  const pool = LOCAL_REACTIONS[intent] || LOCAL_REACTIONS.agree;
+  let base = pickOne(pool);
+  if (intent === "greeting" && Math.random() < 0.25) {
+    base = pickOne(["오셨네요ㅎㅎ", "안녕하세요~", "반가워요ㅎㅎ"]);
+  }
+  return styleLocalText(character, base);
+}
+
+function localAutonomousMessages(selected, topic) {
+  const title = String(topic?.title || topic?.category || "요즘 일상").replace(/\s+/g, " ").slice(0, 28);
+  const count = Math.max(2, Math.min(selected.length, randInt(2, 4)));
+  const messages = [];
+  const used = new Set();
+  for (let i = 0; i < count; i += 1) {
+    let line;
+    for (let tries = 0; tries < 8; tries += 1) {
+      const fn = pickOne(LOCAL_SCENE_LINES);
+      const candidate = fn(title);
+      if (!used.has(candidate)) { line = candidate; used.add(candidate); break; }
+    }
+    line ||= `${title} 얘기는 은근 재밌네요`;
+    messages.push({
+      member_id: selected[i % selected.length].member_id,
+      message: styleLocalText(selected[i % selected.length], line),
+      act: i === count - 1 ? "bridge" : (i === 0 ? "experience" : "agree"),
+    });
+  }
+  return messages;
+}
+
+function localWelcomeMessages(selected, nickname) {
+  return selected.slice(0, 4).map((c, i) => ({
+    member_id: c.member_id,
+    message: styleLocalText(c, i === 0 ? `${nickname || "회원"}님 안녕하세요ㅎㅎ` : pickOne(["반가워요!", "어서오세요~", "오 새로 오셨네요ㅎㅎ"])),
+    act: "agree",
+  }));
+}
+
+function localEventMessages(selected, event, winner = null) {
+  if (winner) {
+    return selected.map((c) => ({
+      member_id: c.member_id,
+      message: styleLocalText(
+        c,
+        c.member_id === winner.id
+          ? pickOne(["헉 제가요? 감사합니다ㅎㅎ", "와 저 당첨된 거예요?ㅋㅋ 감사합니다!", "헉 대박 감사합니다"])
+          : pickOne(LOCAL_REACTIONS.celebration)
+      ),
+      act: "celebration",
+    }));
+  }
+  const label = event?.title || "이벤트";
+  return selected.map((c, i) => ({
+    member_id: c.member_id,
+    message: styleLocalText(c, i === 0 ? `${label} 저도 참여했어요ㅎㅎ` : pickOne(["오 저도 넣었어요ㅋㅋ", "저도 참여 완료!", "이번엔 좀 기대되네요ㅎㅎ"])),
+    act: "agree",
+  }));
+}
+
+function preparedGenerated(item, remainingCount = 0, provider = "local") {
+  return {
+    message: item.message,
+    replyTo: item.reply_to_message_id || null,
+    act: item.act || "agree",
+    shouldContinue: remainingCount > 0,
+    openQuestion: false,
+    energy: remainingCount > 0 ? 0.72 : 0.15,
+    summary: null,
+    provider,
+    relationshipNote: "",
+    memoryUpdates: [],
+  };
+}
+
+async function publishPreparedNow(db, thread, characters, settings, prepared, now, provider = "local") {
+  if (!prepared?.length) return null;
+  const first = prepared[0];
+  const speaker = characters.find((c) => c.member_id === first.member_id);
+  if (!speaker) return null;
+  const generated = preparedGenerated(first, prepared.length - 1, provider);
+  const published = await publishGeneratedTurn(db, thread, speaker, generated, settings, now, { scheduleNext: false });
+  const remaining = prepared.slice(1);
+  if (remaining.length) {
+    await queueTurn(db, thread.id, {
+      delaySeconds: FIXED_AI_TURN_DELAY_SECONDS,
+      preferredMemberId: remaining[0].member_id,
+      targetMessageId: published?.inserted?.id || thread.last_message_id || null,
+      turnKind: thread.thread_type,
+      priority: thread.priority || 70,
+      preparedPayload: remaining,
+      preparedProvider: provider,
+      generationMode: provider === "local" ? "local" : "batch",
+      now,
+    });
+  }
+  return published;
+}
+
+async function generateHumanBatch(db, humanText, selected, context, purpose = "human_batch") {
+  const recent = context.rows.slice(-6).map((r) => {
+    const p = context.profileMap.get(r.member_id);
+    return `${p?.nickname || "회원"}: ${String(r.content || "").slice(0, 180)}`;
+  }).join("\n");
+  const chars = selected.map(compactCharacter).join("\n");
+  const prompt = `
+한국 VIP 단체채팅에서 실제회원의 말에 여러 사람이 자연스럽게 답한다.
+한 번의 API 호출로 아래 캐릭터들의 짧은 답변을 모두 만든다.
+
+[실제회원 메시지]
+${String(humanText || "").slice(0, 500)}
+
+[최근 대화 최대 6개]
+${recent || "없음"}
+
+[응답 캐릭터]
+형식: member_id|닉네임|나이|말투|표현특징|관심사
+${chars}
+
+규칙:
+- 캐릭터마다 답변 1개씩.
+- 각 답변 10~90자, 최대 2문장.
+- 첫 번째 답변은 실제회원의 말에 직접 답한다.
+- 이후 답변은 앞사람 말을 똑같이 반복하지 않는다.
+- 질문은 전체 답변 중 최대 1개만 허용.
+- 모르는 실제 장소/사실을 지어내지 않는다.
+- ㅋㅋ/ㅎㅎ/느낌표는 캐릭터 말투와 상황에 맞을 때만.
+- 설명회/토론처럼 길게 말하지 않는다.
+- JSON 외 문장 금지.
+
+JSON:
+{"replies":[{"member_id":"UUID","message":"짧은 답변","act":"answer|agree|experience|joke|support|bridge"}]}
+`.trim();
+  const generated = await generateAI(db, prompt, 700, purpose);
+  const replies = Array.isArray(generated?.result?.replies) ? generated.result.replies : [];
+  const allowed = new Set(selected.map((c) => c.member_id));
+  const cleaned = [];
+  for (const r of replies) {
+    if (!allowed.has(r?.member_id)) continue;
+    const message = trimChatMessage(String(r?.message || ""), 110);
+    if (message.length < 2) continue;
+    cleaned.push({
+      member_id: r.member_id,
+      message,
+      act: ["answer","agree","experience","joke","support","bridge"].includes(r?.act) ? r.act : "answer",
+    });
+  }
+  return { replies: cleaned, provider: generated?.provider || "unknown" };
+}
+
+
 async function chooseSpeaker(db, thread, participants, characters, context) {
   const participantRows = participants.length ? participants : characters.map((c) => ({ member_id: c.member_id, turns: 0, character: c }));
   const lastMessage = thread.last_message_id ? context.rows.find((r) => r.id === thread.last_message_id) : null;
@@ -1053,7 +1290,7 @@ JSON 객체만 출력:
 }
 `.trim();
 
-  const generatedBy = await generateAI(db, prompt, 2600);
+  const generatedBy = await generateAI(db, prompt, 420, "legacy_single");
   const result = generatedBy.result;
   const message = String(result?.message || "").trim().replace(/\s+/g, " ");
   if (message.length < 2) throw new AIProviderError(generatedBy.provider, 200, "AI_PROVIDER_EMPTY_MESSAGE", "AI 공급자가 빈 대사를 반환했습니다.");
@@ -1242,86 +1479,91 @@ async function processTurn(db, turn, characters, settings, now = new Date()) {
     return { action: "turn_cancelled" };
   }
 
-  if (thread.thread_type === "autonomous" && await hasRecentHuman(db, settings.human_quiet_minutes, now)) {
-    await db.from("ai_turn_queue").update({
-      status: "queued",
-      scheduled_at: new Date(now.getTime() + randInt(3, 6) * 60000).toISOString(),
-    }).eq("id", turn.id);
-    return { action: "autonomous_postponed_for_human" };
+  const prepared = Array.isArray(turn.prepared_payload) ? turn.prepared_payload : [];
+  if (prepared.length) {
+    const item = prepared[0];
+    const speaker = characters.find((c) => c.member_id === item.member_id)
+      || characters.find((c) => c.member_id === turn.preferred_member_id);
+    if (!speaker) {
+      await db.from("ai_turn_queue").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", turn.id);
+      return { action: "prepared_speaker_missing" };
+    }
+
+    const remaining = prepared.slice(1);
+    const generated = preparedGenerated(item, remaining.length, turn.prepared_provider || "local");
+    const published = await publishGeneratedTurn(db, thread, speaker, generated, settings, now, { scheduleNext: false });
+
+    if (remaining.length) {
+      await db.from("ai_turn_queue").update({
+        status: "queued",
+        scheduled_at: new Date(now.getTime() + FIXED_AI_TURN_DELAY_SECONDS * 1000).toISOString(),
+        preferred_member_id: remaining[0].member_id,
+        target_message_id: published?.inserted?.id || turn.target_message_id || null,
+        prepared_payload: remaining,
+        processed_at: null,
+      }).eq("id", turn.id);
+    } else {
+      await db.from("ai_turn_queue").update({
+        status: "done",
+        processed_at: now.toISOString(),
+        prepared_payload: [],
+      }).eq("id", turn.id);
+      await db.from("ai_conversation_threads").update({
+        status: "completed",
+        completed_at: now.toISOString(),
+        last_activity_at: now.toISOString(),
+      }).eq("id", thread.id);
+      if (thread.thread_type === "autonomous") {
+        await db.from("ai_community_state").update({
+          next_autonomous_at: new Date(now.getTime() + 60 * 1000).toISOString(),
+          updated_at: now.toISOString(),
+        }).eq("id", 1);
+      }
+    }
+    return {
+      action: "prepared_turn_published",
+      speaker: speaker.profile?.nickname || speaker.character_name,
+      threadId: thread.id,
+      provider: turn.prepared_provider || "local",
+    };
   }
 
-  const context = await recentChatContext(db, Number(settings.recent_context_messages || 36));
-  const participants = await loadThreadParticipants(db, thread.id, characters);
-  let speaker = turn.preferred_member_id
-    ? characters.find((c) => c.member_id === turn.preferred_member_id)
-    : null;
-  if (!speaker || !availableNow(speaker, now)) speaker = await chooseSpeaker(db, thread, participants, characters, context);
-  if (!speaker) {
-    const participantIds = new Set(participants.map((p) => p.member_id));
-    const freshPool = characters.filter((c) => !participantIds.has(c.member_id) && availableNow(c, now));
-    if (freshPool.length) {
-      speaker = weightedSample(freshPool, 1, (c) => topicInterestWeight(c, null))[0] || null;
-      if (speaker) await addParticipants(db, thread.id, [speaker]);
-    }
+  if (["autonomous","event_start","event_winner","welcome","celebration","loss"].includes(thread.thread_type)) {
+    await db.from("ai_turn_queue").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", turn.id);
+    await db.from("ai_conversation_threads").update({ status: "completed", completed_at: now.toISOString() }).eq("id", thread.id);
+    return { action: "legacy_api_turn_cancelled" };
   }
+
+  const context = await recentChatContext(db, Math.min(Number(settings.recent_context_messages || 10), 10));
+  const participants = await loadThreadParticipants(db, thread.id, characters);
+  let speaker = turn.preferred_member_id ? characters.find((c) => c.member_id === turn.preferred_member_id) : null;
+  if (!speaker) speaker = await chooseSpeaker(db, thread, participants, characters, context);
   if (!speaker) {
-    const nextTimes = participants
-      .map((p) => p.character?.state?.next_available_at)
-      .filter(Boolean)
-      .map((v) => new Date(v).getTime())
-      .filter((v) => Number.isFinite(v) && v > now.getTime());
-    const resumeAt = nextTimes.length
-      ? new Date(Math.min(...nextTimes))
-      : new Date(now.getTime() + randInt(3, 6) * 60000);
-    await db.from("ai_turn_queue").update({
-      status: "queued", scheduled_at: resumeAt.toISOString(),
-    }).eq("id", turn.id);
-    return { action: "thread_resting" };
+    await db.from("ai_turn_queue").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", turn.id);
+    return { action: "turn_no_speaker" };
   }
 
   try {
     const generated = await generateTurn(db, thread, speaker, settings, context, turn.target_message_id);
     const published = await publishGeneratedTurn(db, thread, speaker, generated, settings, now, { scheduleNext: false });
     await db.from("ai_turn_queue").update({ status: "done", processed_at: now.toISOString() }).eq("id", turn.id);
-    if (published.continueThread && published.inserted) {
-      const kind = thread.thread_type === "autonomous" ? "continue" : thread.thread_type;
-      const priority = thread.thread_type === "autonomous" ? 10 : 70;
-      await queueTurn(db, thread.id, {
-        delaySeconds: FIXED_AI_TURN_DELAY_SECONDS,
-        targetMessageId: published.inserted.id,
-        turnKind: ["human_reply","welcome","celebration","loss"].includes(kind) ? kind : "continue",
-        priority,
-        now,
-      });
-    }
     return {
-      action: published.skipped ? "turn_skipped_repetitive" : "turn_published",
+      action: "legacy_single_turn_published",
       speaker: speaker.profile?.nickname || speaker.character_name,
       threadId: thread.id,
       provider: published.provider,
-      skipped: published.skipped || null,
     };
   } catch (error) {
-    console.error("V17.5 generate turn error:", error);
-    const providerFailure = error instanceof AIProviderError || String(error?.code || "").startsWith("AI_PROVIDER") || String(error?.code || "").startsWith("AI_ALL_PROVIDERS");
-    if (providerFailure) {
-      await db.from("ai_turn_queue").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", turn.id);
-      await db.from("ai_conversation_threads").update({ status: "completed", completed_at: now.toISOString() }).eq("id", thread.id);
-      await logEngineEvent(db, {
-        level: "error",
-        category: error?.code || "AI_GENERATION_STOPPED",
-        provider: error?.provider || null,
-        message: error?.message || "AI 생성 중단",
-        meta: { thread_id: thread.id, turn_id: turn.id },
-      });
-      return { success: false, action: "turn_generation_stopped", error: error?.message || "generation_failed", errorCode: error?.code || "AI_GENERATION_STOPPED" };
-    }
-    await db.from("ai_turn_queue").update({
-      status: "queued",
-      scheduled_at: new Date(now.getTime() + FIXED_AI_TURN_DELAY_SECONDS * 1000).toISOString(),
-    }).eq("id", turn.id);
-    await logEngineEvent(db, { level: "error", category: "AI_ENGINE_INTERNAL_ERROR", message: error?.message || "generation_failed", meta: { thread_id: thread.id, turn_id: turn.id } });
-    return { success: false, action: "turn_retry_scheduled", error: error?.message || "generation_failed" };
+    await db.from("ai_turn_queue").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", turn.id);
+    await db.from("ai_conversation_threads").update({ status: "completed", completed_at: now.toISOString() }).eq("id", thread.id);
+    await logEngineEvent(db, {
+      level: "error",
+      category: error?.code || "AI_GENERATION_STOPPED",
+      provider: error?.provider || null,
+      message: error?.message || "AI 생성 중단",
+      meta: { thread_id: thread.id, turn_id: turn.id },
+    });
+    return { success: false, action: "turn_generation_stopped", error: error?.message || "generation_failed" };
   }
 }
 
@@ -1336,28 +1578,22 @@ async function startHumanThread(db, info, characters, settings, now = new Date()
   const situation = detectSituation(info.latest.content);
   let count;
   if (situation === "celebration") {
-    const willing = characters.filter((c) => Math.random() * 100 < Number(c.celebration_reply_rate || 0));
-    count = Math.max(Number(settings.celebration_min || 5), willing.length);
-    count = Math.min(characters.length, count);
+    count = Math.min(characters.length, Math.max(Number(settings.celebration_min || 5), randInt(5, 7)));
   } else {
     count = randInt(Number(settings.human_reply_min || 3), Number(settings.human_reply_max || 4));
   }
+
   let selected = await selectHumanResponders(characters, situation, count, now);
   const mentioned = characters.find((c) => {
     const nickname = c?.profile?.nickname;
     return nickname && String(info.latest.content || "").includes(nickname);
   });
-  if (mentioned) {
-    selected = [mentioned, ...selected.filter((c) => c.member_id !== mentioned.member_id)].slice(0, count);
-    if (selected.length < count) {
-      const used = new Set(selected.map((c) => c.member_id));
-      selected.push(...characters.filter((c) => !used.has(c.member_id)).slice(0, count - selected.length));
-    }
-  }
+  if (mentioned) selected = [mentioned, ...selected.filter((c) => c.member_id !== mentioned.member_id)].slice(0, count);
   if (!selected.length) return { scheduled: 0, situation };
 
-  await markHumanHandled(db, info.unhandled);
+  await markHumanHandled(db, [info.latest]);
   await postponeAutonomousTurns(db, now);
+
   const threadType = situation === "celebration" ? "celebration" : situation === "loss" ? "loss" : "human_reply";
   const thread = await insertThread(db, {
     thread_type: threadType,
@@ -1369,34 +1605,55 @@ async function startHumanThread(db, info, characters, settings, now = new Date()
     min_turns: selected.length,
     max_turns: selected.length,
     energy: situation === "celebration" ? 0.95 : 0.78,
-    open_question: true,
+    open_question: false,
     priority: situation === "celebration" ? 100 : 90,
     title: `실제회원 ${info.latestProfile?.nickname || "회원"} 대화`,
   });
   await addParticipants(db, thread.id, selected);
 
-  // 첫 답은 즉시 생성. 나머지는 미리 만들지 않고 방 전체 1분 턴 규칙으로 최신 문맥에서 생성.
-  const firstSpeaker = selected[0];
-  const context = await recentChatContext(db, Number(settings.recent_context_messages || 36));
-  try {
-    const generated = await generateTurn(db, thread, firstSpeaker, settings, context, info.latest.id);
-    await publishGeneratedTurn(db, thread, firstSpeaker, generated, settings, now);
-  } catch (error) {
-    console.error("V17.5 immediate human reply error:", error);
-    if (error instanceof AIProviderError) {
-      await db.from("ai_conversation_threads").update({ status: "completed", completed_at: now.toISOString() }).eq("id", thread.id);
-      await logEngineEvent(db, { level: "error", category: error.code, provider: error.provider, message: error.message, meta: { thread_id: thread.id, source_message_id: info.latest.id } });
-      return { scheduled: 0, situation, providerError: { code: error.code, message: error.message } };
+  const intent = simpleHumanIntent(info.latest.content);
+  let prepared = [];
+  let provider = "local";
+
+  if (intent !== "other" || situation !== "general") {
+    const effectiveIntent = situation === "celebration" ? "celebration" : situation === "loss" ? "loss" : intent;
+    prepared = selected.map((c) => ({
+      member_id: c.member_id,
+      message: localReplyForHuman(c, effectiveIntent, info.latest.content),
+      act: effectiveIntent === "loss" ? "support" : effectiveIntent === "celebration" ? "celebration" : "agree",
+      reply_to_message_id: info.latest.id,
+    }));
+  } else {
+    const context = await recentChatContext(db, 10);
+    try {
+      const batch = await generateHumanBatch(db, info.latest.content, selected, context, "human_batch");
+      prepared = batch.replies.map((r) => ({ ...r, reply_to_message_id: info.latest.id }));
+      provider = batch.provider;
+    } catch (error) {
+      await logEngineEvent(db, {
+        level: "warning",
+        category: error?.code || "AI_BATCH_FALLBACK_LOCAL",
+        provider: error?.provider || null,
+        message: error?.message || "배치 생성 실패, 로컬 반응으로 대체",
+        meta: { source_message_id: info.latest.id },
+      });
+      prepared = selected.map((c, i) => ({
+        member_id: c.member_id,
+        message: styleLocalText(c, i === 0 ? "음 그건 저도 좀 궁금하네요" : pickOne(["저도 비슷하게 생각했어요", "이건 다른 분들 생각도 궁금하네요ㅎㅎ", "저는 일단 조금 더 봐야 알 것 같아요"])),
+        act: "agree",
+        reply_to_message_id: info.latest.id,
+      }));
+      provider = "local_fallback";
     }
-    await queueTurn(db, thread.id, {
-      delaySeconds: FIXED_AI_TURN_DELAY_SECONDS, preferredMemberId: firstSpeaker.member_id,
-      targetMessageId: info.latest.id, turnKind: threadType, priority: 90, now,
-    });
   }
 
-  await db.from("ai_community_events").update({ status: "done", processed_at: now.toISOString() })
-    .eq("event_type", "member_join").eq("member_id", info.latest.member_id).eq("status", "pending");
-  return { scheduled: selected.length, situation };
+  if (!prepared.length) {
+    await db.from("ai_conversation_threads").update({ status: "completed", completed_at: now.toISOString() }).eq("id", thread.id);
+    return { scheduled: 0, situation };
+  }
+
+  await publishPreparedNow(db, thread, characters, settings, prepared, now, provider);
+  return { scheduled: prepared.length, situation, provider, apiCalls: provider.startsWith("local") ? 0 : 1 };
 }
 
 async function startWelcomeThread(db, event, characters, settings, now = new Date()) {
@@ -1408,16 +1665,15 @@ async function startWelcomeThread(db, event, characters, settings, now = new Dat
   const count = randInt(Number(settings.welcome_min || 3), Number(settings.welcome_max || 4));
   const selected = await selectHumanResponders(characters, "general", Math.min(count, characters.length), now);
   if (!selected.length) return 0;
+
   const thread = await insertThread(db, {
     thread_type: "welcome", source_member_id: member.id, status: "active",
     min_turns: selected.length, max_turns: selected.length, energy: 0.85,
-    open_question: true, priority: 80, title: `${member.nickname} 입장 환영`,
+    open_question: false, priority: 80, title: `${member.nickname} 입장 환영`,
   });
   await addParticipants(db, thread.id, selected);
-  await queueTurn(db, thread.id, {
-    delaySeconds: FIXED_AI_TURN_DELAY_SECONDS, preferredMemberId: selected[0].member_id,
-    turnKind: "welcome", priority: 80, now,
-  });
+  const prepared = localWelcomeMessages(selected, member.nickname);
+  await publishPreparedNow(db, thread, characters, settings, prepared, now, "local");
   await db.from("ai_community_events").update({ status: "done", processed_at: now.toISOString() }).eq("id", event.id);
   return selected.length;
 }
@@ -1444,56 +1700,25 @@ async function startEventCommunityThread(db, communityEvent, characters, setting
       await db.from("ai_community_events").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", communityEvent.id);
       return { started: 0, cancelled: true };
     }
-
-    const { data: entries } = await db.from("event_entries")
-      .select("member_id")
-      .eq("event_id", event.id);
+    const { data: entries } = await db.from("event_entries").select("member_id").eq("event_id", event.id);
     const participantIds = new Set((entries || []).map((row) => row.member_id));
     const participantCharacters = characters.filter((c) => participantIds.has(c.member_id));
-
     if (!participantCharacters.length) {
       const ageMs = now.getTime() - new Date(communityEvent.created_at).getTime();
       if (ageMs < 4 * 60 * 1000) return { started: 0, deferred: true };
       await db.from("ai_community_events").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", communityEvent.id);
       return { started: 0, cancelled: true };
     }
-
-    const count = Math.min(participantCharacters.length, randInt(1, 2));
-    const selected = weightedSample(participantCharacters, count, (c) =>
-      Number(c.general_reply_rate || 10) * (0.7 + Number(c?.state?.social_energy ?? 55) / 120)
-    );
-    if (!selected.length) return { started: 0, deferred: true };
-
+    const selected = weightedSample(participantCharacters, Math.min(participantCharacters.length, randInt(1, 2)), (c) => Number(c.general_reply_rate || 10) + 5);
     const thread = await insertThread(db, {
-      thread_type: "event_start",
-      source_event_id: event.id,
-      status: "active",
-      min_turns: selected.length,
-      max_turns: selected.length,
-      energy: 0.82,
-      open_question: false,
-      priority: 75,
-      title: `${event.title || "이벤트"} 참가 반응`,
-      summary: "현재 진행 중인 이벤트에 실제 참가한 캐릭터들이 자신의 선택과 느낌을 자연스럽게 말하는 대화다. 정답과 당첨 결과는 아직 모른다.",
+      thread_type: "event_start", source_event_id: event.id, status: "active",
+      min_turns: selected.length, max_turns: selected.length, energy: 0.82,
+      open_question: false, priority: 75, title: `${event.title || "이벤트"} 참가 반응`,
     });
     await addParticipants(db, thread.id, selected);
-
-    const context = await recentChatContext(db, Number(settings.recent_context_messages || 36));
-    const firstSpeaker = selected[0];
-    try {
-      const generated = await generateTurn(db, thread, firstSpeaker, settings, context, null);
-      await publishGeneratedTurn(db, thread, firstSpeaker, generated, settings, now);
-    } catch (error) {
-      console.error("V17.7 event start chat error:", error);
-      if (error instanceof AIProviderError) {
-        await db.from("ai_conversation_threads").update({ status: "completed", completed_at: now.toISOString() }).eq("id", thread.id);
-        await logEngineEvent(db, { level: "error", category: error.code, provider: error.provider, message: error.message, meta: { thread_id: thread.id, event_id: event.id } });
-        return { started: 0, providerError: { code: error.code, message: error.message } };
-      }
-    }
-
+    await publishPreparedNow(db, thread, characters, settings, localEventMessages(selected, event, null), now, "local");
     await db.from("ai_community_events").update({ status: "done", processed_at: now.toISOString() }).eq("id", communityEvent.id);
-    return { started: selected.length, type: "event_start" };
+    return { started: selected.length, type: "event_start", apiCalls: 0 };
   }
 
   if (communityEvent.event_type === "event_winner") {
@@ -1501,18 +1726,14 @@ async function startEventCommunityThread(db, communityEvent, characters, setting
     const { data: winner } = winnerId
       ? await db.from("profiles").select("id,nickname,account_type,approval_status").eq("id", winnerId).maybeSingle()
       : { data: null };
-
     if (!winner) {
       await db.from("ai_community_events").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", communityEvent.id);
       return { started: 0, cancelled: true };
     }
 
     const others = characters.filter((c) => c.member_id !== winner.id);
-    const isHumanWinner = winner.account_type === "human";
-    const baseCount = isHumanWinner ? randInt(5, 8) : randInt(3, 5);
+    const baseCount = winner.account_type === "human" ? randInt(5, 8) : randInt(3, 5);
     let selected = await selectHumanResponders(others, "celebration", Math.min(baseCount, others.length), now);
-
-    // AI 캐릭터가 당첨자면 축하가 이어진 뒤 본인도 놀람/감사 반응을 할 수 있게 참여시킨다.
     const winnerCharacter = characters.find((c) => c.member_id === winner.id);
     if (winnerCharacter && selected.length < 6) selected = [...selected, winnerCharacter];
     if (!selected.length) {
@@ -1521,36 +1742,14 @@ async function startEventCommunityThread(db, communityEvent, characters, setting
     }
 
     const thread = await insertThread(db, {
-      thread_type: "event_winner",
-      source_member_id: winner.id,
-      source_event_id: event.id,
-      status: "active",
-      min_turns: selected.length,
-      max_turns: selected.length,
-      energy: 0.96,
-      open_question: false,
-      priority: 100,
-      title: `${event.title || "이벤트"} 당첨 축하`,
-      summary: `${winner.nickname || "VIP 회원"}님이 방금 이벤트 당첨자로 발표됐다. 각자 다른 방식으로 자연스럽게 축하하며, 당첨자가 캐릭터라면 본인은 감사/놀람으로 반응한다.`,
+      thread_type: "event_winner", source_member_id: winner.id, source_event_id: event.id, status: "active",
+      min_turns: selected.length, max_turns: selected.length, energy: 0.96,
+      open_question: false, priority: 100, title: `${event.title || "이벤트"} 당첨 축하`,
     });
     await addParticipants(db, thread.id, selected);
-
-    const firstSpeaker = selected.find((c) => c.member_id !== winner.id) || selected[0];
-    const context = await recentChatContext(db, Number(settings.recent_context_messages || 36));
-    try {
-      const generated = await generateTurn(db, thread, firstSpeaker, settings, context, null);
-      await publishGeneratedTurn(db, thread, firstSpeaker, generated, settings, now);
-    } catch (error) {
-      console.error("V17.7 event winner chat error:", error);
-      if (error instanceof AIProviderError) {
-        await db.from("ai_conversation_threads").update({ status: "completed", completed_at: now.toISOString() }).eq("id", thread.id);
-        await logEngineEvent(db, { level: "error", category: error.code, provider: error.provider, message: error.message, meta: { thread_id: thread.id, event_id: event.id } });
-        return { started: 0, providerError: { code: error.code, message: error.message } };
-      }
-    }
-
+    await publishPreparedNow(db, thread, characters, settings, localEventMessages(selected, event, winner), now, "local");
     await db.from("ai_community_events").update({ status: "done", processed_at: now.toISOString() }).eq("id", communityEvent.id);
-    return { started: selected.length, type: "event_winner" };
+    return { started: selected.length, type: "event_winner", apiCalls: 0 };
   }
 
   return { started: 0 };
@@ -1563,55 +1762,43 @@ async function countActiveAutonomousThreads(db) {
 }
 
 async function startAutonomousThread(db, characters, settings, now = new Date()) {
+  if (await hasRecentHuman(db, settings.human_quiet_minutes, now)) return 0;
   const kst = kstParts(now);
   if (kst.minutes >= timeToMinutes(settings.autonomous_last_start_cutoff || "18:20")) return 0;
-  if (await hasRecentHuman(db, settings.human_quiet_minutes, now)) return 0;
   const activeCount = await countActiveAutonomousThreads(db);
   if (activeCount >= Number(settings.autonomous_max_active_threads || 3)) return 0;
 
   const { data: state } = await db.from("ai_community_state").select("next_autonomous_at").eq("id", 1).maybeSingle();
   if (state?.next_autonomous_at && new Date(state.next_autonomous_at).getTime() > now.getTime()) return 0;
+
   if (activeCount > 0 && Math.random() * 100 >= Number(settings.new_parallel_topic_chance || 32)) {
     await db.from("ai_community_state").update({
-      next_autonomous_at: new Date(now.getTime() + 60 * 1000).toISOString(), updated_at: now.toISOString(),
+      next_autonomous_at: new Date(now.getTime() + 60 * 1000).toISOString(),
+      updated_at: now.toISOString(),
     }).eq("id", 1);
     return 0;
   }
 
   const topic = await pickTopic(db, now);
   if (!topic) return 0;
-  const count = Math.min(characters.length, randInt(Number(settings.autonomous_participant_min || 2), Number(settings.autonomous_participant_max || 5)));
   const availableCharacters = characters.filter((c) => availableNow(c, now));
   if (availableCharacters.length < 2) return 0;
-  const selected = weightedSample(availableCharacters, Math.min(count, availableCharacters.length), (c) => topicInterestWeight(c, topic));
+  const targetCount = Math.min(availableCharacters.length, randInt(2, 4));
+  const selected = weightedSample(availableCharacters, targetCount, (c) => topicInterestWeight(c, topic));
   if (selected.length < 2) return 0;
 
+  const prepared = localAutonomousMessages(selected, topic);
   const thread = await insertThread(db, {
     thread_type: "autonomous", topic_id: topic.id, status: "active",
-    min_turns: Number(settings.autonomous_thread_min_turns || 2),
-    max_turns: Math.min(Number(settings.autonomous_thread_max_turns || 5), 5),
-    energy: 0.78, open_question: false, priority: 10,
+    min_turns: prepared.length, max_turns: prepared.length,
+    energy: 0.72, open_question: false, priority: 10,
     title: `${topic.category} · ${topic.title}`,
+    summary: "V18 로컬 대화 엔진으로 생성된 짧은 일상 대화",
   });
   await addParticipants(db, thread.id, selected);
   await db.from("ai_topic_history").insert({ topic_id: topic.id, thread_id: thread.id, used_at: now.toISOString() });
 
-  // 첫 말만 지금 생성, 이후는 매 턴 최신 문맥으로 다시 판단한다.
-  const context = await recentChatContext(db, Number(settings.recent_context_messages || 36));
-  const speaker = weightedSample(selected, 1, (c) => topicInterestWeight(c, topic))[0];
-  try {
-    const generated = await generateTurn(db, thread, speaker, settings, context, null);
-    await publishGeneratedTurn(db, thread, speaker, generated, settings, now);
-  } catch (error) {
-    console.error("V17.5 autonomous start error:", error);
-    if (error instanceof AIProviderError) {
-      await db.from("ai_conversation_threads").update({ status: "completed", completed_at: now.toISOString() }).eq("id", thread.id);
-      await logEngineEvent(db, { level: "error", category: error.code, provider: error.provider, message: error.message, meta: { thread_id: thread.id } });
-      return 0;
-    }
-    await queueTurn(db, thread.id, { delaySeconds: FIXED_AI_TURN_DELAY_SECONDS, preferredMemberId: speaker.member_id, turnKind: "autonomous_start", priority: 10, now });
-  }
-
+  await publishPreparedNow(db, thread, characters, settings, prepared, now, "local");
   await db.from("ai_community_state").update({
     next_autonomous_at: new Date(now.getTime() + 60 * 1000).toISOString(),
     updated_at: now.toISOString(),
@@ -1751,7 +1938,7 @@ export async function runAiCommunityTick({ source = "cron", bypassMinuteClaim = 
     const started = await startAutonomousThread(db, characters, settings, now);
     return { success: true, action: started ? "autonomous_thread_started" : "idle", started, source };
   } catch (error) {
-    console.error("AI COMMUNITY V17.7 ERROR:", error);
+    console.error("AI COMMUNITY V18 ERROR:", error);
     return { success: false, error: error?.message || "AI 커뮤니티 엔진 오류" };
   }
 }
