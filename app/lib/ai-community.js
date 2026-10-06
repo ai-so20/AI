@@ -1,7 +1,20 @@
 import { createClient } from "@supabase/supabase-js";
 
 export const AI_ROOM_ID = "0a495a02-bcb8-4e38-b3ef-4e7059c2a883";
-const GEMINI_MODEL = "gemini-3.5-flash-lite";
+const CLOUDFLARE_MODEL = process.env.CLOUDFLARE_MODEL || "@cf/openai/gpt-oss-20b";
+const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
+const FIXED_AI_TURN_DELAY_SECONDS = 60;
+
+class AIProviderError extends Error {
+  constructor(provider, status, code, message, details = null) {
+    super(message);
+    this.name = "AIProviderError";
+    this.provider = provider;
+    this.status = Number(status || 0);
+    this.code = code || "AI_PROVIDER_ERROR";
+    this.details = details;
+  }
+}
 
 function dbClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -114,31 +127,239 @@ function weightedSample(items, count, weightFn) {
   return picked;
 }
 
-async function generateGemini(prompt, maxOutputTokens = 2200) {
-  if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY가 설정되지 않았습니다.");
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 1.05,
-          maxOutputTokens,
-          responseMimeType: "application/json",
+async function logEngineEvent(db, { level = "error", category, provider = null, message, meta = null }) {
+  try {
+    await db.from("ai_engine_logs").insert({
+      level,
+      category,
+      provider,
+      message: String(message || "").slice(0, 1600),
+      meta: meta || null,
+    });
+  } catch (error) {
+    console.error("ai_engine_logs write failed:", error?.message || error);
+  }
+}
+
+function providerConfig() {
+  const cloudflareReady = Boolean(process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN);
+  const groqReady = Boolean(process.env.GROQ_API_KEY);
+  const requested = String(process.env.AI_PRIMARY_PROVIDER || "").toLowerCase();
+  const primary = requested === "cloudflare" || requested === "groq"
+    ? requested
+    : groqReady ? "groq" : "cloudflare";
+  const order = primary === "groq" ? ["groq", "cloudflare"] : ["cloudflare", "groq"];
+  return order.filter((provider) => provider === "groq" ? groqReady : cloudflareReady);
+}
+
+async function providerPaused(db, provider, now = new Date()) {
+  try {
+    const { data } = await db.from("ai_provider_health")
+      .select("status,paused_until")
+      .eq("provider", provider)
+      .maybeSingle();
+    if (!data?.paused_until) return false;
+    return new Date(data.paused_until).getTime() > now.getTime();
+  } catch {
+    return false;
+  }
+}
+
+async function markProviderSuccess(db, provider) {
+  try {
+    await db.from("ai_provider_health").upsert({
+      provider,
+      status: "healthy",
+      paused_until: null,
+      last_error_code: null,
+      last_error_message: null,
+      last_success_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "provider" });
+  } catch {}
+}
+
+function classifyProviderError(provider, status, errorText) {
+  const text = String(errorText || "");
+  if (status === 401 || status === 403) {
+    return new AIProviderError(provider, status, "AI_PROVIDER_AUTH_DENIED", `${provider} 인증/권한 오류 (${status})`, text.slice(0, 1200));
+  }
+  if (status === 429) {
+    return new AIProviderError(provider, status, "AI_PROVIDER_RATE_LIMIT", `${provider} 무료 한도 또는 호출 제한에 도달했습니다.`, text.slice(0, 1200));
+  }
+  if (status >= 500) {
+    return new AIProviderError(provider, status, "AI_PROVIDER_SERVER_ERROR", `${provider} 서버 오류 (${status})`, text.slice(0, 1200));
+  }
+  return new AIProviderError(provider, status, "AI_PROVIDER_HTTP_ERROR", `${provider} API 오류 (${status || "unknown"})`, text.slice(0, 1200));
+}
+
+async function markProviderFailure(db, error) {
+  const provider = error?.provider || "unknown";
+  const code = error?.code || "AI_PROVIDER_ERROR";
+  const now = new Date();
+  let pauseMinutes = 5;
+  if (code === "AI_PROVIDER_AUTH_DENIED") pauseMinutes = 24 * 60;
+  else if (code === "AI_PROVIDER_RATE_LIMIT") pauseMinutes = 15;
+  else if (code === "AI_PROVIDER_BAD_JSON") pauseMinutes = 5;
+
+  try {
+    const { data: current } = await db.from("ai_provider_health")
+      .select("error_count")
+      .eq("provider", provider)
+      .maybeSingle();
+    await db.from("ai_provider_health").upsert({
+      provider,
+      status: code === "AI_PROVIDER_AUTH_DENIED" ? "blocked" : "paused",
+      paused_until: new Date(now.getTime() + pauseMinutes * 60000).toISOString(),
+      last_error_code: code,
+      last_error_message: String(error?.message || code).slice(0, 1200),
+      last_error_at: now.toISOString(),
+      error_count: Number(current?.error_count || 0) + 1,
+      updated_at: now.toISOString(),
+    }, { onConflict: "provider" });
+  } catch {}
+
+  await logEngineEvent(db, {
+    level: "error",
+    category: code,
+    provider,
+    message: error?.message || code,
+    meta: { status: error?.status || null, details: error?.details || null, pause_minutes: pauseMinutes },
+  });
+}
+
+async function callCloudflare(prompt, maxOutputTokens) {
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  if (!accountId || !token) throw new AIProviderError("cloudflare", 0, "AI_PROVIDER_NOT_CONFIGURED", "Cloudflare 환경변수가 설정되지 않았습니다.");
+
+  let response;
+  try {
+    response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/ai/v1/chat/completions`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          model: CLOUDFLARE_MODEL,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.8,
+          max_tokens: maxOutputTokens,
+          response_format: { type: "json_object" },
+        }),
+        cache: "no-store",
+      }
+    );
+  } catch (error) {
+    throw new AIProviderError("cloudflare", 0, "AI_PROVIDER_NETWORK_ERROR", `Cloudflare 네트워크 오류: ${error?.message || "network error"}`);
+  }
+
+  const text = await response.text();
+  if (!response.ok) throw classifyProviderError("cloudflare", response.status, text);
+  let data;
+  try { data = JSON.parse(text); }
+  catch { throw new AIProviderError("cloudflare", response.status, "AI_PROVIDER_BAD_RESPONSE", "Cloudflare 응답 JSON을 읽을 수 없습니다.", text.slice(0, 1200)); }
+  const root = data?.result || data;
+  const content = root?.choices?.[0]?.message?.content ?? root?.response ?? data?.response;
+  if (!content) throw new AIProviderError("cloudflare", response.status, "AI_PROVIDER_EMPTY_RESPONSE", "Cloudflare가 빈 응답을 반환했습니다.");
+  try { return typeof content === "string" ? safeJson(content) : content; }
+  catch { throw new AIProviderError("cloudflare", response.status, "AI_PROVIDER_BAD_JSON", "Cloudflare가 올바른 JSON 대사를 반환하지 않았습니다.", String(content).slice(0, 1200)); }
+}
+
+async function callGroq(prompt, maxOutputTokens) {
+  const token = process.env.GROQ_API_KEY;
+  if (!token) throw new AIProviderError("groq", 0, "AI_PROVIDER_NOT_CONFIGURED", "Groq 환경변수가 설정되지 않았습니다.");
+
+  let response;
+  try {
+    response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [{ role: "user", content: prompt }],
+        temperature: 0.8,
+        max_completion_tokens: maxOutputTokens,
+        response_format: { type: "json_object" },
+        reasoning_effort: "low",
+        reasoning_format: "hidden",
       }),
       cache: "no-store",
-    }
-  );
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini 오류: ${errorText.slice(0, 1200)}`);
+    });
+  } catch (error) {
+    throw new AIProviderError("groq", 0, "AI_PROVIDER_NETWORK_ERROR", `Groq 네트워크 오류: ${error?.message || "network error"}`);
   }
-  const data = await response.json();
-  const rawText = data?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim();
-  return safeJson(rawText || "{}");
+
+  const text = await response.text();
+  if (!response.ok) throw classifyProviderError("groq", response.status, text);
+  let data;
+  try { data = JSON.parse(text); }
+  catch { throw new AIProviderError("groq", response.status, "AI_PROVIDER_BAD_RESPONSE", "Groq 응답 JSON을 읽을 수 없습니다.", text.slice(0, 1200)); }
+  const content = data?.choices?.[0]?.message?.content;
+  if (!content) throw new AIProviderError("groq", response.status, "AI_PROVIDER_EMPTY_RESPONSE", "Groq가 빈 응답을 반환했습니다.");
+  try { return safeJson(content); }
+  catch { throw new AIProviderError("groq", response.status, "AI_PROVIDER_BAD_JSON", "Groq가 올바른 JSON 대사를 반환하지 않았습니다.", String(content).slice(0, 1200)); }
+}
+
+async function generateAI(db, prompt, maxOutputTokens = 2200) {
+  const configured = providerConfig();
+  if (!configured.length) {
+    throw new AIProviderError("none", 0, "AI_PROVIDER_NOT_CONFIGURED", "Cloudflare 또는 Groq API 환경변수가 필요합니다.");
+  }
+
+  const failures = [];
+  for (const provider of configured) {
+    if (await providerPaused(db, provider)) continue;
+    try {
+      const result = provider === "groq"
+        ? await callGroq(prompt, maxOutputTokens)
+        : await callCloudflare(prompt, maxOutputTokens);
+      await markProviderSuccess(db, provider);
+      if (failures.length) {
+        await logEngineEvent(db, {
+          level: "warning",
+          category: "AI_PROVIDER_FAILOVER_SUCCESS",
+          provider,
+          message: `${provider}로 자동 전환하여 생성에 성공했습니다.`,
+          meta: { failed_providers: failures.map((e) => e.provider) },
+        });
+      }
+      return { result, provider };
+    } catch (error) {
+      const normalized = error instanceof AIProviderError
+        ? error
+        : new AIProviderError(provider, 0, "AI_PROVIDER_UNKNOWN_ERROR", error?.message || "알 수 없는 AI 공급자 오류");
+      failures.push(normalized);
+      await markProviderFailure(db, normalized);
+    }
+  }
+
+  const last = failures[failures.length - 1];
+  if (last) {
+    throw new AIProviderError(
+      "all",
+      last.status,
+      "AI_ALL_PROVIDERS_UNAVAILABLE",
+      `사용 가능한 AI 공급자가 없습니다. (${failures.map((e) => `${e.provider}:${e.code}`).join(", ")})`,
+      failures.map((e) => ({ provider: e.provider, code: e.code, status: e.status }))
+    );
+  }
+  throw new AIProviderError("all", 503, "AI_ALL_PROVIDERS_PAUSED", "현재 모든 AI 공급자가 일시 중지 상태입니다.");
+}
+
+async function hasUsableProvider(db, now = new Date()) {
+  const configured = providerConfig();
+  if (!configured.length) return { ok: false, reason: "provider_not_configured" };
+  for (const provider of configured) {
+    if (!(await providerPaused(db, provider, now))) return { ok: true, provider };
+  }
+  return { ok: false, reason: "all_providers_paused" };
 }
 
 async function loadSettings(db) {
@@ -321,7 +542,7 @@ async function queueTurn(db, threadId, {
   priority = 10,
   now = new Date(),
 } = {}) {
-  const seconds = delaySeconds ?? randInt(60, 180);
+  const seconds = delaySeconds ?? FIXED_AI_TURN_DELAY_SECONDS;
   const scheduledAt = new Date(now.getTime() + seconds * 1000);
   const parts = kstParts(scheduledAt);
   if (parts.minutes >= timeToMinutes("18:30")) return null;
@@ -692,7 +913,6 @@ JSON 객체만 출력:
   "open_question":false,
   "thread_energy":0.72,
   "thread_summary":"지금까지 이 대화 가지를 1~2문장으로 요약",
-  "next_delay_seconds":95,
   "relationship_note":"",
   "memory_updates":[
     {"scope":"personal|person|relationship|community|future","subject":"speaker|source_human|null","fact":"기억할 사실","importance":50,"confidence":100,"event_at":null,"valid_until":null}
@@ -700,9 +920,10 @@ JSON 객체만 출력:
 }
 `.trim();
 
-  const result = await generateGemini(prompt, 2600);
+  const generatedBy = await generateAI(db, prompt, 2600);
+  const result = generatedBy.result;
   const message = String(result?.message || "").trim().replace(/\s+/g, " ");
-  if (message.length < 2) throw new Error("Gemini가 빈 대사를 반환했습니다.");
+  if (message.length < 2) throw new AIProviderError(generatedBy.provider, 200, "AI_PROVIDER_EMPTY_MESSAGE", "AI 공급자가 빈 대사를 반환했습니다.");
   const validTargetIds = new Set(threadMessages.map((r) => r.id));
   if (thread.source_message_id) validTargetIds.add(thread.source_message_id);
   if (thread.last_message_id) validTargetIds.add(thread.last_message_id);
@@ -718,7 +939,7 @@ JSON 객체만 출력:
     openQuestion: Boolean(result?.open_question),
     energy: clamp(result?.thread_energy ?? thread.energy ?? 0.7, 0, 1),
     summary: String(result?.thread_summary || thread.summary || "").slice(0, 1000) || null,
-    nextDelaySeconds: clamp(result?.next_delay_seconds ?? randInt(60, 180), 45, 240),
+    provider: generatedBy.provider,
     relationshipNote: String(result?.relationship_note || "").slice(0, 500),
     memoryUpdates: Array.isArray(result?.memory_updates) ? result.memory_updates : [],
   };
@@ -791,14 +1012,14 @@ async function publishGeneratedTurn(db, thread, speaker, generated, settings, no
     const kind = thread.thread_type === "autonomous" ? "continue" : thread.thread_type;
     const priority = thread.thread_type === "autonomous" ? 10 : 70;
     await queueTurn(db, thread.id, {
-      delaySeconds: generated.nextDelaySeconds,
+      delaySeconds: FIXED_AI_TURN_DELAY_SECONDS,
       targetMessageId: inserted.id,
       turnKind: ["human_reply","welcome","celebration","loss"].includes(kind) ? kind : "continue",
       priority,
       now,
     });
   }
-  return { inserted, continueThread, nextDelaySeconds: generated.nextDelaySeconds };
+  return { inserted, continueThread, provider: generated.provider };
 }
 
 async function processTurn(db, turn, characters, settings, now = new Date()) {
@@ -823,6 +1044,14 @@ async function processTurn(db, turn, characters, settings, now = new Date()) {
     : null;
   if (!speaker || !availableNow(speaker, now)) speaker = await chooseSpeaker(db, thread, participants, characters, context);
   if (!speaker) {
+    const participantIds = new Set(participants.map((p) => p.member_id));
+    const freshPool = characters.filter((c) => !participantIds.has(c.member_id) && availableNow(c, now));
+    if (freshPool.length) {
+      speaker = weightedSample(freshPool, 1, (c) => topicInterestWeight(c, null))[0] || null;
+      if (speaker) await addParticipants(db, thread.id, [speaker]);
+    }
+  }
+  if (!speaker) {
     const nextTimes = participants
       .map((p) => p.character?.state?.next_available_at)
       .filter(Boolean)
@@ -845,21 +1074,35 @@ async function processTurn(db, turn, characters, settings, now = new Date()) {
       const kind = thread.thread_type === "autonomous" ? "continue" : thread.thread_type;
       const priority = thread.thread_type === "autonomous" ? 10 : 70;
       await queueTurn(db, thread.id, {
-        delaySeconds: published.nextDelaySeconds,
+        delaySeconds: FIXED_AI_TURN_DELAY_SECONDS,
         targetMessageId: published.inserted.id,
         turnKind: ["human_reply","welcome","celebration","loss"].includes(kind) ? kind : "continue",
         priority,
         now,
       });
     }
-    return { action: "turn_published", speaker: speaker.profile?.nickname || speaker.character_name, threadId: thread.id };
+    return { action: "turn_published", speaker: speaker.profile?.nickname || speaker.character_name, threadId: thread.id, provider: published.provider };
   } catch (error) {
-    console.error("V17.4 generate turn error:", error);
+    console.error("V17.5 generate turn error:", error);
+    const providerFailure = error instanceof AIProviderError || String(error?.code || "").startsWith("AI_PROVIDER") || String(error?.code || "").startsWith("AI_ALL_PROVIDERS");
+    if (providerFailure) {
+      await db.from("ai_turn_queue").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", turn.id);
+      await db.from("ai_conversation_threads").update({ status: "completed", completed_at: now.toISOString() }).eq("id", thread.id);
+      await logEngineEvent(db, {
+        level: "error",
+        category: error?.code || "AI_GENERATION_STOPPED",
+        provider: error?.provider || null,
+        message: error?.message || "AI 생성 중단",
+        meta: { thread_id: thread.id, turn_id: turn.id },
+      });
+      return { success: false, action: "turn_generation_stopped", error: error?.message || "generation_failed", errorCode: error?.code || "AI_GENERATION_STOPPED" };
+    }
     await db.from("ai_turn_queue").update({
       status: "queued",
-      scheduled_at: new Date(now.getTime() + randInt(3, 6) * 60000).toISOString(),
+      scheduled_at: new Date(now.getTime() + FIXED_AI_TURN_DELAY_SECONDS * 1000).toISOString(),
     }).eq("id", turn.id);
-    return { action: "turn_retry_scheduled", error: error?.message || "generation_failed" };
+    await logEngineEvent(db, { level: "error", category: "AI_ENGINE_INTERNAL_ERROR", message: error?.message || "generation_failed", meta: { thread_id: thread.id, turn_id: turn.id } });
+    return { success: false, action: "turn_retry_scheduled", error: error?.message || "generation_failed" };
   }
 }
 
@@ -913,16 +1156,21 @@ async function startHumanThread(db, info, characters, settings, now = new Date()
   });
   await addParticipants(db, thread.id, selected);
 
-  // 첫 답은 즉시 생성. 나머지는 미리 문장을 만들지 않고 1~3분 후 최신 문맥으로 생성.
+  // 첫 답은 즉시 생성. 나머지는 미리 만들지 않고 방 전체 1분 턴 규칙으로 최신 문맥에서 생성.
   const firstSpeaker = selected[0];
   const context = await recentChatContext(db, Number(settings.recent_context_messages || 36));
   try {
     const generated = await generateTurn(db, thread, firstSpeaker, settings, context, info.latest.id);
     await publishGeneratedTurn(db, thread, firstSpeaker, generated, settings, now);
   } catch (error) {
-    console.error("V17.4 immediate human reply error:", error);
+    console.error("V17.5 immediate human reply error:", error);
+    if (error instanceof AIProviderError) {
+      await db.from("ai_conversation_threads").update({ status: "completed", completed_at: now.toISOString() }).eq("id", thread.id);
+      await logEngineEvent(db, { level: "error", category: error.code, provider: error.provider, message: error.message, meta: { thread_id: thread.id, source_message_id: info.latest.id } });
+      return { scheduled: 0, situation, providerError: { code: error.code, message: error.message } };
+    }
     await queueTurn(db, thread.id, {
-      delaySeconds: randInt(60, 120), preferredMemberId: firstSpeaker.member_id,
+      delaySeconds: FIXED_AI_TURN_DELAY_SECONDS, preferredMemberId: firstSpeaker.member_id,
       targetMessageId: info.latest.id, turnKind: threadType, priority: 90, now,
     });
   }
@@ -948,7 +1196,7 @@ async function startWelcomeThread(db, event, characters, settings, now = new Dat
   });
   await addParticipants(db, thread.id, selected);
   await queueTurn(db, thread.id, {
-    delaySeconds: randInt(10, 35), preferredMemberId: selected[0].member_id,
+    delaySeconds: FIXED_AI_TURN_DELAY_SECONDS, preferredMemberId: selected[0].member_id,
     turnKind: "welcome", priority: 80, now,
   });
   await db.from("ai_community_events").update({ status: "done", processed_at: now.toISOString() }).eq("id", event.id);
@@ -1002,8 +1250,13 @@ async function startAutonomousThread(db, characters, settings, now = new Date())
     const generated = await generateTurn(db, thread, speaker, settings, context, null);
     await publishGeneratedTurn(db, thread, speaker, generated, settings, now);
   } catch (error) {
-    console.error("V17.4 autonomous start error:", error);
-    await queueTurn(db, thread.id, { delaySeconds: randInt(120, 240), preferredMemberId: speaker.member_id, turnKind: "autonomous_start", priority: 10, now });
+    console.error("V17.5 autonomous start error:", error);
+    if (error instanceof AIProviderError) {
+      await db.from("ai_conversation_threads").update({ status: "completed", completed_at: now.toISOString() }).eq("id", thread.id);
+      await logEngineEvent(db, { level: "error", category: error.code, provider: error.provider, message: error.message, meta: { thread_id: thread.id } });
+      return 0;
+    }
+    await queueTurn(db, thread.id, { delaySeconds: FIXED_AI_TURN_DELAY_SECONDS, preferredMemberId: speaker.member_id, turnKind: "autonomous_start", priority: 10, now });
   }
 
   await db.from("ai_community_state").update({
@@ -1011,6 +1264,23 @@ async function startAutonomousThread(db, characters, settings, now = new Date())
     updated_at: now.toISOString(),
   }).eq("id", 1);
   return 1;
+}
+
+async function recoverStaleProcessingTurns(db, now = new Date()) {
+  const cutoff = new Date(now.getTime() - 3 * 60000).toISOString();
+  const { data: stale } = await db.from("ai_turn_queue")
+    .select("id")
+    .eq("status", "processing")
+    .lt("scheduled_at", cutoff);
+  const ids = (stale || []).map((row) => row.id);
+  if (!ids.length) return 0;
+  await db.from("ai_turn_queue").update({
+    status: "queued",
+    scheduled_at: now.toISOString(),
+    processed_at: null,
+  }).in("id", ids);
+  await logEngineEvent(db, { level: "warning", category: "QUEUE_STALE_RECOVERED", message: `멈춘 processing 큐 ${ids.length}건을 복구했습니다.`, meta: { count: ids.length } });
+  return ids.length;
 }
 
 async function closeStaleThreads(db, now = new Date()) {
@@ -1045,15 +1315,22 @@ export async function runAiCommunityTick({ source = "cron", bypassMinuteClaim = 
       if (!error && !claimed) return { success: true, reason: "already_ran_this_minute" };
     }
 
+    const providerState = await hasUsableProvider(db, now);
+    if (!providerState.ok) {
+      return { success: false, reason: providerState.reason, error: "현재 사용 가능한 AI 공급자가 없습니다." };
+    }
+
     const characters = await loadCharacters(db, now);
     if (!characters.length) return { success: true, reason: "ai_accounts_not_ready" };
     await refreshIdleEnergy(db, characters, now);
+    await recoverStaleProcessingTurns(db, now);
     await closeStaleThreads(db, now);
 
     // 1순위: 실제회원 새 메시지
     const humanInfo = await findLatestUnhandledHuman(db);
     if (humanInfo) {
       const result = await startHumanThread(db, humanInfo, characters, settings, now);
+      if (result?.providerError) return { success: false, action: "human_priority_failed", source, ...result.providerError };
       return { success: true, action: "human_priority", source, ...result };
     }
 
@@ -1061,6 +1338,7 @@ export async function runAiCommunityTick({ source = "cron", bypassMinuteClaim = 
     const due = await getDueTurn(db);
     if (due) {
       const result = await processTurn(db, due, characters, settings, now);
+      if (result?.success === false) return { ...result, source };
       return { success: true, source, ...result };
     }
 
@@ -1077,7 +1355,7 @@ export async function runAiCommunityTick({ source = "cron", bypassMinuteClaim = 
     const started = await startAutonomousThread(db, characters, settings, now);
     return { success: true, action: started ? "autonomous_thread_started" : "idle", started, source };
   } catch (error) {
-    console.error("AI COMMUNITY V17.4 ERROR:", error);
+    console.error("AI COMMUNITY V17.5 ERROR:", error);
     return { success: false, error: error?.message || "AI 커뮤니티 엔진 오류" };
   }
 }
@@ -1085,7 +1363,7 @@ export async function runAiCommunityTick({ source = "cron", bypassMinuteClaim = 
 export async function getAiCommunityStatus() {
   const db = dbClient();
   if (!db) return { success: false, reason: "supabase_server_env_missing" };
-  const [stateRes, settingsRes, aiRes, turnRes, threadRes, relRes, memoryRes] = await Promise.all([
+  const [stateRes, settingsRes, aiRes, turnRes, threadRes, relRes, memoryRes, providerRes, logRes] = await Promise.all([
     db.from("ai_community_state").select("*").eq("id", 1).maybeSingle(),
     db.from("ai_community_settings").select("*").eq("id", 1).maybeSingle(),
     db.from("profiles").select("id", { count: "exact", head: true }).eq("account_type", "ai_character").eq("approval_status", "approved"),
@@ -1093,6 +1371,8 @@ export async function getAiCommunityStatus() {
     db.from("ai_conversation_threads").select("id", { count: "exact", head: true }).eq("status", "active"),
     db.from("ai_relationships").select("member_low", { count: "exact", head: true }),
     db.from("ai_social_memories").select("id", { count: "exact", head: true }),
+    db.from("ai_provider_health").select("provider,status,paused_until,last_error_code,last_error_message,last_success_at,last_error_at,error_count").order("provider"),
+    db.from("ai_engine_logs").select("level,category,provider,message,created_at").order("created_at", { ascending: false }).limit(10),
   ]);
   return {
     success: true,
@@ -1103,5 +1383,8 @@ export async function getAiCommunityStatus() {
     activeThreadCount: threadRes.count || 0,
     relationshipCount: relRes.count || 0,
     memoryCount: memoryRes.count || 0,
+    configuredProviders: providerConfig(),
+    providerHealth: providerRes.data || [],
+    recentEngineLogs: logRes.data || [],
   };
 }

@@ -1010,20 +1010,6 @@ export default function Home() {
   }, [user, profile?.role, privateChatId]);
 
   useEffect(() => {
-    if (!user || !profile || chatTab !== "group") return;
-
-    const aiCommunityHeartbeat = () => {
-      fetch("/api/ai-community-tick", { method: "POST" }).catch(() => {});
-    };
-
-    // 그룹방을 보고 있는 동안에도 1분마다 예약 큐를 깨웁니다.
-    // 전용 community tick은 분당 중복방지 장치를 사용합니다. 실제회원 메시지 직후 호출만 /api/ai-chat이 우선 처리합니다.
-    aiCommunityHeartbeat();
-    const timer = setInterval(aiCommunityHeartbeat, 60 * 1000);
-    return () => clearInterval(timer);
-  }, [user?.id, profile?.role, chatTab]);
-
-  useEffect(() => {
     if (chatTab !== "group") return;
 
     const jumpToLatest = () => {
