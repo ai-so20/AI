@@ -46,13 +46,19 @@ function shuffle(items) {
 }
 
 function safeJson(text) {
-  const cleaned = String(text || "")
-    .trim()
+  const raw = String(text || "").trim();
+  const cleaned = raw
     .replace(/^```json\s*/i, "")
     .replace(/^```\s*/i, "")
     .replace(/```$/i, "")
     .trim();
-  return JSON.parse(cleaned || "{}");
+  try { return JSON.parse(cleaned || "{}"); } catch {}
+  // 일부 무료 모델은 JSON 앞뒤에 한두 문장을 붙일 수 있습니다.
+  // 가장 바깥 JSON 객체만 한 번 더 복구합니다.
+  const first = cleaned.indexOf("{");
+  const last = cleaned.lastIndexOf("}");
+  if (first >= 0 && last > first) return JSON.parse(cleaned.slice(first, last + 1));
+  throw new Error("invalid_json");
 }
 
 function kstParts(date = new Date()) {
@@ -200,7 +206,7 @@ async function markProviderFailure(db, error) {
   let pauseMinutes = 5;
   if (code === "AI_PROVIDER_AUTH_DENIED") pauseMinutes = 24 * 60;
   else if (code === "AI_PROVIDER_RATE_LIMIT") pauseMinutes = 15;
-  else if (code === "AI_PROVIDER_BAD_JSON") pauseMinutes = 5;
+  else if (["AI_PROVIDER_BAD_JSON","AI_PROVIDER_BAD_RESPONSE","AI_PROVIDER_EMPTY_RESPONSE","AI_PROVIDER_EMPTY_MESSAGE"].includes(code)) pauseMinutes = 1;
 
   try {
     const { data: current } = await db.from("ai_provider_health")
@@ -376,15 +382,15 @@ async function loadSettings(db) {
     welcome_min: 3,
     welcome_max: 4,
     celebration_min: 5,
-    autonomous_gap_min_minutes: 5,
-    autonomous_gap_max_minutes: 11,
+    autonomous_gap_min_minutes: 1,
+    autonomous_gap_max_minutes: 1,
     human_quiet_minutes: 4,
     autonomous_max_active_threads: 3,
     recent_context_messages: 36,
     memory_recall_limit: 8,
     relationship_event_limit: 5,
-    autonomous_thread_min_turns: 4,
-    autonomous_thread_max_turns: 12,
+    autonomous_thread_min_turns: 2,
+    autonomous_thread_max_turns: 5,
     new_parallel_topic_chance: 32,
   };
 }
@@ -435,17 +441,31 @@ function characterPromptBlock(character) {
 }
 
 const COMMON_PROMPT = `
-[공통 대화 규칙]
+[공통 대화 규칙 - 실제 한국 단체채팅처럼]
 - 캐릭터는 자신의 이름, 나이, 직업, 취향, 과거와 일상을 자기 삶의 연속된 서사처럼 유지한다.
 - 이전에 실제로 저장된 기억과 관계를 우선한다. 기억에 없는 과거 사건을 '전에 말했잖아요'처럼 지어내지 않는다.
-- 대화는 한국 커뮤니티/메신저처럼 짧고 자연스럽게 1~2문장이 기본이다.
+- 문어체 답변이 아니라 실제 한국 메신저 말투를 쓴다. 기본은 짧은 1문장, 필요할 때만 2문장이다.
+- 자율대화는 토론이나 정보글이 아니다. 한 사람이 한 번에 길게 설명하거나 팁을 연달아 쏟아내지 않는다.
+- 자율대화 메시지는 보통 15~70자 정도로 짧게 쓴다. 정말 필요한 경우에도 120자를 넘기지 않는다.
+- 한 주제는 보통 2~5개 메시지 안에서 충분하다. 같은 소재를 세부 팁·수치·방법으로 계속 파고들지 않는다.
+- 앞의 2명이 이미 설명이나 팁을 말했다면 다음 사람은 비슷한 설명을 반복하지 말고 짧게 반응하거나 자연스럽게 화제를 옮긴다.
+- 완성된 설명문을 매번 만들지 않는다. 상황에 따라 '오', '헉', 'ㅋㅋ', '그러게요', '아 그건 인정' 같은 짧은 반응도 가능하다.
+- 단, 여러 캐릭터가 연속해서 의미 없는 맞장구만 반복하지 않는다.
+- 말끝, 띄어쓰기, ㅋㅋ/ㅎㅎ, 느낌표, 이모티콘, 문장 길이는 캐릭터마다 다르게 유지한다.
+- 모든 턴에서 질문하지 않는다. 질문은 정말 상대 답이 궁금하거나 대화를 자연스럽게 이어야 할 때만 한다.
+- 최근 대화에서 질문이 이미 2번 이상 이어졌다면 이번 메시지는 질문으로 끝내지 않는다.
+- '저도 예전에 ~했는데요' 같은 개인 경험을 매번 만들어내지 않는다. 경험담은 흐름에 꼭 맞을 때만 가끔 쓴다.
+- 실제회원이 질문했다면 먼저 그 질문에 직접 답한다. 관련 없는 자기 식사시간, 자기 계획 같은 이야기로 질문을 피하지 않는다.
+- 모르는 장소/가게/사실을 아는 척 지어내지 않는다. 확실하지 않으면 범위를 좁혀 묻거나 일반적인 선택지를 말한다.
 - 바로 앞 말만 기계적으로 따라가지 말고, 지금 살아있는 대화 가지 중 어떤 말에 답하는지 분명히 정한다.
 - 같은 주제 안에서도 A의 첫 말에 뒤늦게 답하거나, B의 답변에 다시 답할 수 있다.
-- 다른 주제가 동시에 살아있어도 괜찮다. 단, 답변 한 개 안에서 서로 다른 주제를 마구 섞지 않는다.
-- 질문, 대답, 공감, 자기 경험, 가벼운 반대, 농담, 주제 확장, 자연스러운 마무리를 상황에 맞게 섞는다.
-- '맞아요', '그러게요', '저도요'만 단독으로 쓰는 빈 맞장구는 피한다. 구체적인 내용을 하나 더 보탠다.
+- 다른 주제가 동시에 살아있어도 괜찮다. 단, 아무 연결 없이 갑자기 전혀 다른 말로 튀지 않는다.
+- 질문, 대답, 공감, 자기 경험, 가벼운 반대, 농담, 짧은 리액션, 주제 확장, 자연스러운 마무리를 섞는다.
+- 대화가 끝날 때 굳이 '그럼 이만'처럼 마무리하지 않아도 된다. 사람 단톡처럼 자연스럽게 멈출 수 있다.
 - 모든 캐릭터가 같은 말투나 ㅋㅋ/ㅎㅎ를 쓰지 않는다.
 - 실제회원 메시지가 있으면 그 흐름을 AI끼리의 잡담보다 우선한다.
+- 이벤트 참여 중에는 자신이 실제로 제출한 선택만 말할 수 있고, 서버 정답이나 당첨 결과를 미리 아는 척하지 않는다.
+- 당첨 발표 뒤에는 똑같은 '축하합니다'만 복사하지 말고 짧은 감탄, 농담, 부러움, 축하를 각자 다르게 표현한다.
 - 민감정보(전화번호, 계좌, 주소, 비밀번호, 인증번호 등)는 장기기억으로 저장하지 않는다.
 - 실제 투자 결과나 수익을 보장하거나 확정적으로 약속하지 않는다.
 `.trim();
@@ -626,6 +646,93 @@ function relationshipPrompt(rel, events) {
   if (!rel) return "아직 뚜렷한 관계 기록 없음";
   const notes = (events || []).map((e) => e.event_note).join(" / ");
   return `친숙함 ${Math.round(rel.familiarity)}, 호감 ${Math.round(rel.affinity)}, 편안함 ${Math.round(rel.comfort)}, 장난친밀도 ${Math.round(rel.playfulness)}, 신뢰 ${Math.round(rel.trust)}, 대화횟수 ${rel.interaction_count}. 최근 관계기억: ${notes || "없음"}`;
+}
+
+
+async function loadEventContext(db, eventId, speakerId = null) {
+  if (!eventId) return null;
+  const { data: event } = await db.from("events")
+    .select("id,title,description,event_type,status,starts_at,ends_at,round_number")
+    .eq("id", eventId)
+    .maybeSingle();
+  if (!event) return null;
+
+  let quiz = null;
+  if (event.event_type === "quiz") {
+    const { data: secret } = await db.from("event_game_secrets")
+      .select("secret_answer").eq("event_id", eventId).maybeSingle();
+    if (secret?.secret_answer) {
+      const { data } = await db.from("event_quiz_bank")
+        .select("id,question,option_1,option_2,option_3,option_4,quiz_type,category,difficulty")
+        .eq("id", secret.secret_answer)
+        .maybeSingle();
+      quiz = data || null;
+    }
+  }
+
+  let myEntry = null;
+  if (speakerId) {
+    const { data } = await db.from("event_entries")
+      .select("answer,result_text,submitted_at")
+      .eq("event_id", eventId)
+      .eq("member_id", speakerId)
+      .maybeSingle();
+    myEntry = data || null;
+  }
+
+  const { data: winnerRow } = await db.from("event_winners")
+    .select("member_id,selected_at,rank").eq("event_id", eventId).order("rank", { ascending: true }).limit(1).maybeSingle();
+  let winner = null;
+  if (winnerRow?.member_id) {
+    const { data: profile } = await db.from("profiles")
+      .select("id,nickname,account_type").eq("id", winnerRow.member_id).maybeSingle();
+    winner = profile || { id: winnerRow.member_id, nickname: "VIP 회원", account_type: "human" };
+  }
+
+  let myAnswer = "아직 참가 기록 없음";
+  if (myEntry) {
+    if (event.event_type === "quiz") {
+      const index = Number(myEntry.answer || 0);
+      const options = quiz ? [quiz.option_1, quiz.option_2, quiz.option_3, quiz.option_4] : [];
+      myAnswer = index >= 1 && index <= 4
+        ? `${index}번${options[index - 1] ? ` (${options[index - 1]})` : ""} 선택`
+        : "퀴즈 참가 완료";
+    } else if (event.event_type === "gift_box") {
+      myAnswer = `${myEntry.answer || "?"}번 상자 선택`;
+    } else if (event.event_type === "number") {
+      myAnswer = `${myEntry.answer || "?"}번 선택`;
+    } else if (event.event_type === "roulette") {
+      myAnswer = "룰렛 응모 완료";
+    } else if (event.event_type === "draw") {
+      myAnswer = "자동추첨 응모 완료";
+    } else if (event.event_type === "attendance") {
+      myAnswer = "출석 완료";
+    } else if (event.event_type === "first_come") {
+      myAnswer = "선착순 참여";
+    } else {
+      myAnswer = myEntry.result_text || "참가 완료";
+    }
+  }
+
+  const quizText = quiz
+    ? `퀴즈 문제=${quiz.question} / 보기=1:${quiz.option_1}, 2:${quiz.option_2}, 3:${quiz.option_3}, 4:${quiz.option_4}`
+    : "";
+  return {
+    event,
+    quiz,
+    myEntry,
+    winner,
+    text: [
+      `이벤트=${event.title || event.event_type}`,
+      `종류=${event.event_type}`,
+      `상태=${event.status}`,
+      `현재 캐릭터 참가내용=${myAnswer}`,
+      quizText,
+      `당첨자=${winner?.nickname || "아직 발표 전"}`,
+      `현재 캐릭터가 당첨자=${winner?.id && speakerId ? String(winner.id === speakerId) : "false"}`,
+      "중요: 진행 중 이벤트의 서버 정답/당첨 결과는 절대 추측하거나 미리 아는 척하지 않는다.",
+    ].filter(Boolean).join("\n"),
+  };
 }
 
 function topicInterestWeight(character, topic) {
@@ -842,8 +949,11 @@ async function generateTurn(db, thread, speaker, settings, context, targetMessag
   const { data: topic } = thread.topic_id
     ? await db.from("ai_chat_topics").select("*").eq("id", thread.topic_id).maybeSingle()
     : { data: null };
+  const eventContext = thread.source_event_id
+    ? await loadEventContext(db, thread.source_event_id, speaker.member_id)
+    : null;
 
-  const threadMessages = context.rows.filter((r) => r.ai_thread_id === thread.id).slice(0, 14);
+  const threadMessages = context.rows.filter((r) => r.ai_thread_id === thread.id).slice(-14);
   const threadGuidance = thread.thread_type === "welcome"
     ? "새로 들어온 실제회원에게 반갑게 인사하고, 환영문구만 반복하지 말고 편하게 어울릴 수 있는 한마디를 이어간다."
     : thread.thread_type === "celebration"
@@ -852,11 +962,21 @@ async function generateTurn(db, thread, speaker, settings, context, targetMessag
         ? "실제회원의 속상한 상황에 가볍게 비웃지 말고 공감/안정/짧은 경험으로 자연스럽게 반응한다."
         : thread.thread_type === "human_reply"
           ? "실제회원의 대화가 중심이다. 캐릭터끼리 자기 이야기만 하지 말고 회원의 말에서 나온 구체적인 내용에 연결한다."
-          : "사람들이 쉬는 커뮤니티에서 자연스럽게 이어지는 사적인 일상대화다.";
-  const candidateTargets = threadMessages.slice(0, 8).map((r) => {
+          : thread.thread_type === "event_start"
+            ? "지금 실제로 진행 중인 이벤트에 참가한 사람처럼 짧게 반응한다. 자신이 제출한 선택은 말해도 되지만 정답이나 당첨 결과를 미리 아는 척하면 안 된다. '이벤트 참여했습니다' 같은 안내문 말투보다 실제 단톡 반응을 쓴다."
+            : thread.thread_type === "event_winner"
+              ? "방금 발표된 이벤트 당첨자를 자연스럽게 축하한다. 현재 캐릭터가 당첨자라면 자기 자신을 축하하지 말고 놀라거나 고맙다고 반응한다. 다른 사람은 감탄/축하/장난/부러움 중 캐릭터다운 방식으로 반응한다."
+              : "사람들이 쉬는 커뮤니티에서 자연스럽게 이어지는 사적인 일상대화다. 토론이나 정보교환 회의가 아니다. 같은 소재를 2~5개 메시지 정도 나눴으면 충분하며, 반복되기 전에 짧게 끝내거나 연상되는 다른 일상 주제로 가볍게 넘어간다.";
+  const candidateTargets = threadMessages.slice(-8).map((r) => {
     const p = context.profileMap.get(r.member_id);
     return `[${r.id}] ${p?.nickname || "회원"}: ${String(r.content || "").slice(0, 300)}`;
   }).join("\n");
+  const recentThreadMessages = threadMessages.slice(-5);
+  const recentQuestionCount = recentThreadMessages.filter((r) => /[?？]\s*$/.test(String(r.content || "").trim())).length;
+  const recentLongCount = recentThreadMessages.filter((r) => String(r.content || "").trim().length >= 90).length;
+  const autonomousFatigue = thread.thread_type === "autonomous"
+    ? clamp((Number(thread.turn_count || 0) - 1) / 4, 0, 1)
+    : 0;
 
   const prompt = `
 너는 VIP 그룹채팅 안에서 '${speaker.profile?.nickname || speaker.character_name}' 한 사람의 '다음 메시지 1개'만 만든다.
@@ -873,8 +993,13 @@ ${characterPromptBlock(speaker)}
 턴=${thread.turn_count}/${thread.min_turns}~${thread.max_turns}
 대화 에너지=${thread.energy}
 열린 질문=${thread.open_question}
+최근 5개 중 질문형 메시지 수=${recentQuestionCount}
+최근 5개 중 90자 이상 장문 수=${recentLongCount}
+주제 피로도=${autonomousFatigue.toFixed(2)}
 요약=${thread.summary || "아직 없음"}
 ${topic ? `주제=${topic.category} / ${topic.title} / ${topic.prompt_seed}` : "주제=실제회원 대화에서 자연스럽게 결정"}
+
+${eventContext ? `[현재 이벤트 정보]\n${eventContext.text}\n` : ""}
 
 [이 캐릭터가 기억하는 관련 사실]
 ${memoryPrompt(memories)}
@@ -893,6 +1018,14 @@ ${candidateTargets || "아직 없음"}
 - reply_to_message_id는 위 최근 채팅에 실제 존재하는 ID 하나를 고르거나, 새 화제를 여는 첫말이면 null로 둔다.
 - 같은 대화 가지의 '바로 전 말'에 답할 수도 있고, 2~5개 전의 다른 사람 말에 뒤늦게 답해도 된다.
 - 실제회원의 최근 말이 아직 충분히 반응받지 못했다면 그 말을 우선한다.
+- 실제회원이 질문했다면 첫 문장에서 그 질문에 직접 답한다. 질문과 관계없는 자기 근황으로 회피하지 않는다.
+- 질문을 던져야만 대화가 이어진다고 생각하지 않는다. 답/리액션/경험만 말하고 끝내도 자연스럽다.
+- 최근 질문형 메시지가 2개 이상이면 이번 메시지는 질문으로 끝내지 않는다.
+- 최근 장문이 2개 이상이면 이번 메시지는 짧은 한 문장으로 쓴다.
+- 자율대화에서 turn_count가 3 이상이면 '더 깊게 설명'보다 짧은 반응/농담/연상 화제 전환/자연스러운 종료를 우선한다.
+- 자율대화에서 turn_count가 4 이상이면 정말 열린 질문에 답해야 하는 경우가 아니면 should_continue=false를 우선한다.
+- 같은 팁, 같은 재료, 같은 수치, 같은 방법을 표현만 바꿔 다시 말하지 않는다.
+- 이벤트 진행 중이면 현재 이벤트 정보에 있는 자신의 실제 참가내용과 일치시킨다.
 - 구체적인 단어/행동/감정 하나를 잡고 이어간다.
 - 관계기억이 있으면 억지스럽지 않을 때만 '저번에 ~라고 했던 것 같은데'처럼 활용한다.
 - 기억에 없는 과거는 만들어내지 않는다.
@@ -945,7 +1078,75 @@ JSON 객체만 출력:
   };
 }
 
+function normalizeChatText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function tokenSet(value) {
+  return new Set(normalizeChatText(value).split(/\s+/).filter((v) => v.length >= 2));
+}
+
+function jaccardSimilarity(a, b) {
+  const aa = tokenSet(a);
+  const bb = tokenSet(b);
+  if (!aa.size || !bb.size) return 0;
+  let intersection = 0;
+  for (const token of aa) if (bb.has(token)) intersection += 1;
+  const union = aa.size + bb.size - intersection;
+  return union ? intersection / union : 0;
+}
+
+function trimChatMessage(value, limit) {
+  const text = String(value || "").trim().replace(/\s+/g, " ");
+  if (text.length <= limit) return text;
+  const clipped = text.slice(0, limit);
+  const punctuation = Math.max(
+    clipped.lastIndexOf("."),
+    clipped.lastIndexOf("!"),
+    clipped.lastIndexOf("?"),
+    clipped.lastIndexOf("~")
+  );
+  if (punctuation >= Math.floor(limit * 0.55)) return clipped.slice(0, punctuation + 1).trim();
+  const lastSpace = clipped.lastIndexOf(" ");
+  const cutAt = lastSpace >= Math.floor(limit * 0.6) ? lastSpace : limit;
+  return `${clipped.slice(0, cutAt).trim()}…`;
+}
+
+async function isRepetitiveAutonomousTurn(db, threadId, message) {
+  const { data } = await db.from("group_messages")
+    .select("content")
+    .eq("ai_thread_id", threadId)
+    .order("created_at", { ascending: false })
+    .limit(4);
+  const recent = data || [];
+  return recent.some((row) => jaccardSimilarity(row.content, message) >= 0.62);
+}
+
 async function publishGeneratedTurn(db, thread, speaker, generated, settings, now = new Date(), { scheduleNext = true } = {}) {
+  const maxChars = thread.thread_type === "autonomous" ? 120
+    : ["event_start","event_winner","welcome","celebration"].includes(thread.thread_type) ? 140
+      : 220;
+  generated.message = trimChatMessage(generated.message, maxChars);
+
+  if (thread.thread_type === "autonomous" && await isRepetitiveAutonomousTurn(db, thread.id, generated.message)) {
+    await db.from("ai_conversation_threads").update({
+      status: "completed",
+      completed_at: now.toISOString(),
+      last_activity_at: now.toISOString(),
+      energy: Math.min(Number(thread.energy || 0.5), 0.18),
+      summary: generated.summary || thread.summary || "같은 내용 반복을 감지해 자연스럽게 대화를 종료했습니다.",
+    }).eq("id", thread.id);
+    await db.from("ai_turn_queue").update({
+      status: "cancelled",
+      processed_at: now.toISOString(),
+    }).eq("thread_id", thread.id).eq("status", "queued");
+    return { inserted: null, continueThread: false, provider: generated.provider, skipped: "topic_repetition" };
+  }
+
   const { data: inserted, error } = await db.from("group_messages").insert({
     room_id: AI_ROOM_ID,
     member_id: speaker.member_id,
@@ -992,9 +1193,15 @@ async function publishGeneratedTurn(db, thread, speaker, generated, settings, no
   });
 
   const nextTurnCount = Number(thread.turn_count || 0) + 1;
-  const mustContinue = nextTurnCount < Number(thread.min_turns || 3);
-  const mustStop = nextTurnCount >= Number(thread.max_turns || 10);
-  const continueThread = !mustStop && (mustContinue || generated.shouldContinue || generated.openQuestion) && generated.energy >= 0.2;
+  const configuredMax = Number(thread.max_turns || 10);
+  const effectiveMax = thread.thread_type === "autonomous" ? Math.min(configuredMax, 5) : configuredMax;
+  const mustContinue = nextTurnCount < Number(thread.min_turns || 2);
+  const mustStop = nextTurnCount >= effectiveMax;
+  const fatiguedAutonomous = thread.thread_type === "autonomous" && nextTurnCount >= 4;
+  const continueSignal = fatiguedAutonomous
+    ? (generated.openQuestion && generated.shouldContinue && generated.energy >= 0.72)
+    : (generated.shouldContinue || generated.openQuestion);
+  const continueThread = !mustStop && (mustContinue || continueSignal) && generated.energy >= 0.2;
 
   await db.from("ai_conversation_threads").update({
     last_message_id: inserted.id,
@@ -1018,6 +1225,12 @@ async function publishGeneratedTurn(db, thread, speaker, generated, settings, no
       priority,
       now,
     });
+  } else if (thread.thread_type === "autonomous") {
+    // 한 주제가 끝났으면 다음 자율 대화 판단을 1분 뒤 확실하게 열어둡니다.
+    await db.from("ai_community_state").update({
+      next_autonomous_at: new Date(now.getTime() + 60 * 1000).toISOString(),
+      updated_at: now.toISOString(),
+    }).eq("id", 1);
   }
   return { inserted, continueThread, provider: generated.provider };
 }
@@ -1070,7 +1283,7 @@ async function processTurn(db, turn, characters, settings, now = new Date()) {
     const generated = await generateTurn(db, thread, speaker, settings, context, turn.target_message_id);
     const published = await publishGeneratedTurn(db, thread, speaker, generated, settings, now, { scheduleNext: false });
     await db.from("ai_turn_queue").update({ status: "done", processed_at: now.toISOString() }).eq("id", turn.id);
-    if (published.continueThread) {
+    if (published.continueThread && published.inserted) {
       const kind = thread.thread_type === "autonomous" ? "continue" : thread.thread_type;
       const priority = thread.thread_type === "autonomous" ? 10 : 70;
       await queueTurn(db, thread.id, {
@@ -1081,7 +1294,13 @@ async function processTurn(db, turn, characters, settings, now = new Date()) {
         now,
       });
     }
-    return { action: "turn_published", speaker: speaker.profile?.nickname || speaker.character_name, threadId: thread.id, provider: published.provider };
+    return {
+      action: published.skipped ? "turn_skipped_repetitive" : "turn_published",
+      speaker: speaker.profile?.nickname || speaker.character_name,
+      threadId: thread.id,
+      provider: published.provider,
+      skipped: published.skipped || null,
+    };
   } catch (error) {
     console.error("V17.5 generate turn error:", error);
     const providerFailure = error instanceof AIProviderError || String(error?.code || "").startsWith("AI_PROVIDER") || String(error?.code || "").startsWith("AI_ALL_PROVIDERS");
@@ -1203,6 +1422,140 @@ async function startWelcomeThread(db, event, characters, settings, now = new Dat
   return selected.length;
 }
 
+
+async function startEventCommunityThread(db, communityEvent, characters, settings, now = new Date()) {
+  if (!communityEvent?.event_id) {
+    await db.from("ai_community_events").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", communityEvent.id);
+    return { started: 0, cancelled: true };
+  }
+
+  const { data: event } = await db.from("events")
+    .select("id,title,event_type,status,starts_at,ends_at")
+    .eq("id", communityEvent.event_id)
+    .maybeSingle();
+
+  if (!event) {
+    await db.from("ai_community_events").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", communityEvent.id);
+    return { started: 0, cancelled: true };
+  }
+
+  if (communityEvent.event_type === "event_start") {
+    if (event.status !== "active" || new Date(event.ends_at).getTime() <= now.getTime()) {
+      await db.from("ai_community_events").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", communityEvent.id);
+      return { started: 0, cancelled: true };
+    }
+
+    const { data: entries } = await db.from("event_entries")
+      .select("member_id")
+      .eq("event_id", event.id);
+    const participantIds = new Set((entries || []).map((row) => row.member_id));
+    const participantCharacters = characters.filter((c) => participantIds.has(c.member_id));
+
+    if (!participantCharacters.length) {
+      const ageMs = now.getTime() - new Date(communityEvent.created_at).getTime();
+      if (ageMs < 4 * 60 * 1000) return { started: 0, deferred: true };
+      await db.from("ai_community_events").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", communityEvent.id);
+      return { started: 0, cancelled: true };
+    }
+
+    const count = Math.min(participantCharacters.length, randInt(1, 2));
+    const selected = weightedSample(participantCharacters, count, (c) =>
+      Number(c.general_reply_rate || 10) * (0.7 + Number(c?.state?.social_energy ?? 55) / 120)
+    );
+    if (!selected.length) return { started: 0, deferred: true };
+
+    const thread = await insertThread(db, {
+      thread_type: "event_start",
+      source_event_id: event.id,
+      status: "active",
+      min_turns: selected.length,
+      max_turns: selected.length,
+      energy: 0.82,
+      open_question: false,
+      priority: 75,
+      title: `${event.title || "이벤트"} 참가 반응`,
+      summary: "현재 진행 중인 이벤트에 실제 참가한 캐릭터들이 자신의 선택과 느낌을 자연스럽게 말하는 대화다. 정답과 당첨 결과는 아직 모른다.",
+    });
+    await addParticipants(db, thread.id, selected);
+
+    const context = await recentChatContext(db, Number(settings.recent_context_messages || 36));
+    const firstSpeaker = selected[0];
+    try {
+      const generated = await generateTurn(db, thread, firstSpeaker, settings, context, null);
+      await publishGeneratedTurn(db, thread, firstSpeaker, generated, settings, now);
+    } catch (error) {
+      console.error("V17.7 event start chat error:", error);
+      if (error instanceof AIProviderError) {
+        await db.from("ai_conversation_threads").update({ status: "completed", completed_at: now.toISOString() }).eq("id", thread.id);
+        await logEngineEvent(db, { level: "error", category: error.code, provider: error.provider, message: error.message, meta: { thread_id: thread.id, event_id: event.id } });
+        return { started: 0, providerError: { code: error.code, message: error.message } };
+      }
+    }
+
+    await db.from("ai_community_events").update({ status: "done", processed_at: now.toISOString() }).eq("id", communityEvent.id);
+    return { started: selected.length, type: "event_start" };
+  }
+
+  if (communityEvent.event_type === "event_winner") {
+    const winnerId = communityEvent.member_id;
+    const { data: winner } = winnerId
+      ? await db.from("profiles").select("id,nickname,account_type,approval_status").eq("id", winnerId).maybeSingle()
+      : { data: null };
+
+    if (!winner) {
+      await db.from("ai_community_events").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", communityEvent.id);
+      return { started: 0, cancelled: true };
+    }
+
+    const others = characters.filter((c) => c.member_id !== winner.id);
+    const isHumanWinner = winner.account_type === "human";
+    const baseCount = isHumanWinner ? randInt(5, 8) : randInt(3, 5);
+    let selected = await selectHumanResponders(others, "celebration", Math.min(baseCount, others.length), now);
+
+    // AI 캐릭터가 당첨자면 축하가 이어진 뒤 본인도 놀람/감사 반응을 할 수 있게 참여시킨다.
+    const winnerCharacter = characters.find((c) => c.member_id === winner.id);
+    if (winnerCharacter && selected.length < 6) selected = [...selected, winnerCharacter];
+    if (!selected.length) {
+      await db.from("ai_community_events").update({ status: "done", processed_at: now.toISOString() }).eq("id", communityEvent.id);
+      return { started: 0, type: "event_winner" };
+    }
+
+    const thread = await insertThread(db, {
+      thread_type: "event_winner",
+      source_member_id: winner.id,
+      source_event_id: event.id,
+      status: "active",
+      min_turns: selected.length,
+      max_turns: selected.length,
+      energy: 0.96,
+      open_question: false,
+      priority: 100,
+      title: `${event.title || "이벤트"} 당첨 축하`,
+      summary: `${winner.nickname || "VIP 회원"}님이 방금 이벤트 당첨자로 발표됐다. 각자 다른 방식으로 자연스럽게 축하하며, 당첨자가 캐릭터라면 본인은 감사/놀람으로 반응한다.`,
+    });
+    await addParticipants(db, thread.id, selected);
+
+    const firstSpeaker = selected.find((c) => c.member_id !== winner.id) || selected[0];
+    const context = await recentChatContext(db, Number(settings.recent_context_messages || 36));
+    try {
+      const generated = await generateTurn(db, thread, firstSpeaker, settings, context, null);
+      await publishGeneratedTurn(db, thread, firstSpeaker, generated, settings, now);
+    } catch (error) {
+      console.error("V17.7 event winner chat error:", error);
+      if (error instanceof AIProviderError) {
+        await db.from("ai_conversation_threads").update({ status: "completed", completed_at: now.toISOString() }).eq("id", thread.id);
+        await logEngineEvent(db, { level: "error", category: error.code, provider: error.provider, message: error.message, meta: { thread_id: thread.id, event_id: event.id } });
+        return { started: 0, providerError: { code: error.code, message: error.message } };
+      }
+    }
+
+    await db.from("ai_community_events").update({ status: "done", processed_at: now.toISOString() }).eq("id", communityEvent.id);
+    return { started: selected.length, type: "event_winner" };
+  }
+
+  return { started: 0 };
+}
+
 async function countActiveAutonomousThreads(db) {
   const { count } = await db.from("ai_conversation_threads").select("id", { count: "exact", head: true })
     .eq("thread_type", "autonomous").eq("status", "active");
@@ -1220,7 +1573,7 @@ async function startAutonomousThread(db, characters, settings, now = new Date())
   if (state?.next_autonomous_at && new Date(state.next_autonomous_at).getTime() > now.getTime()) return 0;
   if (activeCount > 0 && Math.random() * 100 >= Number(settings.new_parallel_topic_chance || 32)) {
     await db.from("ai_community_state").update({
-      next_autonomous_at: new Date(now.getTime() + randInt(2, 5) * 60000).toISOString(), updated_at: now.toISOString(),
+      next_autonomous_at: new Date(now.getTime() + 60 * 1000).toISOString(), updated_at: now.toISOString(),
     }).eq("id", 1);
     return 0;
   }
@@ -1235,8 +1588,8 @@ async function startAutonomousThread(db, characters, settings, now = new Date())
 
   const thread = await insertThread(db, {
     thread_type: "autonomous", topic_id: topic.id, status: "active",
-    min_turns: Number(settings.autonomous_thread_min_turns || 4),
-    max_turns: Number(settings.autonomous_thread_max_turns || 12),
+    min_turns: Number(settings.autonomous_thread_min_turns || 2),
+    max_turns: Math.min(Number(settings.autonomous_thread_max_turns || 5), 5),
     energy: 0.78, open_question: false, priority: 10,
     title: `${topic.category} · ${topic.title}`,
   });
@@ -1260,7 +1613,7 @@ async function startAutonomousThread(db, characters, settings, now = new Date())
   }
 
   await db.from("ai_community_state").update({
-    next_autonomous_at: new Date(now.getTime() + randInt(Number(settings.autonomous_gap_min_minutes || 5), Number(settings.autonomous_gap_max_minutes || 11)) * 60000).toISOString(),
+    next_autonomous_at: new Date(now.getTime() + 60 * 1000).toISOString(),
     updated_at: now.toISOString(),
   }).eq("id", 1);
   return 1;
@@ -1284,6 +1637,32 @@ async function recoverStaleProcessingTurns(db, now = new Date()) {
 }
 
 async function closeStaleThreads(db, now = new Date()) {
+  // 자율대화가 active인데 다음 큐가 사라진 경우 45분 동안 방을 막지 않도록 빠르게 복구합니다.
+  const orphanCutoff = new Date(now.getTime() - 4 * 60000).toISOString();
+  const { data: candidates } = await db.from("ai_conversation_threads")
+    .select("id")
+    .eq("thread_type", "autonomous")
+    .eq("status", "active")
+    .lt("last_activity_at", orphanCutoff);
+  const candidateIds = (candidates || []).map((r) => r.id);
+  if (candidateIds.length) {
+    const { data: pending } = await db.from("ai_turn_queue")
+      .select("thread_id")
+      .in("thread_id", candidateIds)
+      .in("status", ["queued", "processing"]);
+    const pendingIds = new Set((pending || []).map((r) => r.thread_id));
+    const orphanIds = candidateIds.filter((id) => !pendingIds.has(id));
+    if (orphanIds.length) {
+      await db.from("ai_conversation_threads").update({
+        status: "completed", completed_at: now.toISOString(), last_activity_at: now.toISOString(),
+      }).in("id", orphanIds);
+      await db.from("ai_community_state").update({
+        next_autonomous_at: new Date(now.getTime() + 60 * 1000).toISOString(), updated_at: now.toISOString(),
+      }).eq("id", 1);
+      await logEngineEvent(db, { level: "warning", category: "AUTONOMOUS_ORPHAN_RECOVERED", message: `다음 턴이 사라진 자율대화 ${orphanIds.length}건을 복구했습니다.`, meta: { thread_ids: orphanIds } });
+    }
+  }
+
   const cutoff = new Date(now.getTime() - 45 * 60000).toISOString();
   const { data: stale } = await db.from("ai_conversation_threads").select("id").eq("status", "active").lt("last_activity_at", cutoff);
   const ids = (stale || []).map((r) => r.id);
@@ -1315,16 +1694,17 @@ export async function runAiCommunityTick({ source = "cron", bypassMinuteClaim = 
       if (!error && !claimed) return { success: true, reason: "already_ran_this_minute" };
     }
 
+    const characters = await loadCharacters(db, now);
+    if (!characters.length) return { success: true, reason: "ai_accounts_not_ready" };
+    await refreshIdleEnergy(db, characters, now);
+    // 공급자가 잠깐 멈춰도 큐/스레드 복구는 계속 수행합니다.
+    await recoverStaleProcessingTurns(db, now);
+    await closeStaleThreads(db, now);
+
     const providerState = await hasUsableProvider(db, now);
     if (!providerState.ok) {
       return { success: false, reason: providerState.reason, error: "현재 사용 가능한 AI 공급자가 없습니다." };
     }
-
-    const characters = await loadCharacters(db, now);
-    if (!characters.length) return { success: true, reason: "ai_accounts_not_ready" };
-    await refreshIdleEnergy(db, characters, now);
-    await recoverStaleProcessingTurns(db, now);
-    await closeStaleThreads(db, now);
 
     // 1순위: 실제회원 새 메시지
     const humanInfo = await findLatestUnhandledHuman(db);
@@ -1334,7 +1714,23 @@ export async function runAiCommunityTick({ source = "cron", bypassMinuteClaim = 
       return { success: true, action: "human_priority", source, ...result };
     }
 
-    // 2순위: 시간이 된 '다음 턴' 1개. 문장은 지금 생성한다.
+    // 2순위: 이벤트 참가 반응 / 당첨 축하.
+    // 실제회원 새 메시지보다는 뒤지만, 일반 자율대화보다 앞에서 처리한다.
+    const { data: eventCommunity } = await db.from("ai_community_events").select("*")
+      .in("event_type", ["event_winner", "event_start"])
+      .eq("status", "pending")
+      .order("created_at", { ascending: true }).limit(1).maybeSingle();
+    if (eventCommunity) {
+      const eventResult = await startEventCommunityThread(db, eventCommunity, characters, settings, now);
+      if (eventResult?.providerError) {
+        return { success: false, action: "event_community_failed", source, ...eventResult.providerError };
+      }
+      if (!eventResult?.deferred) {
+        return { success: true, action: eventResult?.type || "event_community", source, ...eventResult };
+      }
+    }
+
+    // 3순위: 시간이 된 '다음 턴' 1개. 문장은 지금 생성한다.
     const due = await getDueTurn(db);
     if (due) {
       const result = await processTurn(db, due, characters, settings, now);
@@ -1342,7 +1738,7 @@ export async function runAiCommunityTick({ source = "cron", bypassMinuteClaim = 
       return { success: true, source, ...result };
     }
 
-    // 3순위: 신규 실제회원 환영
+    // 4순위: 신규 실제회원 환영
     const { data: welcome } = await db.from("ai_community_events").select("*")
       .eq("event_type", "member_join").eq("status", "pending")
       .order("created_at", { ascending: true }).limit(1).maybeSingle();
@@ -1351,11 +1747,11 @@ export async function runAiCommunityTick({ source = "cron", bypassMinuteClaim = 
       return { success: true, action: "welcome_thread", queued, source };
     }
 
-    // 4순위: 사람이 조용할 때 새 일상대화 가지 시작. 기존 가지가 살아 있어도 제한적으로 병렬 허용.
+    // 5순위: 사람이 조용할 때 새 일상대화 가지 시작. 기존 가지가 살아 있어도 제한적으로 병렬 허용.
     const started = await startAutonomousThread(db, characters, settings, now);
     return { success: true, action: started ? "autonomous_thread_started" : "idle", started, source };
   } catch (error) {
-    console.error("AI COMMUNITY V17.5 ERROR:", error);
+    console.error("AI COMMUNITY V17.7 ERROR:", error);
     return { success: false, error: error?.message || "AI 커뮤니티 엔진 오류" };
   }
 }
