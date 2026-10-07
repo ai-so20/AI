@@ -1091,6 +1091,13 @@ export default function Home() {
   }, [user, profile]);
 
   async function loadAutoEvents() {
+    /* V25 EVENT RUNTIME */
+    try {
+      await fetch("/api/event-runtime", { method: "POST", cache: "no-store" });
+    } catch (runtimeError) {
+      console.warn("이벤트 런타임 동기화 오류:", runtimeError);
+    }
+
     const { data, error } = await supabase.rpc("get_auto_events");
 
     if (error) {
