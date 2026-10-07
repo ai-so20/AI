@@ -35,3 +35,5 @@ jobs:
             git commit -m "fix: restore stock movement and persistent AI chart"
             git push
           fi
+
+# V30 trigger
