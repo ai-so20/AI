@@ -522,14 +522,22 @@ export default function Home() {
       if (mineError) console.error("AI PROCESS 내 세션 조회 오류:", mineError);
       if (publicError) console.error("AI PROCESS 공개 현황 조회 오류:", publicError);
 
-      const rows = Array.isArray(mineRows) ? mineRows : [];
+      const directRows = Array.isArray(mineRows) ? mineRows : [];
+      const publicList = Array.isArray(publicRows) ? publicRows : [];
+      const publicMine = publicList
+        .filter((row) => row.user_id === user.id)
+        .map((row) => ({ ...row, id: row.id || row.process_id }));
+      const rows = directRows.length ? directRows : publicMine;
       setAiSessions(rows);
       const preferredId = aiSelectedProcessId && rows.some((row) => row.id === aiSelectedProcessId)
         ? aiSelectedProcessId
         : (rows.find((row) => row.status === "running")?.id || rows[0]?.id || "");
       if (preferredId !== aiSelectedProcessId) setAiSelectedProcessId(preferredId);
-      setAiSession(rows.find((row) => row.id === preferredId) || null);
-      if (needPublicSessions) setAiPublicSessions(publicRows || []);
+      const selected = rows.find((row) => row.id === preferredId)
+        || publicMine.find((row) => row.status === "running")
+        || null;
+      setAiSession(selected);
+      if (needPublicSessions) setAiPublicSessions(publicList);
     } finally {
       if (needPublicSessions) setAiPublicLoading(false);
     }
@@ -2856,7 +2864,7 @@ export default function Home() {
                 <section className="vip-member-workspace vip-master-member-workspace">
                   <div className="vip-member-panel vip-member-chart-card">
                     <div className="vip-member-panel-head">
-                      <div><span>PERFORMANCE</span><strong>수익 그래프</strong></div>
+                      <div><span>자산 흐름</span><strong>수익 그래프</strong></div>
                       <button type="button" onClick={() => changeTab("ai")}>최근 기록 ›</button>
                     </div>
                     <div className="vip-member-chart-meta">
@@ -3307,8 +3315,8 @@ export default function Home() {
                 <section className="ai-v2-hero">
                   <div className="ai-v2-hero-copy">
                     <div className="ai-v2-eyebrow"><span className="ai-v2-live-dot"></span> AI PROCESS · LIVE</div>
-                    <h2>내 AI PROCESS 운용 현황</h2>
-                    <p>내 자산 변화와 실제 시장 연동 기록, 현재 진행 PROCESS를 한 화면에서 확인하세요.</p>
+                    <h2>내 AI PROCESS</h2>
+                    <p>현재 평가금액과 자산 흐름, 시장 연동 상태를 확인하세요.</p>
                     <div className="ai-v2-status-row">
                       <span className={`ai-v2-status ${aiSession?.status === "running" ? "is-running" : "is-done"}`}>{aiSession?.status === "running" ? "진행 중" : "대기"}</span>
                       <span>다음 PROCESS 갱신 <b>{aiCountdown}</b></span>
@@ -3471,7 +3479,7 @@ export default function Home() {
 
                   <section className="ai-v2-panel ai-v2-market-panel">
                     <div className="ai-v2-panel-head">
-                      <div><span>LIVE MARKET</span><strong>5분 시장 현황</strong></div>
+                      <div><span>실시간 시장</span><strong>5분 시장 현황</strong></div>
                       <div className="ai-v2-market-count">8 ASSETS</div>
                     </div>
                     <div className="ai-v2-market-grid">
@@ -3491,7 +3499,7 @@ export default function Home() {
 
                 <section className="ai-v2-panel ai-v2-log-panel">
                   <div className="ai-v2-panel-head">
-                    <div><span>PROCESS HISTORY</span><strong>최근 AI PROCESS 연동 기록</strong></div>
+                    <div><span>운용 기록</span><strong>최근 AI PROCESS 연동 기록</strong></div>
                     <div className="ai-v2-history-count">최근 {aiRecentResults.length}건</div>
                   </div>
                   <div className="ai-v2-history-list">
