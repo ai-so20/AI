@@ -126,6 +126,7 @@ export default function Home() {
   const [aiSimError, setAiSimError] = useState("");
   const [aiNextUpdate, setAiNextUpdate] = useState(null);
   const [aiCountdown, setAiCountdown] = useState("05:00");
+  const [aiChartHover, setAiChartHover] = useState(null);
 
   const messagesRef = useRef(null);
   const groupMessagesRef = useRef(null);
@@ -134,6 +135,7 @@ export default function Home() {
   const privateBottomRef = useRef(null);
   const groupEmojiRef = useRef(null);
   const privateEmojiRef = useRef(null);
+  const aiSimRequestSeq = useRef(0);
 
   const AI_START_MONEY = 5000000;
   const AI_REFRESH_MS = 60 * 1000;
@@ -581,8 +583,9 @@ export default function Home() {
   }
 
   async function updateAiSimulation() {
-    if (!user || aiSimLoading) return;
+    if (!user) return;
 
+    const requestId = ++aiSimRequestSeq.current;
     setAiSimLoading(true);
     setAiSimError("");
 
@@ -654,6 +657,8 @@ export default function Home() {
       const totalProfit = portfolioValue - startMoney;
       const totalReturn = startMoney > 0 ? (totalProfit / startMoney) * 100 : 0;
 
+      if (requestId !== aiSimRequestSeq.current) return;
+
       setAiSim({
         startedAt: aiSession?.started_at || marketResult.updatedAt,
         durationHours: Number(aiSession?.duration_hours || 24),
@@ -674,7 +679,7 @@ export default function Home() {
       console.error(error);
       setAiSimError(error.message || "시장 결과 분석 중 오류가 발생했습니다.");
     } finally {
-      setAiSimLoading(false);
+      if (requestId === aiSimRequestSeq.current) setAiSimLoading(false);
     }
   }
 
@@ -3401,13 +3406,42 @@ export default function Home() {
                               cy={node.y}
                               r={node.delta ? 5.2 : 3.2}
                               className={Number(node.delta || 0) < 0 ? "ai-v2-point is-loss" : Number(node.delta || 0) > 0 ? "ai-v2-point is-profit" : "ai-v2-point"}
-                            >
-                              <title>{`${aiTime(node.at)} · ${node.name || "AI PROCESS"} · ${aiSignedKrw(node.delta || 0)} · ${aiKrw(node.value)}`}</title>
-                            </circle>
+                              onMouseEnter={() => setAiChartHover(node)}
+                              onMouseLeave={() => setAiChartHover(null)}
+                              onClick={() => setAiChartHover((current) => current?.at === node.at ? null : node)}
+                              style={{cursor:"pointer"}}
+                            />
                           ))}
                         </svg>
                       ) : (
                         <div className="ai-v2-chart-empty">첫 5분 시장 구간을 기록하고 있습니다.</div>
+                      )}
+                      {aiChartHover && (
+                        <div
+                          className="ai-v2-custom-tooltip"
+                          style={{
+                            position:"absolute",
+                            left:`${Math.min(88, Math.max(12, (Number(aiChartHover.x || 0) / aiChart.width) * 100))}%`,
+                            top:`${Math.min(82, Math.max(12, (Number(aiChartHover.y || 0) / aiChart.height) * 100))}%`,
+                            transform:"translate(-50%,-118%)",
+                            zIndex:5,
+                            minWidth:"150px",
+                            padding:"9px 10px",
+                            borderRadius:"10px",
+                            background:"rgba(39,31,25,.95)",
+                            border:"1px solid rgba(224,188,128,.34)",
+                            boxShadow:"0 8px 22px rgba(43,28,18,.24)",
+                            color:"#fff8ef",
+                            pointerEvents:"none",
+                            fontSize:"10px",
+                            lineHeight:1.45,
+                            whiteSpace:"nowrap"
+                          }}
+                        >
+                          <b style={{display:"block",marginBottom:"3px"}}>{aiChartHover.name || "AI PROCESS"}</b>
+                          <span>{aiTime(aiChartHover.at)} · {aiSignedKrw(aiChartHover.delta || 0)}</span><br/>
+                          <span>평가금액 {aiKrw(aiChartHover.value)}</span>
+                        </div>
                       )}
                       <div className="ai-v2-chart-scale ai-v2-chart-scale-top">{aiKrw(aiChart.max)}</div>
                       <div className="ai-v2-chart-scale ai-v2-chart-scale-bottom">{aiKrw(aiChart.min)}</div>
