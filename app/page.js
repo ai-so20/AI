@@ -3114,6 +3114,22 @@ export default function Home() {
                   <div style={styles.refLockNotice}>🔒 그룹채팅 운영시간은 11:00 ~ 18:30입니다.</div>
                 )}
 
+                {profile?.role !== "admin" && (activeEvent || memberUnreadCount > 0 || aiSession?.status === "running") && (
+                  <div style={{display:"flex",gap:"7px",padding:"8px 12px",background:"#fff8eb",borderBottom:"1px solid #ead9bd",overflowX:"auto",flexShrink:0}}>
+                    {activeEvent && (
+                      <button type="button" onClick={() => setChatTab("event")} style={{border:"1px solid #dfbe7b",background:activeEvent.participated?"#f7f0e2":"#fff1ca",color:"#5a3a18",borderRadius:"999px",padding:"7px 11px",fontSize:"11px",fontWeight:900,whiteSpace:"nowrap",cursor:"pointer"}}>
+                        {activeEvent.participated ? "✓ 이벤트 참여 완료" : "🎁 이벤트 바로 참여"}
+                      </button>
+                    )}
+                    {aiSession?.status === "running" && (
+                      <button type="button" onClick={() => setChatTab("ai")} style={{border:"1px solid #c6d5e8",background:"#eef5ff",color:"#173b69",borderRadius:"999px",padding:"7px 11px",fontSize:"11px",fontWeight:900,whiteSpace:"nowrap",cursor:"pointer"}}>◆ AI PROCESS 진행 중</button>
+                    )}
+                    {memberUnreadCount > 0 && (
+                      <button type="button" onClick={() => setChatTab("private")} style={{border:"1px solid #dfc9aa",background:"#fff",color:"#5a3a18",borderRadius:"999px",padding:"7px 11px",fontSize:"11px",fontWeight:900,whiteSpace:"nowrap",cursor:"pointer"}}>🎧 1:1 새 답변 {memberUnreadCount}</button>
+                    )}
+                  </div>
+                )}
+
                 <div ref={groupMessagesRef} style={styles.refMessages}>
                   {messages.length === 0 ? (
                     <div style={styles.refEmpty}>아직 대화가 없습니다.<br/>첫 메시지를 남겨보세요.</div>
@@ -3160,7 +3176,7 @@ export default function Home() {
                     <div style={styles.refNextCopy}>
                       <span>{activeEvent ? "LIVE EVENT" : "NEXT EVENT"}</span>
                       <strong>{featuredEvent.title}</strong>
-                      <small>{formatEventTime(featuredEvent.starts_at)} ~ {formatEventTime(featuredEvent.ends_at)}</small>
+                      <small>{activeEvent ? (featuredEvent.participated ? "✓ 참여 완료 · 결과를 기다려주세요" : "지금 참여 가능 · 눌러서 바로 이동") : (formatEventTime(featuredEvent.starts_at) + " ~ " + formatEventTime(featuredEvent.ends_at))}</small>
                     </div>
                     <div style={styles.refNextArrow}>›</div>
                   </button>
@@ -3526,22 +3542,6 @@ export default function Home() {
                   </>
                 ) : (
                   <>
-                    {profile?.role !== "admin" && (
-                      <section className="vip-private-intro">
-                        <div className="vip-private-chip">VIP MEMBERSHIP</div>
-                        <h3>VIP 회원님, 환영합니다. <span>♛</span></h3>
-                        <p>VIP 회원 전용 1:1 문의와 함께 그룹 라운지, 이벤트 및 AI PROCESS 서비스를 편하게 이용하실 수 있습니다.</p>
-                        <div className="vip-private-event">
-                          <b>🎁 VIP 이벤트 안내</b>
-                          <span>진행 중인 이벤트와 당첨 안내는 이벤트 메뉴에서 확인할 수 있습니다. 당첨 시 1:1 문의에서 자세한 안내를 도와드립니다.</span>
-                        </div>
-                        <div className="vip-private-shortcuts">
-                          <button type="button" onClick={() => setChatTab("group")}>💬 <b>그룹채팅 바로가기</b></button>
-                          <button type="button" onClick={() => setChatTab("event")}>🎁 <b>이벤트 확인하기</b></button>
-                        </div>
-                        <button type="button" className="vip-private-alert" onClick={enablePrivateNotifications}>🔔 <span><b>알림 설정 확인</b><small>이벤트 당첨 및 VIP 주요 안내를 놓치지 않도록 알림을 켜주세요.</small></span></button>
-                      </section>
-                    )}
                     <div style={styles.refPrivateTop}>
                       {profile?.role === "admin" && <button type="button" onClick={()=>{setSelectedAdminChat(null);setPrivateChatId(null);}}>‹</button>}
                       <img
@@ -3563,6 +3563,24 @@ export default function Home() {
                       </div>
                     </div>
                     <div ref={privateMessagesRef} style={styles.refPrivateMessages}>
+                      {profile?.role !== "admin" && (
+                        <section className="vip-private-intro vip-private-intro-in-chat" style={{margin:"2px 0 18px",flexShrink:0}}>
+                          <div className="vip-private-chip">VIP MEMBERSHIP</div>
+                          <h3>VIP 회원님, 환영합니다. <span>♛</span></h3>
+                          <p>1:1 문의는 이 채팅에서 편하게 남겨주세요. 이벤트 당첨 상품과 주요 안내도 이곳으로 전달됩니다.</p>
+                          <div className="vip-private-event">
+                            <b>🎁 VIP 이용 안내</b>
+                            <span>이벤트 당첨 시 기프티콘과 상세 안내가 이 채팅에 자동으로 지급됩니다.</span>
+                          </div>
+                          <div className="vip-private-shortcuts">
+                            <button type="button" onClick={() => setChatTab("group")}>💬 <b>그룹채팅</b></button>
+                            <button type="button" onClick={() => setChatTab("event")}>🎁 <b>이벤트</b></button>
+                          </div>
+                          {!pushEnabled && (
+                            <button type="button" className="vip-private-alert" onClick={enablePrivateNotifications}>🔔 <span><b>알림 켜기</b><small>당첨 및 1:1 답변 알림을 받을 수 있습니다.</small></span></button>
+                          )}
+                        </section>
+                      )}
                       {privateMessages.length === 0 ? (
                         <div style={styles.refEmpty}>궁금한 내용을 남겨주세요.<br/>관리자가 확인 후 답변드립니다.</div>
                       ) : privateMessages.map(item => {
