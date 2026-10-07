@@ -100,6 +100,17 @@ function pairIds(a, b) {
   return String(a) < String(b) ? [a, b] : [b, a];
 }
 
+function directNicknameCallReply(character, text) {
+  const nickname = String(character?.profile?.nickname || character?.character_name || "").trim();
+  if (!nickname) return null;
+  const raw = String(text || "").trim();
+  if (!raw.includes(nickname)) return null;
+  const remainder = raw.replaceAll(nickname, "").replace(/[@?？！!~ㅎㅎㅋ\s]/g, "").trim();
+  if (remainder.length > 10) return null;
+  const choices = ["네?", "넹?", "왜요?", "무슨 일이져?", "불렀나요?", "네 ㅋㅋ", "저요?", "여기 있어요ㅎㅎ"];
+  return choices[randInt(0, choices.length - 1)];
+}
+
 function detectSituation(text) {
   const value = String(text || "").toLowerCase();
   const lossWords = [
@@ -495,6 +506,9 @@ const COMMON_PROMPT = `
 - 한 사람이 방금 충분히 답했으면 다음 캐릭터는 설명을 덧붙이기보다 짧게 받거나 침묵하는 쪽을 우선한다.
 - "여러분?", "계세요?", "왜 아무도 답 안 해요" 같은 방 전체 호출은 새 주제로 해석하지 말고 즉시 존재 반응을 한다.
 - 사람 단톡은 모든 메시지를 설명으로 완결하지 않는다. 짧은 감탄, 맞장구, 한마디 경험, 가벼운 반대가 섞여야 한다.
+- 한 주제에서 한 캐릭터가 한 번만 말하고 사라지지 않는다. 몇 명이 대화를 이어가다가 누군가는 조용해지고, 다른 캐릭터가 중간에 합류하며, 먼저 말했던 캐릭터가 다시 끼어들 수 있다.
+- 같은 캐릭터가 한 주제에서 2~4번 등장해도 자연스럽다. 단, 모든 캐릭터가 순번처럼 돌아가며 한마디씩 하는 구조는 피한다.
+- 누군가 캐릭터 닉네임을 직접 부르면 그 캐릭터가 먼저 '네?', '왜요?', '불렀나요?' 같은 짧은 존재 반응을 할 수 있다.
 - 이벤트 참여 중에는 자신이 실제로 제출한 선택만 말할 수 있고, 서버 정답이나 당첨 결과를 미리 아는 척하지 않는다.
 - 당첨 발표 뒤에는 똑같은 '축하합니다'만 복사하지 말고 짧은 감탄, 농담, 부러움, 축하를 각자 다르게 표현한다.
 - 민감정보(전화번호, 계좌, 주소, 비밀번호, 인증번호 등)는 장기기억으로 저장하지 않는다.
@@ -1693,7 +1707,7 @@ async function publishGeneratedTurn(db, thread, speaker, generated, settings, no
   } else if (thread.thread_type === "autonomous") {
     // 한 주제가 끝났으면 다음 자율 대화 판단을 1분 뒤 확실하게 열어둡니다.
     await db.from("ai_community_state").update({
-      next_autonomous_at: new Date(now.getTime() + 60 * 1000).toISOString(),
+      next_autonomous_at: new Date(now.getTime() + randInt(5, 10) * 60 * 1000).toISOString(),
       updated_at: now.toISOString(),
     }).eq("id", 1);
   }
@@ -1743,7 +1757,7 @@ async function processTurn(db, turn, characters, settings, now = new Date()) {
       }).eq("id", thread.id);
       if (thread.thread_type === "autonomous") {
         await db.from("ai_community_state").update({
-          next_autonomous_at: new Date(now.getTime() + 60 * 1000).toISOString(),
+          next_autonomous_at: new Date(now.getTime() + randInt(5, 10) * 60 * 1000).toISOString(),
           updated_at: now.toISOString(),
         }).eq("id", 1);
       }
@@ -1819,6 +1833,9 @@ async function startHumanThread(db, info, characters, settings, now = new Date()
   if (mentioned) selected = [mentioned, ...selected.filter((c) => c.member_id !== mentioned.member_id)].slice(0, count);
   if (!selected.length) return { scheduled: 0, situation };
 
+  const directCallText = mentioned ? directNicknameCallReply(mentioned, info.latest.content) : null;
+  if (directCallText) selected = [mentioned];
+
   await markHumanHandled(db, [info.latest]);
   await postponeAutonomousTurns(db, now);
 
@@ -1843,7 +1860,14 @@ async function startHumanThread(db, info, characters, settings, now = new Date()
   let prepared = [];
   let provider = "local";
 
-  if (intent !== "other" || situation !== "general") {
+  if (directCallText && mentioned) {
+    prepared = [{
+      member_id: mentioned.member_id,
+      message: styleLocalText(mentioned, directCallText),
+      act: "answer",
+      reply_to_message_id: info.latest.id,
+    }];
+  } else if (intent !== "other" || situation !== "general") {
     const effectiveIntent = situation === "celebration" ? "celebration" : situation === "loss" ? "loss" : intent;
     prepared = selected.map((c) => ({
       member_id: c.member_id,
@@ -2001,7 +2025,7 @@ async function startAutonomousThread(db, characters, settings, now = new Date())
 
   if (activeCount > 0 && Math.random() * 100 >= Number(settings.new_parallel_topic_chance || 32)) {
     await db.from("ai_community_state").update({
-      next_autonomous_at: new Date(now.getTime() + 60 * 1000).toISOString(),
+      next_autonomous_at: new Date(now.getTime() + randInt(5, 10) * 60 * 1000).toISOString(),
       updated_at: now.toISOString(),
     }).eq("id", 1);
     return 0;
@@ -2011,15 +2035,40 @@ async function startAutonomousThread(db, characters, settings, now = new Date())
   if (!topic) return 0;
   const availableCharacters = characters.filter((c) => availableNow(c, now));
   if (availableCharacters.length < 2) return 0;
-  const targetCount = Math.min(availableCharacters.length, randInt(2, 4));
+  const targetCount = Math.min(availableCharacters.length, randInt(2, 3));
   const selected = weightedSample(availableCharacters, targetCount, (c) => topicInterestWeight(c, topic));
   if (selected.length < 2) return 0;
 
-  const localScene = await localAutonomousMessages(db, selected, topic, now);
+  const participantRoster = [...selected];
+  const outsiders = availableCharacters.filter((c) => !selected.some((s) => s.member_id === c.member_id));
+  if (outsiders.length && Math.random() < 0.7) {
+    const newcomer = weightedSample(outsiders, 1, (c) => topicInterestWeight(c, topic))[0];
+    if (newcomer) participantRoster.push(newcomer);
+  }
+
+  const turnTarget = randInt(4, 8);
+  const conversationCast = [];
+  let lastId = null;
+  for (let i = 0; i < turnTarget; i += 1) {
+    let pool = participantRoster;
+    if (i < 2) pool = selected;
+    const candidates = pool.filter((c) => c.member_id !== lastId);
+    const chosen = weightedSample(candidates.length ? candidates : pool, 1, (c) => {
+      const base = topicInterestWeight(c, topic);
+      const previousTurns = conversationCast.filter((x) => x.member_id === c.member_id).length;
+      const repeatBias = previousTurns === 0 ? 1.35 : previousTurns === 1 ? 1.05 : 0.55;
+      return base * repeatBias;
+    })[0];
+    if (!chosen) break;
+    conversationCast.push(chosen);
+    lastId = chosen.member_id;
+  }
+
+  const localScene = await localAutonomousMessages(db, conversationCast, topic, now);
   const prepared = localScene.messages;
   if (!prepared.length) {
     await db.from("ai_community_state").update({
-      next_autonomous_at: new Date(now.getTime() + 60 * 1000).toISOString(),
+      next_autonomous_at: new Date(now.getTime() + randInt(5, 10) * 60 * 1000).toISOString(),
       updated_at: now.toISOString(),
     }).eq("id", 1);
     return 0;
@@ -2031,12 +2080,12 @@ async function startAutonomousThread(db, characters, settings, now = new Date())
     title: `${topic.category} · ${topic.title}`,
     summary: localScene.meta?.summary || "V18 로컬 오픈채팅 대화",
   });
-  await addParticipants(db, thread.id, selected);
+  await addParticipants(db, thread.id, participantRoster);
   await db.from("ai_topic_history").insert({ topic_id: topic.id, thread_id: thread.id, used_at: now.toISOString() });
 
   await publishPreparedNow(db, thread, characters, settings, prepared, now, "local");
   await db.from("ai_community_state").update({
-    next_autonomous_at: new Date(now.getTime() + 60 * 1000).toISOString(),
+    next_autonomous_at: new Date(now.getTime() + randInt(5, 10) * 60 * 1000).toISOString(),
     updated_at: now.toISOString(),
   }).eq("id", 1);
   return 1;
@@ -2080,7 +2129,7 @@ async function closeStaleThreads(db, now = new Date()) {
         status: "completed", completed_at: now.toISOString(), last_activity_at: now.toISOString(),
       }).in("id", orphanIds);
       await db.from("ai_community_state").update({
-        next_autonomous_at: new Date(now.getTime() + 60 * 1000).toISOString(), updated_at: now.toISOString(),
+        next_autonomous_at: new Date(now.getTime() + randInt(5, 10) * 60 * 1000).toISOString(), updated_at: now.toISOString(),
       }).eq("id", 1);
       await logEngineEvent(db, { level: "warning", category: "AUTONOMOUS_ORPHAN_RECOVERED", message: `다음 턴이 사라진 자율대화 ${orphanIds.length}건을 복구했습니다.`, meta: { thread_ids: orphanIds } });
     }
