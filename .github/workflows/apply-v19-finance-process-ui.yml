@@ -20,7 +20,7 @@ jobs:
         run: node scripts/apply-v19-finance-process-ui.mjs
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Build validation
         run: npm run build
