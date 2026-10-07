@@ -4,14 +4,14 @@ import { runAiCommunityTick } from "../../lib/ai-community";
 export const dynamic = "force-dynamic";
 
 const ASSETS = [
-  { symbol: "AAPL", name: "Apple", type: "stock" },
-  { symbol: "NVDA", name: "NVIDIA", type: "stock" },
-  { symbol: "MSFT", name: "Microsoft", type: "stock" },
-  { symbol: "TSLA", name: "Tesla", type: "stock" },
-  { symbol: "BTC/USD", name: "Bitcoin", type: "crypto" },
-  { symbol: "ETH/USD", name: "Ethereum", type: "crypto" },
-  { symbol: "SOL/USD", name: "Solana", type: "crypto" },
-  { symbol: "XRP/USD", name: "XRP", type: "crypto" },
+  { symbol: "AAPL", yahoo: "AAPL", name: "Apple", type: "stock" },
+  { symbol: "NVDA", yahoo: "NVDA", name: "NVIDIA", type: "stock" },
+  { symbol: "MSFT", yahoo: "MSFT", name: "Microsoft", type: "stock" },
+  { symbol: "TSLA", yahoo: "TSLA", name: "Tesla", type: "stock" },
+  { symbol: "BTC/USD", yahoo: "BTC-USD", name: "Bitcoin", type: "crypto" },
+  { symbol: "ETH/USD", yahoo: "ETH-USD", name: "Ethereum", type: "crypto" },
+  { symbol: "SOL/USD", yahoo: "SOL-USD", name: "Solana", type: "crypto" },
+  { symbol: "XRP/USD", yahoo: "XRP-USD", name: "XRP", type: "crypto" },
 ];
 
 const CACHE_KEY = "main";
@@ -32,7 +32,7 @@ function normalizeQuotes(data) {
     const row = data?.[asset.symbol];
     const price = Number(typeof row === "object" && row !== null ? row.price : row);
     if (!Number.isFinite(price) || price <= 0) return null;
-    return { ...asset, price };
+    return { symbol: asset.symbol, name: asset.name, type: asset.type, price };
   }).filter(Boolean);
 }
 
@@ -110,7 +110,7 @@ function jsonFromCache(cache, age, extra = {}) {
   });
 }
 
-async function fetchFreshMarket(cache, cacheAge, apiKey) {
+async function fetchTwelveData(cache, cacheAge, apiKey) {
   const url = new URL("https://api.twelvedata.com/price");
   url.searchParams.set("symbol", ASSETS.map((asset) => asset.symbol).join(","));
 
@@ -124,27 +124,89 @@ async function fetchFreshMarket(cache, cacheAge, apiKey) {
     });
     const data = await response.json().catch(() => null);
     if (!response.ok || data?.status === "error") {
-      const error = new Error(data?.message || "시장데이터 공급자가 일시적으로 응답하지 않습니다.");
-      error.status = response.status;
-      throw error;
+      throw new Error(data?.message || "Twelve Data 응답 오류");
     }
 
     const normalized = normalizeQuotes(data);
     if (normalized.length !== ASSETS.length) {
-      throw new Error("초기 시장가격 일부가 누락되었습니다. 잠시 후 다시 시도해주세요.");
+      throw new Error("Twelve Data 일부 종목 누락");
     }
 
-    const updatedAt = new Date().toISOString();
     return {
       success: true,
-      updatedAt,
+      updatedAt: new Date().toISOString(),
       quotes: withMarketChanges(normalized, cache?.payload, cacheAge),
       processRefreshSeconds: 60,
       marketRefreshSeconds: 300,
+      provider: "twelvedata",
     };
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function fetchYahooQuote(asset) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(asset.yahoo)}?interval=5m&range=1d`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 7000);
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        Accept: "application/json,text/plain,*/*",
+      },
+    });
+    if (!response.ok) throw new Error(`Yahoo ${asset.yahoo} ${response.status}`);
+    const data = await response.json().catch(() => null);
+    const result = data?.chart?.result?.[0];
+    const metaPrice = Number(result?.meta?.regularMarketPrice);
+    const closeValues = Array.isArray(result?.indicators?.quote?.[0]?.close)
+      ? result.indicators.quote[0].close
+      : [];
+    const lastClose = [...closeValues].reverse().find((value) => Number.isFinite(Number(value)) && Number(value) > 0);
+    const price = Number.isFinite(metaPrice) && metaPrice > 0 ? metaPrice : Number(lastClose);
+    if (!Number.isFinite(price) || price <= 0) throw new Error(`Yahoo ${asset.yahoo} price missing`);
+    return { symbol: asset.symbol, name: asset.name, type: asset.type, price };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchKeylessMarket(cache, cacheAge) {
+  const settled = await Promise.allSettled(ASSETS.map(fetchYahooQuote));
+  const quotes = settled
+    .filter((item) => item.status === "fulfilled")
+    .map((item) => item.value);
+
+  if (quotes.length !== ASSETS.length) {
+    const failed = settled.filter((item) => item.status === "rejected").length;
+    throw new Error(`무료 시장데이터 ${failed}개 종목 조회 실패`);
+  }
+
+  return {
+    success: true,
+    updatedAt: new Date().toISOString(),
+    quotes: withMarketChanges(quotes, cache?.payload, cacheAge),
+    processRefreshSeconds: 60,
+    marketRefreshSeconds: 300,
+    provider: "yahoo",
+  };
+}
+
+async function fetchFreshMarket(cache, cacheAge) {
+  const apiKey = process.env.TWELVE_DATA_API_KEY;
+
+  if (apiKey) {
+    try {
+      return await fetchTwelveData(cache, cacheAge, apiKey);
+    } catch (error) {
+      console.warn("Twelve Data failed, falling back to keyless provider:", error?.message || error);
+    }
+  }
+
+  return fetchKeylessMarket(cache, cacheAge);
 }
 
 export async function GET(request) {
@@ -157,10 +219,9 @@ export async function GET(request) {
     : Number.POSITIVE_INFINITY;
 
   // 일반 사용자 조회는 서버 엔진을 실행하지 않습니다.
-  // 캐시가 있으면 그대로 반환하여 수십 명이 동시에 접속해도 1분 엔진/RPC가 중복 호출되지 않습니다.
-  if (!engineMode && cache) {
+  if (!engineMode && cache && Number.isFinite(cacheAge) && cacheAge < MARKET_FRESH_MS) {
     return jsonFromCache(cache, cacheAge, {
-      stale: cacheAge >= MARKET_FRESH_MS,
+      stale: false,
       viewerMode: true,
     });
   }
@@ -172,36 +233,8 @@ export async function GET(request) {
     return jsonFromCache(cache, cacheAge, { stale: false, engineMode: true });
   }
 
-  const apiKey = process.env.TWELVE_DATA_API_KEY;
-  if (!apiKey) {
-    if (cache) {
-      if (engineMode) {
-        await runProcessEngine(db, cache.payload, cacheAge);
-        await runAiCommunityTick({ source: "market_cron" });
-      }
-      return jsonFromCache(cache, cacheAge, {
-        stale: true,
-        fallback: true,
-        marketSetupRequired: true,
-        engineMode,
-        error: "Vercel에 TWELVE_DATA_API_KEY를 추가해주세요.",
-      });
-    }
-    if (engineMode) await runAiCommunityTick({ source: "market_cron" });
-    return Response.json(
-      {
-        success: false,
-        marketSetupRequired: true,
-        error: "시장데이터 키가 없습니다. Vercel 환경변수에 TWELVE_DATA_API_KEY를 추가해주세요.",
-      },
-      { status: 503 }
-    );
-  }
-
   try {
-    // 캐시가 전혀 없는 최초 접속은 일반 사용자 요청에서도 1회 초기화할 수 있습니다.
-    // 이후 정상 운용 중 시장 갱신과 PROCESS 계산은 Cron(engine=1)이 담당합니다.
-    const payload = await fetchFreshMarket(cache, cacheAge, apiKey);
+    const payload = await fetchFreshMarket(cache, cacheAge);
     await saveCache(db, payload);
     if (engineMode) {
       await runProcessEngine(db, payload, 0);
@@ -209,6 +242,7 @@ export async function GET(request) {
     }
     return Response.json({ ...payload, cached: false, stale: false, engineMode });
   } catch (error) {
+    console.error("market provider error:", error);
     if (cache) {
       if (engineMode) {
         await runProcessEngine(db, cache.payload, cacheAge);
@@ -224,10 +258,7 @@ export async function GET(request) {
     return Response.json(
       {
         success: false,
-        error:
-          error?.name === "AbortError"
-            ? "시장데이터 연결 시간이 초과되었습니다."
-            : (error?.message || "시장데이터 연결에 실패했습니다."),
+        error: "시장 데이터를 갱신하는 중입니다. 잠시 후 다시 시도해주세요.",
       },
       { status: 503 }
     );
