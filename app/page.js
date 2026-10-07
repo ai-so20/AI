@@ -2565,7 +2565,29 @@ export default function Home() {
     const aiMarketRows = Array.isArray(aiSim?.marketRows) ? aiSim.marketRows : [];
     const aiRecentResults = Array.isArray(aiSim?.resultHistory) ? aiSim.resultHistory.slice(0, 14) : [];
     const aiCurrentStartMoney = aiStartMoney();
-    const aiChart = buildAiChartModel(aiSession?.status === "running" ? (aiSim?.history || []) : [], aiCurrentStartMoney);
+    const aiDisplayAmount = aiSession?.status === "running"
+      ? Number(aiSession?.current_amount || aiCurrentStartMoney)
+      : aiCurrentStartMoney;
+    const aiDisplayProfit = aiDisplayAmount - aiCurrentStartMoney;
+    const aiDisplayReturn = aiCurrentStartMoney > 0 ? (aiDisplayProfit / aiCurrentStartMoney) * 100 : 0;
+    const aiChartHistory = aiSession?.status === "running" ? [...(aiSim?.history || [])] : [];
+    if (aiSession?.status === "running") {
+      const lastPoint = aiChartHistory[aiChartHistory.length - 1];
+      const lastValue = Number(lastPoint?.value ?? aiCurrentStartMoney);
+      if (!Number.isFinite(lastValue) || Math.abs(lastValue - aiDisplayAmount) >= 0.005) {
+        const delta = aiDisplayAmount - (Number.isFinite(lastValue) ? lastValue : aiCurrentStartMoney);
+        aiChartHistory.push({
+          at: aiSession?.last_tick_at || aiSession?.updated_at || aiSim?.updatedAt || new Date().toISOString(),
+          value: aiDisplayAmount,
+          delta,
+          resultType: delta > 0 ? "profit" : delta < 0 ? "loss" : "wait",
+          symbol: aiSession?.last_asset_symbol || null,
+          name: aiSession?.last_asset_name || "현재 평가금액",
+          marketPct: Number(aiSession?.last_market_pct || 0),
+        });
+      }
+    }
+    const aiChart = buildAiChartModel(aiChartHistory, aiCurrentStartMoney);
     const aiLastResult = aiRecentResults[0] || null;
     const aiPositiveMarkets = aiMarketRows.filter((item) => Number(item.changePct) > 0).length;
     const aiNegativeMarkets = aiMarketRows.filter((item) => Number(item.changePct) < 0).length;
@@ -3268,9 +3290,9 @@ export default function Home() {
                   </div>
                   <div className="ai-v2-hero-result">
                     <span>현재 평가금액</span>
-                    <strong>{aiSession?.status === "running" ? aiKrw(aiSession?.current_amount || aiCurrentStartMoney) : "대기 중"}</strong>
-                    <em className={(aiSession?.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>
-                      {aiSession?.status === "running" ? `${aiSignedKrw(aiSession?.total_profit || 0)} · ${aiSignedPct(aiSession?.total_return || 0)}` : ""}
+                    <strong>{aiSession?.status === "running" ? aiKrw(aiDisplayAmount) : "대기 중"}</strong>
+                    <em className={aiDisplayProfit >= 0 ? "is-profit" : "is-loss"}>
+                      {aiSession?.status === "running" ? `${aiSignedKrw(aiDisplayProfit)} · ${aiSignedPct(aiDisplayReturn)}` : ""}
                     </em>
                     {aiLastResult && (
                       <small>최근 연동 · {aiLastResult.name} {aiSignedPct(aiLastResult.intervalPct)}</small>
@@ -3334,8 +3356,8 @@ export default function Home() {
 
                 <div className="ai-v2-summary-grid">
                   <div className="ai-v2-summary-card"><span>시작 운용금액</span><strong>{aiSession?.status === "running" ? aiKrw(aiCurrentStartMoney) : "대기"}</strong><small>프로세스 시작 기준</small></div>
-                  <div className="ai-v2-summary-card"><span>현재 평가금액</span><strong>{aiSession?.status === "running" ? aiKrw(aiSession?.current_amount || aiCurrentStartMoney) : "-"}</strong><small>1분 단위 현재금액 갱신</small></div>
-                  <div className="ai-v2-summary-card"><span>누적 손익</span><strong className={(aiSession?.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSession?.status === "running" ? aiSignedKrw(aiSession?.total_profit || 0) : "-"}</strong><small>{aiSession?.status === "running" ? aiSignedPct(aiSession?.total_return || 0) : "PROCESS WAIT"}</small></div>
+                  <div className="ai-v2-summary-card"><span>현재 평가금액</span><strong>{aiSession?.status === "running" ? aiKrw(aiDisplayAmount) : "-"}</strong><small>1분 단위 현재금액 갱신</small></div>
+                  <div className="ai-v2-summary-card"><span>누적 손익</span><strong className={aiDisplayProfit >= 0 ? "is-profit" : "is-loss"}>{aiSession?.status === "running" ? aiSignedKrw(aiDisplayProfit) : "-"}</strong><small>{aiSession?.status === "running" ? aiSignedPct(aiDisplayReturn) : "PROCESS WAIT"}</small></div>
                   <div className="ai-v2-summary-card"><span>진행 기간</span><strong>{aiSession?.status === "running" ? (aiSession?.ends_at ? aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours}) : "기간 미정") : "대기"}</strong><small>{aiSession?.status === "running" && !aiSession?.ends_at ? "관리자 종료 시까지 진행" : "최대 30일 진행"}</small></div>
                   <div className="ai-v2-summary-card"><span>5분 시장</span><strong>{aiPositiveMarkets}↑ / {aiNegativeMarkets}↓</strong><small>주식·코인 8종 · 5분</small></div>
                 </div>
@@ -3381,7 +3403,7 @@ export default function Home() {
                     </div>
 
                     <div className="ai-v2-chart-kpis">
-                      <div><span>현재</span><b>{aiSession?.status === "running" ? aiKrw(aiSession?.current_amount || aiCurrentStartMoney) : "-"}</b></div>
+                      <div><span>현재</span><b>{aiSession?.status === "running" ? aiKrw(aiDisplayAmount) : "-"}</b></div>
                       <div><span>시작</span><b>{aiSession?.status === "running" ? aiKrw(aiCurrentStartMoney) : "-"}</b></div>
                       <div><span>5분 연동</span><b>{aiLastResult ? `${aiLastResult.name} ${aiSignedPct(aiLastResult.intervalPct)}` : "대기 중"}</b></div>
                     </div>
@@ -3443,8 +3465,8 @@ export default function Home() {
                           <span>평가금액 {aiKrw(aiChartHover.value)}</span>
                         </div>
                       )}
-                      <div className="ai-v2-chart-scale ai-v2-chart-scale-top">{aiKrw(aiChart.max)}</div>
-                      <div className="ai-v2-chart-scale ai-v2-chart-scale-bottom">{aiKrw(aiChart.min)}</div>
+                      <div className="ai-v2-chart-scale ai-v2-chart-scale-top">현재 · {aiKrw(aiDisplayAmount)}</div>
+                      <div className="ai-v2-chart-scale ai-v2-chart-scale-bottom">시작 · {aiKrw(aiCurrentStartMoney)}</div>
                       <div className="ai-v2-start-line-label">시작금액 기준</div>
                     </div>
                   </section>
