@@ -1,0 +1,38 @@
+name: Apply V18 chat refinements
+
+on:
+  push:
+    paths:
+      - ".github/workflows/apply-v18-chat-refinement.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply open-chat 72h lock
+        run: node scripts/apply-v18-openchat-72h.mjs
+
+      - name: Apply private chat alert flow
+        run: node scripts/apply-private-chat-alert-flow.mjs
+
+      - name: Validate JavaScript
+        run: node --check app/lib/ai-community.js
+
+      - name: Commit changes
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/lib/ai-community.js app/page.js
+          git commit -m "fix: diversify community chat and keep private alerts in flow"
+          git push
