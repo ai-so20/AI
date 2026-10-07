@@ -551,7 +551,11 @@ async function recentChatContext(db, limit = 40) {
 
 async function findLatestUnhandledHuman(db) {
   const { rows, profileMap } = await recentChatContext(db, 100);
-  const humanRows = rows.filter((r) => r.member_id && profileMap.get(r.member_id)?.account_type === "human");
+  const humanRows = rows.filter((r) =>
+    r.member_id &&
+    r.message_type !== "event" &&
+    profileMap.get(r.member_id)?.account_type === "human"
+  );
   if (!humanRows.length) return null;
   const ids = humanRows.map((r) => r.id);
   const { data: receipts } = await db.from("ai_human_message_receipts").select("message_id").in("message_id", ids);

@@ -141,7 +141,6 @@ async function ensureAnnouncement(db, event, admin) {
     `⏰ 종료: ${endText}`,
     "",
     "이벤트 메뉴에서 바로 참여해주세요.",
-    `event:${event.id}`,
   ].filter(Boolean).join("\n");
 
   const { error } = await db.from("group_messages").insert({
@@ -157,15 +156,15 @@ async function ensureAnnouncement(db, event, admin) {
 
 async function ensureCommunityEvent(db, event) {
   const { data: rows } = await db.from("ai_community_events")
-    .select("id").eq("event_type", "event_started").eq("source_key", String(event.id)).limit(1);
+    .select("id").eq("event_type", "event_start").eq("source_key", String(event.id)).limit(1);
   if (rows?.length) return;
   const { error } = await db.from("ai_community_events").insert({
-    event_type: "event_started",
+    event_type: "event_start",
     member_id: null,
     source_key: String(event.id),
     status: "pending",
   });
-  if (error && error.code !== "23505") console.warn("event_started queue insert failed", error.message);
+  if (error && error.code !== "23505") console.warn("event_start queue insert failed", error.message);
 }
 
 async function aiCharacters(db) {
