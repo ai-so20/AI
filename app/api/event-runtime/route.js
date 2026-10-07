@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+import { EXPANDED_QUIZ_SEEDS } from "../../lib/event-quiz-bank";
 
-const QUIZ_SEEDS = [
+const BASE_QUIZ_SEEDS = [
   ["[상식] 대한민국의 수도는 어디일까요?", "부산", "서울", "대전", "인천", 2],
   ["[상식] 세계에서 가장 넓은 바다는?", "대서양", "인도양", "태평양", "북극해", 3],
   ["[상식] 한글을 창제한 왕은?", "세종대왕", "태조", "정조", "영조", 1],
@@ -29,6 +30,8 @@ const QUIZ_SEEDS = [
   ["[넌센스] 세상에서 가장 뜨거운 전화는?", "스마트폰", "무선전화", "화상전화", "공중전화", 3],
   ["[넌센스] 세상에서 가장 잔인한 비빔밥은?", "돌솥비빔밥", "산채비빔밥", "회덮밥", "육회비빔밥", 1],
 ];
+
+const QUIZ_SEEDS = [...BASE_QUIZ_SEEDS, ...EXPANDED_QUIZ_SEEDS];
 
 function dbClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -59,8 +62,7 @@ function quizCategory(question) {
 }
 
 async function ensureQuizBank(db) {
-  const questions = QUIZ_SEEDS.map((q) => q[0]);
-  const { data: existing } = await db.from("event_quiz_bank").select("question").in("question", questions);
+  const { data: existing } = await db.from("event_quiz_bank").select("question").limit(1000);
   const have = new Set((existing || []).map((row) => row.question));
   const missing = QUIZ_SEEDS.filter((q) => !have.has(q[0])).map((q) => ({
     question: q[0], option_1: q[1], option_2: q[2], option_3: q[3], option_4: q[4], correct_option: q[5], active: true,
@@ -85,7 +87,7 @@ async function ensureQuizSetup(db, event) {
   if (!quiz) {
     const { data: bank } = await db.from("event_quiz_bank")
       .select("id,question,option_1,option_2,option_3,option_4,correct_option")
-      .eq("active", true).limit(200);
+      .eq("active", true).limit(1000);
     if (!bank?.length) return null;
     quiz = bank[stableIndex(bank.length, event.id, "quiz")];
     await db.from("event_game_secrets").upsert({ event_id: event.id, secret_answer: quiz.id }, { onConflict: "event_id" });
