@@ -111,6 +111,13 @@ function directNicknameCallReply(character, text) {
   return choices[randInt(0, choices.length - 1)];
 }
 
+function directNicknameCallPlan() {
+  const roll = Math.random();
+  if (roll < 0.55) return { mode: "quick", delaySeconds: 5, silenceMinutes: 0 };
+  if (roll < 0.85) return { mode: "delayed", delaySeconds: randInt(60, 180), silenceMinutes: 0 };
+  return { mode: "ignore", delaySeconds: null, silenceMinutes: randInt(10, 20) };
+}
+
 function detectSituation(text) {
   const value = String(text || "").toLowerCase();
   const lossWords = [
@@ -509,6 +516,8 @@ const COMMON_PROMPT = `
 - 한 주제에서 한 캐릭터가 한 번만 말하고 사라지지 않는다. 몇 명이 대화를 이어가다가 누군가는 조용해지고, 다른 캐릭터가 중간에 합류하며, 먼저 말했던 캐릭터가 다시 끼어들 수 있다.
 - 같은 캐릭터가 한 주제에서 2~4번 등장해도 자연스럽다. 단, 모든 캐릭터가 순번처럼 돌아가며 한마디씩 하는 구조는 피한다.
 - 누군가 캐릭터 닉네임을 직접 부르면 그 캐릭터가 먼저 '네?', '왜요?', '불렀나요?' 같은 짧은 존재 반응을 할 수 있다.
+- 닉네임으로 불린 캐릭터는 답변 예정 시각 전까지 다른 대화에 끼어들지 않는다. 늦게 답할 예정인데 그 사이 다른 채팅을 치는 행동은 금지한다.
+- 호출을 무시한 경우에도 실제로는 그 호출을 못 본 것처럼 한동안 조용히 있다가 충분한 시간이 지난 뒤 일반 대화에 다시 등장할 수 있다.
 - 이벤트 참여 중에는 자신이 실제로 제출한 선택만 말할 수 있고, 서버 정답이나 당첨 결과를 미리 아는 척하지 않는다.
 - 당첨 발표 뒤에는 똑같은 '축하합니다'만 복사하지 말고 짧은 감탄, 농담, 부러움, 축하를 각자 다르게 표현한다.
 - 민감정보(전화번호, 계좌, 주소, 비밀번호, 인증번호 등)는 장기기억으로 저장하지 않는다.
@@ -1834,10 +1843,30 @@ async function startHumanThread(db, info, characters, settings, now = new Date()
   if (!selected.length) return { scheduled: 0, situation };
 
   const directCallText = mentioned ? directNicknameCallReply(mentioned, info.latest.content) : null;
+  const directCallPlan = directCallText && mentioned ? directNicknameCallPlan() : null;
   if (directCallText) selected = [mentioned];
+
+  if (directCallPlan?.mode === "ignore" && mentioned) {
+    await markHumanHandled(db, [info.latest]);
+    await postponeAutonomousTurns(db, now);
+    await db.from("ai_character_state").upsert({
+      member_id: mentioned.member_id,
+      next_available_at: new Date(now.getTime() + directCallPlan.silenceMinutes * 60 * 1000).toISOString(),
+      updated_at: now.toISOString(),
+    }, { onConflict: "member_id" });
+    return { scheduled: 0, situation, provider: "local", ignored: true, silenceMinutes: directCallPlan.silenceMinutes };
+  }
 
   await markHumanHandled(db, [info.latest]);
   await postponeAutonomousTurns(db, now);
+
+  if (directCallPlan && mentioned) {
+    await db.from("ai_character_state").upsert({
+      member_id: mentioned.member_id,
+      next_available_at: new Date(now.getTime() + directCallPlan.delaySeconds * 1000).toISOString(),
+      updated_at: now.toISOString(),
+    }, { onConflict: "member_id" });
+  }
 
   const threadType = situation === "celebration" ? "celebration" : situation === "loss" ? "loss" : "human_reply";
   const thread = await insertThread(db, {
@@ -1902,6 +1931,28 @@ async function startHumanThread(db, info, characters, settings, now = new Date()
   if (!prepared.length) {
     await db.from("ai_conversation_threads").update({ status: "completed", completed_at: now.toISOString() }).eq("id", thread.id);
     return { scheduled: 0, situation };
+  }
+
+  if (directCallPlan && mentioned && prepared.length) {
+    await queueTurn(db, thread.id, {
+      delaySeconds: directCallPlan.delaySeconds,
+      preferredMemberId: mentioned.member_id,
+      targetMessageId: info.latest.id,
+      turnKind: "human_reply",
+      priority: 95,
+      preparedPayload: prepared,
+      preparedProvider: provider,
+      generationMode: "local",
+      now,
+    });
+    return {
+      scheduled: prepared.length,
+      situation,
+      provider,
+      apiCalls: 0,
+      callMode: directCallPlan.mode,
+      delaySeconds: directCallPlan.delaySeconds,
+    };
   }
 
   await publishPreparedNow(db, thread, characters, settings, prepared, now, provider);
