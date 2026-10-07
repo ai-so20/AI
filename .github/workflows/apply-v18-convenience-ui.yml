@@ -33,3 +33,5 @@ jobs:
           git add app/page.js
           git commit -m "feat: move private guide into chat and add smart shortcuts"
           git push
+
+# rerun after script syntax fix
