@@ -21,7 +21,7 @@ jobs:
       - name: Build validation
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder
           SUPABASE_SECRET_KEY: placeholder
         run: npm run build
       - name: Commit changes
@@ -36,4 +36,4 @@ jobs:
             git push
           fi
 
-# V30 trigger
+# V30 build env fixed
