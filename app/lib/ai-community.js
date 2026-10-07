@@ -938,24 +938,108 @@ async function refreshIdleEnergy(db, characters, now = new Date()) {
 }
 
 
+const LOCAL_PATTERN_LOCK_HOURS = 72;
+
 const LOCAL_REACTIONS = {
   greeting: ["안녕하세요ㅎㅎ", "반가워요!", "오 안녕하세요", "어서오세요~", "안녕하세요 :)"],
-  thanks: ["별말씀을요ㅎㅎ", "아니에요 괜찮아요", "도움 됐다니 다행이에요", "ㅎㅎ 다행이네요"],
-  laugh: ["ㅋㅋㅋㅋ", "아 이건 좀 웃기네요ㅋㅋ", "ㅋㅋ 저도 빵터졌어요", "아 인정ㅋㅋ"],
-  celebration: ["와 축하해요!", "오 대박 축하드려요ㅎㅎ", "헉 축하해요ㅋㅋ", "와 이건 부럽네요", "좋은 소식이네요 축하해요!"],
+  thanks: ["별말씀을요ㅎㅎ", "아니에요 괜찮아요", "도움이 됐다니 다행이에요", "ㅎㅎ 다행이네요"],
+  laugh: ["ㅋㅋㅋㅋ", "아 이건 좀 웃기네요ㅋㅋ", "ㅋㅋ 저도 웃었어요", "아 그건 인정이에요ㅋㅋ"],
+  celebration: ["와 축하해요!", "오 대박 축하드려요ㅎㅎ", "헉 축하해요ㅋㅋ", "와 이건 좀 부럽네요", "좋은 소식이네요. 축하해요!"],
   loss: ["아이고 아쉽네요", "이건 좀 속상하겠어요", "ㅠㅠ 그래도 너무 마음 쓰진 마세요", "아쉽네요 진짜"],
-  agree: ["맞아요", "그러게요ㅎㅎ", "아 그건 인정", "저도 비슷해요"],
+  agree: ["맞아요", "그러게요ㅎㅎ", "아 그건 인정이에요", "저도 비슷한 편이에요"],
 };
 
-const LOCAL_SCENE_LINES = [
-  (t) => `${t} 얘기 나오니까 갑자기 생각나네요ㅎㅎ`,
-  (t) => `저는 ${t} 쪽은 가끔 생각날 때만 찾는 편이에요`,
-  (t) => `ㅋㅋ ${t}는 사람마다 취향 진짜 갈리는 것 같아요`,
-  (t) => `아 맞다 ${t} 얘기하니까 오늘 할 일 하나 생각났네요`,
-  (t) => `${t}도 좋지만 저는 요즘 그냥 집에서 쉬는 게 제일 좋더라고요`,
-  (t) => `저는 오히려 너무 파고들면 금방 질려서 적당히 즐겨요ㅋㅋ`,
-  (t) => `갑자기 다른 얘긴데 오늘 시간 진짜 빨리 가는 것 같아요`,
-  (t) => `이 얘기는 여기까지만 해도 충분한 듯요 ㅋㅋ`,
+// 카카오톡 오픈채팅처럼 기본은 존댓말로 유지합니다.
+// opener는 72시간 동안 같은 계열을 다시 쓰지 않도록 충분히 넓게 둡니다.
+const LOCAL_OPENERS = [
+  (t) => `요즘 ${t} 얘기가 은근 자주 보이더라고요.`,
+  (t) => `${t}는 생각보다 취향 차이가 꽤 큰 것 같아요.`,
+  (t) => `최근에 ${t} 얘기를 몇 번 들었는데 괜히 궁금해지더라고요ㅎㅎ`,
+  (t) => `저는 ${t} 쪽은 가끔 생각날 때만 찾아보는 편이에요.`,
+  (t) => `${t} 좋아하시는 분들이 주변에도 꽤 있더라고요.`,
+  (t) => `오늘은 이상하게 ${t} 생각이 한번 나네요.`,
+  (t) => `${t} 관련해서는 사람마다 기준이 진짜 다르더라고요.`,
+  (t) => `예전에는 ${t}에 별 관심 없었는데 요즘은 조금 달라졌어요.`,
+  (t) => `${t}는 막 자주 찾진 않는데 가끔 생각날 때가 있어요.`,
+  (t) => `저는 ${t} 얘기 들으면 한 번쯤 찾아보게 되더라고요ㅎㅎ`,
+  (t) => `${t} 쪽은 잘 모르는데 듣다 보면 은근 재미있어요.`,
+  (t) => `주변에서 ${t} 얘기가 나오면 의견이 꽤 갈리더라고요ㅋㅋ`,
+  (t) => `${t}는 기대 안 하고 접했을 때 오히려 괜찮았던 적이 있어요.`,
+  (t) => `저는 요즘 ${t} 같은 건 너무 깊게 안 보고 가볍게 보는 편이에요.`,
+  (t) => `${t} 얘기만 나오면 각자 경험담이 하나씩은 있는 것 같아요.`,
+  (t) => `최근에 ${t} 쪽으로 괜찮다는 얘기를 들어서 조금 궁금했어요.`,
+  (t) => `${t}는 그날 기분에 따라서 느낌이 좀 달라지는 것 같아요.`,
+  (t) => `저는 ${t} 쪽은 편하게 즐기는 게 제일 좋더라고요.`,
+  (t) => `${t} 관련해서 괜히 오래 고민할 때가 있더라고요ㅎㅎ`,
+  (t) => `요즘은 ${t}도 예전이랑 느낌이 조금 달라진 것 같아요.`,
+  (t) => `${t}는 남들 추천보다 직접 해보는 게 제일 빠른 것 같아요.`,
+  (t) => `저는 ${t} 쪽에서 의외로 소소한 재미를 느끼는 편이에요.`,
+  (t) => `${t} 얘기 들으니까 예전에 비슷한 경험이 하나 떠오르네요.`,
+  (t) => `가끔 ${t} 같은 얘기 나올 때 듣고만 있어도 재밌더라고요.`,
+  (t) => `저는 ${t}는 너무 계획하기보다 그때그때 보는 편이에요.`,
+  (t) => `${t}는 한동안 안 찾다가도 어느 순간 다시 생각나더라고요.`,
+  (t) => `요즘 ${t} 관련해서 새로운 얘기가 꽤 많더라고요.`,
+  (t) => `${t} 쪽은 사소한 차이인데도 느낌이 확 달라질 때가 있어요.`,
+  (t) => `저는 ${t}는 복잡하게 생각 안 하는 쪽이 더 편하더라고요.`,
+  (t) => `${t}는 다른 분들 얘기 듣다 보면 생각이 바뀔 때도 있어요.`,
+  (t) => `최근에는 ${t} 같은 소소한 얘기가 더 편하게 들리더라고요.`,
+  (t) => `${t}는 한 번 관심 생기면 잠깐 찾아보게 되는 정도예요ㅎㅎ`,
+  (t) => `저는 ${t} 쪽은 큰 기대 없이 보는 게 오히려 좋더라고요.`,
+  (t) => `${t} 얘기는 가볍게 나눌 때 제일 재밌는 것 같아요.`,
+  (t) => `요즘은 ${t} 관련해서 취향이 좀 바뀐 분들도 많더라고요.`,
+  (t) => `${t}는 정답이 있다기보다 각자 편한 방식이 있는 것 같아요.`,
+];
+
+const LOCAL_REPLY_A = [
+  "저도 비슷한 편이에요", "저는 조금 다르게 느끼는 편이에요", "저도 예전에는 그랬어요",
+  "저는 그냥 편한 쪽으로 가는 편이에요", "그럴 때는 그날 기분 따라 달라져요",
+  "저도 한동안 관심 있다가 요즘은 좀 뜸해졌어요", "저는 오히려 너무 고민 안 하는 게 편하더라고요",
+  "저도 그런 얘기 들으면 한번 해보고 싶어져요", "저는 주변 추천을 좀 보는 편이에요",
+  "저는 직접 해보고 판단하는 편이에요", "저도 가끔은 그런 생각 들어요", "저는 요즘 기준이 좀 바뀌었어요",
+];
+
+const LOCAL_REPLY_B = [
+  "ㅎㅎ", "ㅋㅋ", "생각보다 괜찮더라고요", "은근 차이가 있더라고요", "그게 제일 편한 것 같아요",
+  "저한테는 그쪽이 더 잘 맞더라고요", "막상 해보면 또 느낌이 다르더라고요", "너무 자주만 아니면 괜찮은 것 같아요",
+];
+
+const LOCAL_BRIDGES = [
+  "저는 오늘 집에 가면 뭐 먹을지가 더 고민이에요ㅋㅋ",
+  "오늘은 시간 진짜 빨리 가는 느낌이네요.",
+  "요즘은 집에 들어가면 바로 쉬고 싶더라고요ㅎㅎ",
+  "오늘 날씨는 생각보다 괜찮은 것 같아요.",
+  "저는 요즘 커피를 줄이려고 하는데 잘 안 되네요ㅋㅋ",
+  "이번 주말은 아직 아무 계획도 못 정했어요.",
+  "요즘 잠을 조금 일찍 자보려고 하는 중이에요.",
+  "저는 요즘 유튜브 켜놓고 멍하니 보는 시간이 늘었어요ㅎㅎ",
+  "오늘은 이상하게 간식이 계속 생각나네요.",
+  "저는 집에 쌓인 택배부터 정리해야 하는데 계속 미루고 있어요ㅋㅋ",
+  "요즘은 저녁에 잠깐 걷는 게 생각보다 좋더라고요.",
+  "저는 주말에 그냥 늦잠 자는 것도 꽤 좋더라고요ㅎㅎ",
+  "오늘 할 일이 조금 남아서 저녁까지는 금방 갈 것 같아요.",
+  "요즘 옷 입기가 애매한 날씨라 아침마다 고민돼요.",
+  "저는 최근에 배달을 좀 줄여보려고 하고 있어요ㅋㅋ",
+  "요즘은 집에서 조용히 쉬는 시간이 제일 좋더라고요.",
+  "오늘은 괜히 달달한 게 하나 먹고 싶네요ㅎㅎ",
+  "저는 요즘 사진 정리를 미루고만 있어요.",
+  "주말에 영화 하나 볼까 하는데 아직 못 골랐어요.",
+  "요즘은 하루가 왜 이렇게 빨리 지나가는지 모르겠어요ㅋㅋ",
+  "저는 오늘 빨래부터 해야 하는데 벌써 귀찮네요.",
+  "최근에 방 정리를 조금 했더니 생각보다 속이 시원하더라고요.",
+  "저는 요즘 아침보다 저녁 시간이 훨씬 편해요.",
+  "오늘은 집 가는 길에 편의점 한번 들를까 싶어요ㅎㅎ",
+  "요즘 음악은 예전에 듣던 것만 다시 듣게 되더라고요.",
+  "저는 요즘 주말 약속을 너무 많이 안 잡으려고 해요.",
+  "오늘은 점심 먹고 나서 유난히 졸리더라고요ㅋㅋ",
+  "저는 요즘 새로 사는 것보다 있는 걸 잘 쓰는 쪽으로 바뀌었어요.",
+  "이번 주는 유난히 길게 느껴지는 것 같아요.",
+  "요즘 저녁 메뉴 정하는 게 은근 제일 어렵네요ㅎㅎ",
+  "저는 최근에 산책할 때 이어폰 없이 걷는 것도 괜찮더라고요.",
+  "오늘은 그냥 조용히 쉬고 싶은 날이에요.",
+  "요즘 집에 있는 시간이 생각보다 편해졌어요ㅎㅎ",
+  "저는 이번 주말에 밀린 정리 좀 하려고요.",
+  "오늘은 따뜻한 거 하나 마시면 좋을 것 같네요.",
+  "요즘은 잠깐 쉬는 시간도 꽤 소중하게 느껴져요.",
 ];
 
 function pickOne(items) {
@@ -973,9 +1057,9 @@ function compactCharacter(character) {
 function styleLocalText(character, base) {
   let text = String(base || "").trim();
   const style = `${character?.speaking_style || ""} ${character?.style_traits || ""}`;
-  if (/ㅋㅋ/.test(style) && Math.random() < 0.22 && !/ㅋㅋ/.test(text)) text += " ㅋㅋ";
-  else if (/ㅎㅎ/.test(style) && Math.random() < 0.22 && !/ㅎㅎ/.test(text)) text += "ㅎㅎ";
-  if (/느낌표/.test(style) && Math.random() < 0.15 && !/[!?]$/.test(text)) text += "!";
+  if (/ㅋㅋ/.test(style) && Math.random() < 0.18 && !/ㅋㅋ/.test(text)) text += " ㅋㅋ";
+  else if (/ㅎㅎ/.test(style) && Math.random() < 0.18 && !/ㅎㅎ/.test(text)) text += "ㅎㅎ";
+  if (/느낌표/.test(style) && Math.random() < 0.12 && !/[!?]$/.test(text)) text += "!";
   return trimChatMessage(text, 110);
 }
 
@@ -1000,26 +1084,144 @@ function localReplyForHuman(character, intent, humanText = "") {
   return styleLocalText(character, base);
 }
 
-function localAutonomousMessages(selected, topic) {
-  const title = String(topic?.title || topic?.category || "요즘 일상").replace(/\s+/g, " ").slice(0, 28);
-  const count = Math.max(2, Math.min(selected.length, randInt(2, 4)));
-  const messages = [];
-  const used = new Set();
-  for (let i = 0; i < count; i += 1) {
-    let line;
-    for (let tries = 0; tries < 8; tries += 1) {
-      const fn = pickOne(LOCAL_SCENE_LINES);
-      const candidate = fn(title);
-      if (!used.has(candidate)) { line = candidate; used.add(candidate); break; }
-    }
-    line ||= `${title} 얘기는 은근 재밌네요`;
-    messages.push({
-      member_id: selected[i % selected.length].member_id,
-      message: styleLocalText(selected[i % selected.length], line),
-      act: i === count - 1 ? "bridge" : (i === 0 ? "experience" : "agree"),
-    });
+function normalizeLocalShape(text, topic = "") {
+  let value = String(text || "").toLowerCase();
+  const t = String(topic || "").toLowerCase().trim();
+  if (t) value = value.split(t).join("{topic}");
+  return value
+    .replace(/[ㅋㅎ]{2,}/g, "")
+    .replace(/[^가-힣a-z0-9{}]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function localShapeTooSimilar(candidate, recentShapes) {
+  const shape = normalizeLocalShape(candidate);
+  if (!shape) return true;
+  if (recentShapes.has(shape)) return true;
+  const words = new Set(shape.split(" ").filter((w) => w.length > 1));
+  for (const recent of recentShapes) {
+    if (!recent) continue;
+    if (shape.slice(0, 14) === recent.slice(0, 14) && shape.slice(0, 14).length >= 8) return true;
+    const rWords = new Set(recent.split(" ").filter((w) => w.length > 1));
+    if (!words.size || !rWords.size) continue;
+    let same = 0;
+    for (const w of words) if (rWords.has(w)) same += 1;
+    const ratio = same / Math.max(words.size, rWords.size);
+    if (ratio >= 0.72) return true;
   }
-  return messages;
+  return false;
+}
+
+async function load72HourLocalLocks(db, now = new Date()) {
+  const cutoff = new Date(now.getTime() - LOCAL_PATTERN_LOCK_HOURS * 60 * 60 * 1000).toISOString();
+  const [{ data: threads }, { data: messages }] = await Promise.all([
+    db.from("ai_conversation_threads")
+      .select("summary,created_at")
+      .eq("thread_type", "autonomous")
+      .gte("created_at", cutoff)
+      .order("created_at", { ascending: false })
+      .limit(500),
+    db.from("group_messages")
+      .select("content,created_at")
+      .eq("room_id", AI_ROOM_ID)
+      .eq("is_deleted", false)
+      .gte("created_at", cutoff)
+      .order("created_at", { ascending: false })
+      .limit(700),
+  ]);
+
+  const openerIds = new Set();
+  const flowIds = new Set();
+  const bridgeIds = new Set();
+  for (const row of threads || []) {
+    const summary = String(row.summary || "");
+    const marker = summary.match(/LOCK72\|open=(\d+)\|flow=([^|]+)\|bridge=(-?\d+)/);
+    if (!marker) continue;
+    openerIds.add(Number(marker[1]));
+    flowIds.add(marker[2]);
+    if (Number(marker[3]) >= 0) bridgeIds.add(Number(marker[3]));
+  }
+  const recentShapes = new Set((messages || []).map((m) => normalizeLocalShape(m.content)).filter(Boolean));
+  return { openerIds, flowIds, bridgeIds, recentShapes };
+}
+
+function buildReplyLine() {
+  const a = Math.floor(Math.random() * LOCAL_REPLY_A.length);
+  const b = Math.floor(Math.random() * LOCAL_REPLY_B.length);
+  return { id: `reply-${a}-${b}`, text: `${LOCAL_REPLY_A[a]}${LOCAL_REPLY_B[b] ? ` ${LOCAL_REPLY_B[b]}` : ""}`.trim() };
+}
+
+async function localAutonomousMessages(db, selected, topic, now = new Date()) {
+  const title = String(topic?.title || topic?.category || "요즘 일상").replace(/\s+/g, " " ).slice(0, 28);
+  const locks = await load72HourLocalLocks(db, now);
+
+  const availableOpeners = LOCAL_OPENERS
+    .map((fn, id) => ({ fn, id }))
+    .filter((x) => !locks.openerIds.has(x.id));
+  if (!availableOpeners.length) return { messages: [], meta: null };
+
+  const opener = pickOne(availableOpeners);
+  const count = Math.max(2, Math.min(selected.length, randInt(2, 4)));
+  const includeBridge = count >= 3 && Math.random() < 0.42;
+
+  let bridge = null;
+  if (includeBridge) {
+    const availableBridges = LOCAL_BRIDGES
+      .map((text, id) => ({ text, id }))
+      .filter((x) => !locks.bridgeIds.has(x.id));
+    if (availableBridges.length) bridge = pickOne(availableBridges);
+  }
+
+  const messages = [];
+  const localShapes = new Set(locks.recentShapes);
+  const patternIds = [];
+
+  const firstCharacter = selected[0];
+  const firstText = styleLocalText(firstCharacter, opener.fn(title));
+  if (localShapeTooSimilar(firstText, localShapes)) return { messages: [], meta: null };
+  messages.push({ member_id: firstCharacter.member_id, message: firstText, act: "experience" });
+  localShapes.add(normalizeLocalShape(firstText));
+  patternIds.push(`open-${opener.id}`);
+
+  for (let i = 1; i < count; i += 1) {
+    const character = selected[i % selected.length];
+    let picked = null;
+
+    if (bridge && i === count - 1) {
+      const text = styleLocalText(character, bridge.text);
+      if (!localShapeTooSimilar(text, localShapes)) picked = { id: `bridge-${bridge.id}`, text, act: "bridge" };
+    }
+
+    if (!picked) {
+      for (let tries = 0; tries < 18; tries += 1) {
+        const reply = buildReplyLine();
+        const text = styleLocalText(character, reply.text);
+        if (locks.flowIds.has(reply.id)) continue;
+        if (localShapeTooSimilar(text, localShapes)) continue;
+        picked = { ...reply, text, act: tries % 4 === 0 ? "experience" : "agree" };
+        break;
+      }
+    }
+
+    if (!picked) continue;
+    messages.push({ member_id: character.member_id, message: picked.text, act: picked.act });
+    localShapes.add(normalizeLocalShape(picked.text));
+    patternIds.push(picked.id);
+  }
+
+  if (messages.length < 2) return { messages: [], meta: null };
+  const flowId = patternIds.join(",");
+  if (locks.flowIds.has(flowId)) return { messages: [], meta: null };
+  return {
+    messages,
+    meta: {
+      openerId: opener.id,
+      bridgeId: bridge?.id ?? -1,
+      flowId,
+      summary: `V18 로컬 오픈채팅 대화 | LOCK72|open=${opener.id}|flow=${flowId}|bridge=${bridge?.id ?? -1}`,
+    },
+  };
 }
 
 function localWelcomeMessages(selected, nickname) {
@@ -1119,6 +1321,10 @@ ${chars}
 - 모르는 실제 장소/사실을 지어내지 않는다.
 - ㅋㅋ/ㅎㅎ/느낌표는 캐릭터 말투와 상황에 맞을 때만.
 - 설명회/토론처럼 길게 말하지 않는다.
+- 카카오톡 오픈채팅방처럼 기본은 자연스러운 존댓말을 쓴다.
+- 친한 친구끼리 쓰는 완전한 반말은 금지한다. 짧은 구어체는 가능하지만 말끝은 대체로 존댓말을 유지한다.
+- 최근 대화에서 이미 나온 시작 표현, 마무리 표현, 비슷한 문장 골격을 되풀이하지 않는다.
+- "아 맞다"로 습관적으로 시작하거나 "이 얘기는 여기까지"처럼 대화를 선언적으로 끝내지 않는다.
 - JSON 외 문장 금지.
 
 JSON:
@@ -1787,13 +1993,21 @@ async function startAutonomousThread(db, characters, settings, now = new Date())
   const selected = weightedSample(availableCharacters, targetCount, (c) => topicInterestWeight(c, topic));
   if (selected.length < 2) return 0;
 
-  const prepared = localAutonomousMessages(selected, topic);
+  const localScene = await localAutonomousMessages(db, selected, topic, now);
+  const prepared = localScene.messages;
+  if (!prepared.length) {
+    await db.from("ai_community_state").update({
+      next_autonomous_at: new Date(now.getTime() + 60 * 1000).toISOString(),
+      updated_at: now.toISOString(),
+    }).eq("id", 1);
+    return 0;
+  }
   const thread = await insertThread(db, {
     thread_type: "autonomous", topic_id: topic.id, status: "active",
     min_turns: prepared.length, max_turns: prepared.length,
     energy: 0.72, open_question: false, priority: 10,
     title: `${topic.category} · ${topic.title}`,
-    summary: "V18 로컬 대화 엔진으로 생성된 짧은 일상 대화",
+    summary: localScene.meta?.summary || "V18 로컬 오픈채팅 대화",
   });
   await addParticipants(db, thread.id, selected);
   await db.from("ai_topic_history").insert({ topic_id: topic.id, thread_id: thread.id, used_at: now.toISOString() });

@@ -2625,7 +2625,7 @@ export default function Home() {
               </section>
             </div>
           )}
-          {privateAlert && (
+          {privateAlert && chatTab !== "private" && (
             <button
               type="button"
               onClick={() => {
