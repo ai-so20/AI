@@ -2823,101 +2823,32 @@ export default function Home() {
               </div>
             )}
             {chatTab === "home" && profile?.role !== "admin" && (
-              <div className="vip-member-dashboard vip-master-member">
-                <section className="vip-member-hero vip-member-hero-master">
-                  <div className="vip-member-hero-copy">
-                    <span>AI PROCESS VIP · PRIVATE MEMBER</span>
-                    <h2>안녕하세요, {profile.nickname}님!</h2>
-                    <p>오늘도 AI와 함께 운용 현황을 확인하고, 진행 중인 PROCESS를 한눈에 관리하세요.</p>
-                  </div>
-                  <div className="vip-member-hero-mascot vip-master-mascot">
-                    <span className="vip-master-mascot-crown">♛</span>
-                    <div className="vip-member-hero-spark s1">✦</div>
-                    <div className="vip-member-hero-spark s2">✦</div>
-                    <div className="vip-member-hero-ring"></div>
-                    <img src={avatarSrc(profile.avatar)} alt={`${profile.nickname || "회원"}님의 프로필`}/>
-                    <em>VIP</em>
+              <div className="vip-home-v20">
+                <section className="vip-home-v20-welcome">
+                  <div><span>AI PROCESS VIP</span><h2>{profile.nickname}님, 지금 확인할 내용입니다.</h2><p>대화, 진행 중인 PROCESS, 이벤트를 한 화면에서 빠르게 확인하세요.</p></div>
+                  <img src={avatarSrc(profile.avatar)} alt="프로필" />
+                </section>
+                <section className="vip-home-v20-alerts">
+                  {unreadPrivate > 0 && <button type="button" onClick={() => changeTab("private")}><i>🎧</i><span><b>1:1 새 답변 {unreadPrivate}</b><small>관리자 답변을 확인하세요</small></span><em>›</em></button>}
+                  {activeEvent && <button type="button" onClick={() => changeTab("event")}><i>🎁</i><span><b>{activeEvent.participated ? "이벤트 참여 완료" : "이벤트 지금 참여 가능"}</b><small>{activeEvent.title}</small></span><em>›</em></button>}
+                  {aiSession?.status === "running" && <button type="button" onClick={() => changeTab("ai")}><i>◆</i><span><b>AI PROCESS 진행 중</b><small>{aiKrw(aiSession?.current_amount || aiCurrentStartMoney)} · {aiSignedPct(aiSession?.total_return || 0)}</small></span><em>›</em></button>}
+                  {unreadPrivate === 0 && !activeEvent && aiSession?.status !== "running" && <div className="vip-home-v20-quiet"><i>✓</i><span><b>새로 확인할 알림이 없습니다.</b><small>필요한 기능은 아래에서 바로 이용할 수 있습니다.</small></span></div>}
+                </section>
+                <section className="vip-home-v20-section">
+                  <div className="vip-home-v20-section-head"><div><span>COMMUNICATION</span><h3>대화</h3></div><small>자주 쓰는 공간</small></div>
+                  <div className="vip-home-v20-chatlist">
+                    <button type="button" onClick={() => changeTab("group")}><div className="vip-home-v20-chat-icon is-group">💬</div><div className="vip-home-v20-chat-copy"><b>VIP 그룹채팅</b><span>{memberGroupChatLocked ? "현재 운영시간 외 · 11:00~18:30" : "지금 대화 가능 · VIP 회원 " + approvedMemberCount + "명"}</span></div><div className="vip-home-v20-chat-meta"><small>{memberGroupChatLocked ? "OFF" : "LIVE"}</small><em>›</em></div></button>
+                    <button type="button" onClick={() => changeTab("private")}><div className="vip-home-v20-chat-icon is-private">🎧</div><div className="vip-home-v20-chat-copy"><b>1:1 문의</b><span>{unreadPrivate > 0 ? "새 답변 " + unreadPrivate + "건이 있습니다." : "관리자와 개인 상담 및 지급 안내"}</span></div><div className="vip-home-v20-chat-meta">{unreadPrivate > 0 && <strong>{unreadPrivate}</strong>}<em>›</em></div></button>
                   </div>
                 </section>
-
-                <section className="vip-member-kpis vip-master-member-kpis">
-                  <button type="button" onClick={() => changeTab("ai")}>
-                    <i className="vip-kpi-icon is-blue">▣</i>
-                    <span>진행 중 프로젝트</span>
-                    <strong>{aiSessions.filter((item) => item.status === "running").length}개</strong>
-                    <small>{aiSessions.filter((item) => item.status === "running").length > 1 ? `현재 ${aiSessions.filter((item) => item.status === "running").length}개 PROCESS 동시 진행` : aiSession?.status === "running" ? (aiSession?.ends_at ? `${aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours})} 남음` : "기간 미정") : "진행 중인 PROCESS 없음"}</small>
-                  </button>
-                  <button type="button" onClick={() => changeTab("ai")}>
-                    <i className="vip-kpi-icon is-green">✓</i>
-                    <span>완료 프로젝트</span>
-                    <strong>{aiCompletedCount}개</strong>
-                    <small>{aiCompletedCount ? "최근 PROCESS 종료 완료" : "완료된 PROCESS 없음"}</small>
-                  </button>
-                  <button type="button" onClick={() => changeTab("ai")}>
-                    <i className="vip-kpi-icon is-gold">★</i>
-                    <span>오늘 수익</span>
-                    <strong className={aiTodayProfit >= 0 ? "is-profit" : "is-loss"}>{aiSignedKrw(aiTodayProfit)}</strong>
-                    <small>오늘 5분 시장 연동 결과 합계</small>
-                  </button>
+                <section className="vip-home-v20-process" onClick={() => changeTab("ai")} role="button" tabIndex={0}>
+                  <div className="vip-home-v20-process-top"><span>MY AI PROCESS</span><em>{aiSession?.status === "running" ? "진행 중" : "대기"}</em></div>
+                  <div className="vip-home-v20-process-main"><div><small>현재 평가금액</small><strong>{aiSession?.status === "running" ? aiKrw(aiSession?.current_amount || aiCurrentStartMoney) : "진행 중인 PROCESS가 없습니다"}</strong></div>{aiSession?.status === "running" && <b className={(aiSession?.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedKrw(aiSession?.total_profit || 0)} · {aiSignedPct(aiSession?.total_return || 0)}</b>}</div>
+                  <div className="vip-home-v20-process-foot"><span>{aiSession?.status === "running" ? "다음 반영 " + aiCountdown : "관리자가 PROCESS 시작 시 자동 표시됩니다."}</span><em>자세히 보기 ›</em></div>
                 </section>
-
-                <section className="vip-member-workspace vip-master-member-workspace">
-                  <div className="vip-member-panel vip-member-chart-card">
-                    <div className="vip-member-panel-head">
-                      <div><span>자산 흐름</span><strong>수익 그래프</strong></div>
-                      <button type="button" onClick={() => changeTab("ai")}>최근 기록 ›</button>
-                    </div>
-                    <div className="vip-member-chart-meta">
-                      <div><span>현재 평가금액</span><b>{aiSession?.status === "running" ? aiKrw(aiSession?.current_amount || aiCurrentStartMoney) : "대기 중"}</b></div>
-                      <div><span>누적 수익률</span><b className={(aiSession?.total_return || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSession?.status === "running" ? aiSignedPct(aiSession?.total_return || 0, 2) : "-"}</b></div>
-                      <div><span>최근 반영</span><b>{aiTime(aiSim?.updatedAt)}</b></div>
-                    </div>
-                    <div className="vip-member-mini-chart">
-                      {aiChart.nodes.length > 1 ? (
-                        <svg viewBox={`0 0 ${aiChart.width} ${aiChart.height}`} preserveAspectRatio="none">
-                          <defs>
-                            <linearGradient id="vipHomeArea" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#edaa2f" stopOpacity=".30"/>
-                              <stop offset="100%" stopColor="#edaa2f" stopOpacity="0"/>
-                            </linearGradient>
-                          </defs>
-                          {[0.2,0.4,0.6,0.8].map((ratio) => <line key={ratio} x1="52" y1={aiChart.height * ratio} x2="866" y2={aiChart.height * ratio} className="vip-member-chart-grid"/>)}
-                          <line x1="52" y1={aiChart.baselineY} x2="866" y2={aiChart.baselineY} className="vip-member-chart-base"/>
-                          <path d={aiChart.areaPath} fill="url(#vipHomeArea)"/>
-                          <polyline points={aiChart.points} className="vip-member-chart-line"/>
-                          {aiChart.nodes.slice(-7).map((node, idx) => <circle key={`${node.at}-${idx}`} cx={node.x} cy={node.y} r="4.2" className="vip-member-chart-dot"/>)}
-                        </svg>
-                      ) : <div className="vip-member-chart-empty">AI PROCESS가 시작되면 자산 변화가 표시됩니다.</div>}
-                    </div>
-                  </div>
-
-                  <div className="vip-member-panel vip-member-process-card">
-                    <div className="vip-member-panel-head">
-                      <div><span>MY PROCESS</span><strong>진행 중인 프로젝트</strong></div>
-                      <i className={aiSession?.status === "running" ? "is-live" : ""}>{aiSession?.status === "running" ? "진행중" : "대기"}</i>
-                    </div>
-                    <div className="vip-member-process-body">
-                      <div className="vip-member-process-icon">AI</div>
-                      <div>
-                        <b>AI PROCESS #CURRENT</b>
-                        <span>{aiSession?.status === "running" ? `운용금액 ${aiKrw(aiCurrentStartMoney)}` : "관리자가 PROCESS를 시작하면 여기에 표시됩니다."}</span>
-                      </div>
-                    </div>
-                    {aiSession?.status === "running" && (
-                      <>
-                        <div className="vip-member-progress"><span style={{width:`${aiSession?.ends_at ? aiProgressPct : 100}%`}} className={!aiSession?.ends_at ? "is-indefinite" : ""}></span></div>
-                        <div className="vip-member-process-meta-row">
-                          <span>남은 시간 <b>{aiSession?.ends_at ? aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours}) : "∞ 기간 미정"}</b></span>
-                          <span>현재 수익률 <b className={(aiSession?.total_return || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedPct(aiSession.total_return || 0, 2)}</b></span>
-                        </div>
-                      </>
-                    )}
-                    <button type="button" onClick={() => changeTab("ai")}>프로젝트 자세히 보기</button>
-                  </div>
-                </section>
+                {featuredEvent && <button type="button" className="vip-home-v20-event" onClick={() => changeTab("event")}><div><span>{activeEvent ? "LIVE EVENT" : "NEXT EVENT"}</span><h3>{featuredEvent.title}</h3><p>{activeEvent ? (featuredEvent.participated ? "참여 완료 · 결과를 기다려주세요" : "지금 참여할 수 있습니다") : formatEventTime(featuredEvent.starts_at) + " ~ " + formatEventTime(featuredEvent.ends_at)}</p></div><div className="vip-home-v20-event-icon">{eventIcon(featuredEvent.event_type)}</div></button>}
               </div>
             )}
-
             {chatTab === "admin" && profile?.role === "admin" && (
               <div className="vip-admin-dashboard vip-master-admin">
                 <section className="vip-admin-page-head">
