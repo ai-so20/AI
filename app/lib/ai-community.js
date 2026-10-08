@@ -104,19 +104,44 @@ function pairIds(a, b) {
   return String(a) < String(b) ? [a, b] : [b, a];
 }
 
+function isDirectCongratulation(text, nickname) {
+  const raw = String(text || "").trim();
+  if (!nickname || !raw.includes(nickname)) return false;
+  return /(축하|당첨|잘됐|잘 됐|대박|좋은 소식|좋겠)/.test(raw);
+}
+
 function directNicknameCallReply(character, text) {
   const nickname = String(character?.profile?.nickname || character?.character_name || "").trim();
   if (!nickname) return null;
   const raw = String(text || "").trim();
   if (!raw.includes(nickname)) return null;
+
+  // "OO님 축하드려요"는 호출이 아니라 축하 인사다. 당첨자는 감사 반응을 해야 한다.
+  if (isDirectCongratulation(raw, nickname)) {
+    const thanks = [
+      "감사합니다~",
+      "헉 감사합니다ㅎㅎ",
+      "감사해요!!",
+      "감사합니당~!",
+      "헉 당첨됐네요ㅋㅋ 감사해요",
+      "와 감사합니다ㅎㅎ 잘 쓸게요",
+      "감사해요 ㅎㅎ 기분 좋네요",
+    ];
+    return thanks[randInt(0, thanks.length - 1)];
+  }
+
   const remainder = raw.replaceAll(nickname, "").replace(/[@?？！!~ㅎㅎㅋ\s]/g, "").trim();
   if (remainder.length > 10) return null;
   const choices = ["네?", "넹?", "왜요?", "무슨 일이져?", "불렀나요?", "네 ㅋㅋ", "저요?", "여기 있어요ㅎㅎ"];
   return choices[randInt(0, choices.length - 1)];
 }
 
-function directNicknameCallPlan() {
+function directNicknameCallPlan(forceResponse = false) {
   const roll = Math.random();
+  if (forceResponse) {
+    if (roll < 0.72) return { mode: "quick", delaySeconds: randInt(5, 18), silenceMinutes: 0 };
+    return { mode: "delayed", delaySeconds: randInt(30, 90), silenceMinutes: 0 };
+  }
   if (roll < 0.55) return { mode: "quick", delaySeconds: 5, silenceMinutes: 0 };
   if (roll < 0.85) return { mode: "delayed", delaySeconds: randInt(60, 180), silenceMinutes: 0 };
   return { mode: "ignore", delaySeconds: null, silenceMinutes: randInt(10, 20) };
@@ -1259,14 +1284,35 @@ function localWelcomeMessages(selected, nickname) {
 
 function localEventMessages(selected, event, winner = null) {
   if (winner) {
-    return selected.map((c) => ({
+    const winnerCharacter = selected.find((c) => c.member_id === winner.id) || null;
+    const others = selected.filter((c) => c.member_id !== winner.id);
+    // 당첨 발표 직후에는 먼저 1~2명이 축하하고, AI 당첨자는 곧바로 감사 인사를 하게 한다.
+    const split = Math.min(others.length, randInt(1, 2));
+    const ordered = winnerCharacter
+      ? [...others.slice(0, split), winnerCharacter, ...others.slice(split)]
+      : others;
+    const prize = String(event?.prize || "").trim();
+    const winnerThanks = [
+      "감사합니다~",
+      "헉 제가 당첨됐네요ㅎㅎ 감사합니다!",
+      "감사해요!!",
+      "와 진짜요? 감사합니다ㅋㅋ",
+      "감사합니당~!",
+      "헉 대박ㅋㅋ 감사해요",
+      prize && prize !== "VIP EVENT 당첨" ? `${prize} 잘 쓸게요ㅎㅎ 감사합니다` : "잘 쓸게요ㅎㅎ 감사합니다",
+    ].filter(Boolean);
+    const congrats = [
+      "와 축하해요!",
+      "오 대박 축하드려요ㅎㅎ",
+      "헉 축하해요ㅋㅋ",
+      "와 부럽네요 축하드려요!",
+      "오 당첨되셨네요 축하드려요~",
+      "대박ㅋㅋ 축하해요",
+      "축하드려요!!",
+    ];
+    return ordered.map((c) => ({
       member_id: c.member_id,
-      message: styleLocalText(
-        c,
-        c.member_id === winner.id
-          ? pickOne(["헉 제가요? 감사합니다ㅎㅎ", "와 저 당첨된 거예요?ㅋㅋ 감사합니다!", "헉 대박 감사합니다"])
-          : pickOne(LOCAL_REACTIONS.celebration)
-      ),
+      message: styleLocalText(c, c.member_id === winner.id ? pickOne(winnerThanks) : pickOne(congrats)),
       act: "celebration",
     }));
   }
@@ -1303,7 +1349,7 @@ async function publishPreparedNow(db, thread, characters, settings, prepared, no
   const remaining = prepared.slice(1);
   if (remaining.length) {
     await queueTurn(db, thread.id, {
-      delaySeconds: nextAiTurnDelaySeconds(),
+      delaySeconds: thread.thread_type === "event_winner" ? randInt(6, 18) : thread.thread_type === "event_start" ? randInt(10, 30) : nextAiTurnDelaySeconds(),
       preferredMemberId: remaining[0].member_id,
       targetMessageId: published?.inserted?.id || thread.last_message_id || null,
       turnKind: ["human_reply","welcome","celebration","loss","event_start","event_winner"].includes(thread.thread_type) ? thread.thread_type : "continue",
@@ -1761,7 +1807,7 @@ async function processTurn(db, turn, characters, settings, now = new Date()) {
     if (remaining.length) {
       await db.from("ai_turn_queue").update({
         status: "queued",
-        scheduled_at: new Date(now.getTime() + nextAiTurnDelaySeconds() * 1000).toISOString(),
+        scheduled_at: new Date(now.getTime() + (thread.thread_type === "event_winner" ? randInt(6, 18) : thread.thread_type === "event_start" ? randInt(10, 30) : nextAiTurnDelaySeconds()) * 1000).toISOString(),
         preferred_member_id: remaining[0].member_id,
         target_message_id: published?.inserted?.id || turn.target_message_id || null,
         prepared_payload: remaining,
@@ -1857,7 +1903,8 @@ async function startHumanThread(db, info, characters, settings, now = new Date()
   if (!selected.length) return { scheduled: 0, situation };
 
   const directCallText = mentioned ? directNicknameCallReply(mentioned, info.latest.content) : null;
-  const directCallPlan = directCallText && mentioned ? directNicknameCallPlan() : null;
+  const directCongrats = mentioned ? isDirectCongratulation(info.latest.content, mentioned?.profile?.nickname || mentioned?.character_name) : false;
+  const directCallPlan = directCallText && mentioned ? directNicknameCallPlan(directCongrats) : null;
   if (directCallText) selected = [mentioned];
 
   if (directCallPlan?.mode === "ignore" && mentioned) {
@@ -2003,7 +2050,7 @@ async function startEventCommunityThread(db, communityEvent, characters, setting
   }
 
   const { data: event } = await db.from("events")
-    .select("id,title,event_type,status,starts_at,ends_at")
+    .select("id,title,event_type,status,starts_at,ends_at,prize")
     .eq("id", communityEvent.event_id)
     .maybeSingle();
 
@@ -2052,7 +2099,7 @@ async function startEventCommunityThread(db, communityEvent, characters, setting
     const baseCount = winner.account_type === "human" ? randInt(5, 8) : randInt(3, 5);
     let selected = await selectHumanResponders(others, "celebration", Math.min(baseCount, others.length), now);
     const winnerCharacter = characters.find((c) => c.member_id === winner.id);
-    if (winnerCharacter && selected.length < 6) selected = [...selected, winnerCharacter];
+    if (winnerCharacter && !selected.some((c) => c.member_id === winner.id)) selected = [...selected, winnerCharacter];
     if (!selected.length) {
       await db.from("ai_community_events").update({ status: "done", processed_at: now.toISOString() }).eq("id", communityEvent.id);
       return { started: 0, type: "event_winner" };
