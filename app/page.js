@@ -125,6 +125,11 @@ export default function Home() {
   const [myEventRewards, setMyEventRewards] = useState([]);
   const [adminEventRewards, setAdminEventRewards] = useState([]);
   const [eventRewardWorking, setEventRewardWorking] = useState(false);
+  const [homeNotice, setHomeNotice] = useState(null);
+  const [homeNoticeTitle, setHomeNoticeTitle] = useState("VIP 운영 안내");
+  const [homeNoticeBody, setHomeNoticeBody] = useState("");
+  const [eventRuntimeEnabled, setEventRuntimeEnabled] = useState(true);
+  const [adminEventOps, setAdminEventOps] = useState([]);
   const [newEventPrize, setNewEventPrize] = useState("");
   const [newEventRewardType, setNewEventRewardType] = useState("physical");
   const [newEventPrizeValue, setNewEventPrizeValue] = useState("");
@@ -1198,6 +1203,65 @@ export default function Home() {
     else setMyEventRewards(data || []);
   }
 
+  async function loadHomeNotice() {
+    const { data, error } = await supabase.rpc("get_home_notice");
+    if (error) return;
+    const row = Array.isArray(data) ? data[0] : null;
+    setHomeNotice(row || null);
+    if (row) {
+      setHomeNoticeTitle(row.title || "VIP 운영 안내");
+      setHomeNoticeBody(row.body || "");
+    }
+  }
+
+  async function saveHomeNotice() {
+    if (profile?.role !== "admin") return;
+    const { error } = await supabase.rpc("admin_set_home_notice", {
+      p_title: homeNoticeTitle,
+      p_body: homeNoticeBody,
+      p_active: true,
+    });
+    if (error) setNotice("공지 저장 실패: " + error.message);
+    else { setNotice("홈 중요 공지를 저장했습니다."); await loadHomeNotice(); }
+  }
+
+  async function loadEventRuntimeSettings() {
+    const { data, error } = await supabase.rpc("get_event_runtime_settings");
+    if (error) return;
+    const row = Array.isArray(data) ? data[0] : null;
+    if (row) setEventRuntimeEnabled(Boolean(row.enabled));
+  }
+
+  async function toggleEventRuntimeEnabled() {
+    if (profile?.role !== "admin") return;
+    const next = !eventRuntimeEnabled;
+    const { error } = await supabase.rpc("admin_set_event_runtime_enabled", { p_enabled: next });
+    if (error) setNotice("자동 이벤트 설정 실패: " + error.message);
+    else { setEventRuntimeEnabled(next); setNotice(next ? "자동 이벤트를 켰습니다." : "자동 이벤트를 중지했습니다."); }
+  }
+
+  async function loadAdminEventOperations() {
+    if (profile?.role !== "admin") return;
+    const { data, error } = await supabase.rpc("get_admin_event_operations");
+    if (!error) setAdminEventOps(data || []);
+  }
+
+  async function uploadPrizeImage(file) {
+    if (!file || profile?.role !== "admin" || prizeWorking) return;
+    if (!file.type.startsWith("image/")) { setNotice("상품 이미지만 업로드할 수 있습니다."); return; }
+    setPrizeWorking(true);
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").replace(/[^a-z0-9]/gi,"").toLowerCase() || "jpg";
+      const path = "event-prizes/" + Date.now() + "-" + Math.random().toString(36).slice(2) + "." + ext;
+      const { error } = await supabase.storage.from("chat-media").upload(path,file,{cacheControl:"3600",upsert:false,contentType:file.type});
+      if (error) throw error;
+      const { data } = supabase.storage.from("chat-media").getPublicUrl(path);
+      setNewEventPrizeImage(data.publicUrl || "");
+      setNotice("상품 이미지를 등록했습니다.");
+    } catch (error) { setNotice("상품 이미지 업로드 실패: " + error.message); }
+    setPrizeWorking(false);
+  }
+
   async function loadGiftInventorySummary() {
     if (profile?.role !== "admin") return;
     const { data, error } = await supabase.rpc("get_admin_gift_inventory_summary");
@@ -1285,7 +1349,9 @@ export default function Home() {
 
   useEffect(() => {
     if (!profile) return;
-    if (profile.role === "admin") { loadEventPrizes(); loadGiftInventorySummary(); }
+    loadHomeNotice();
+    loadEventRuntimeSettings();
+    if (profile.role === "admin") { loadEventPrizes(); loadGiftInventorySummary(); loadAdminEventOperations(); }
     loadEventRewards();
     loadAiDemo();
   }, [profile?.role, user?.id]);
@@ -1307,7 +1373,7 @@ export default function Home() {
     }
 
     setAutoEvents(data || []);
-    await Promise.all([loadEventRewards(), loadAiDemo()]);
+    await Promise.all([loadEventRewards(), loadAiDemo(), loadHomeNotice(), loadEventRuntimeSettings(), profile?.role === "admin" ? loadAdminEventOperations() : Promise.resolve()]);
   }
 
   function setEventAnswer(eventId, value) {
@@ -1800,12 +1866,14 @@ export default function Home() {
 
     if (content.startsWith("[[GIFT]]")) {
       const payload = content.slice(8);
-      const splitAt = payload.indexOf("|");
-      const deliveryId = splitAt >= 0 ? payload.slice(0, splitAt) : payload;
-      const giftName = splitAt >= 0 ? payload.slice(splitAt + 1) : "이벤트 당첨 상품";
+      const parts = payload.split("|");
+      const deliveryId = parts[0] || "";
+      const giftName = parts[1] || "이벤트 당첨 상품";
+      const giftImage = parts.slice(2).join("|");
       return (
-        <div style={{minWidth:"220px",padding:"12px",borderRadius:"14px",background:"linear-gradient(145deg,#fffaf1,#f3eadc)",border:"1px solid #dfccb0",color:"#30271f"}}>
-          <span style={{display:"block",fontSize:"10px",fontWeight:900,color:"#8b6738"}}>🎁 이벤트 당첨 상품</span>
+        <div style={{minWidth:"220px",maxWidth:"280px",padding:"12px",borderRadius:"14px",background:"#fff",border:"1px solid #d8e0dd",color:"#26332f",boxShadow:"0 8px 24px rgba(31,54,47,.08)"}}>
+          {giftImage && <img src={giftImage} alt={giftName} style={{display:"block",width:"100%",maxHeight:"150px",objectFit:"cover",borderRadius:"10px",marginBottom:"10px"}}/>}
+          <span style={{display:"block",fontSize:"10px",fontWeight:900,color:"#4d7569"}}>🎁 이벤트 당첨 상품</span>
           <strong style={{display:"block",marginTop:"5px",fontSize:"14px"}}>{giftName}</strong>
           <button type="button" onClick={() => openGiftDelivery(deliveryId)} style={{width:"100%",marginTop:"10px",border:0,borderRadius:"10px",padding:"9px",background:"#243d38",color:"#fff",fontWeight:900,cursor:"pointer"}}>기프티콘 확인하기</button>
         </div>
@@ -3102,12 +3170,12 @@ export default function Home() {
                 </section>
                 <section style={{padding:"14px",borderRadius:"18px",background:"#fffaf2",border:"1px solid #ead8bf",boxShadow:"0 8px 22px rgba(73,50,31,.06)"}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"10px",marginBottom:"11px"}}>
-                    <div><span style={{display:"block",fontSize:"9px",fontWeight:900,letterSpacing:"1.2px",color:"#a8793c"}}>TODAY BRIEF</span><strong style={{display:"block",marginTop:"3px",fontSize:"15px",color:"#32261e"}}>오늘의 VIP 브리핑</strong></div>
+                    <div><span style={{display:"block",fontSize:"9px",fontWeight:900,letterSpacing:"1.2px",color:"#a8793c"}}>오늘 브리핑</span><strong style={{display:"block",marginTop:"3px",fontSize:"15px",color:"#32261e"}}>오늘의 VIP 브리핑</strong></div>
                     <small style={{fontSize:"9px",fontWeight:900,color:"#8f7a66"}}>{groupChatOperating ? "운영 중" : "운영 종료"}</small>
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:"7px"}}>
                     {[
-                      ["LIVE EVENT", activeEvent ? "진행 중" : nextEvent ? "예정" : "종료"],
+                      ["진행 중 이벤트", activeEvent ? "진행 중" : nextEvent ? "예정" : "종료"],
                       ["내 참여", autoEvents.filter((item)=>item.participated).length + "회"],
                       ["받은 혜택", myEventRewards.length + "건"],
                       ["AI PROCESS", aiSession?.status === "running" ? aiSignedPct(aiSession?.total_return || 0) : "대기"],
@@ -3115,6 +3183,22 @@ export default function Home() {
                   </div>
                   {myEventRewards[0] && <button type="button" onClick={() => changeTab("event")} style={{width:"100%",marginTop:"10px",border:"1px solid #e2c892",background:"#fff3d8",borderRadius:"11px",padding:"9px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",color:"#5b401f",fontSize:"10px",fontWeight:900,cursor:"pointer"}}><span>🎁 최근 혜택 · {myEventRewards[0].reward_name}</span><em style={{fontStyle:"normal"}}>{myEventRewards[0].status === "delivered" ? "지급완료" : myEventRewards[0].reward_type === "ai_process" ? "체험 활성" : "지급대기"} ›</em></button>}
                 </section>
+                <section style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:"10px",marginTop:"12px"}}>
+                  <button type="button" onClick={()=>changeTab("ai")} style={{textAlign:"left",border:"1px solid #cbdcd7",borderRadius:"16px",padding:"14px",background:"linear-gradient(145deg,#f1f7f5,#e8f1ee)",color:"#23443a",cursor:"pointer"}}>
+                    <span style={{display:"block",fontSize:"9px",fontWeight:900,color:"#4d7a6d"}}>AI PROCESS 체험</span>
+                    <strong style={{display:"block",marginTop:"4px",fontSize:"14px"}}>{aiDemo?.status === "running" ? "모의체험 진행 중" : "AI PROCESS 돌발 체험"}</strong>
+                    <p style={{margin:"6px 0 0",fontSize:"10px",lineHeight:1.5,color:"#667b75"}}>{aiDemo?.status === "running" ? "현재 " + aiKrw(aiDemo.current_amount) + " · " + aiSignedPct(aiDemo.total_return || 0) : "선정된 회원에게 1회 체험 혜택이 표시됩니다."}</p>
+                    <em style={{display:"block",marginTop:"8px",fontStyle:"normal",fontSize:"9px",fontWeight:900,color:"#356b5d"}}>{aiDemo?.status === "running" ? "체험 화면 보기 ›" : "선정 시 AI PROCESS에서 시작"}</em>
+                  </button>
+                  <button type="button" onClick={()=>changeTab("event")} style={{textAlign:"left",border:"1px solid #dfe3e1",borderRadius:"16px",padding:"14px",background:"#fff",color:"#303a37",cursor:"pointer"}}>
+                    <span style={{display:"block",fontSize:"9px",fontWeight:900,color:"#74827e"}}>내 이벤트 혜택</span>
+                    <strong style={{display:"block",marginTop:"4px",fontSize:"14px"}}>받은 혜택 {myEventRewards.length}건</strong>
+                    <p style={{margin:"6px 0 0",fontSize:"10px",lineHeight:1.45,color:"#7b8783"}}>{myEventRewards[0] ? myEventRewards[0].reward_name : "당첨 혜택이 생기면 이곳에 표시됩니다."}</p>
+                    <em style={{display:"block",marginTop:"7px",fontStyle:"normal",fontSize:"9px",fontWeight:900,color:"#4d665e"}}>혜택 확인 ›</em>
+                  </button>
+                </section>
+                {featuredEvent && <button type="button" onClick={()=>changeTab("event")} style={{width:"100%",marginTop:"10px",padding:"13px 14px",border:"1px solid #dde3e0",borderRadius:"16px",background:"#fff",display:"flex",alignItems:"center",gap:"11px",textAlign:"left",cursor:"pointer",color:"#293633"}}><div style={{fontSize:"24px"}}>{eventIcon(featuredEvent.event_type)}</div><div style={{flex:1,minWidth:0}}><span style={{display:"block",fontSize:"9px",fontWeight:900,color:"#6b7d77"}}>{activeEvent ? "진행 중 이벤트" : "다음 이벤트"}</span><strong style={{display:"block",marginTop:"3px",fontSize:"13px"}}>{featuredEvent.title}</strong><small style={{display:"block",marginTop:"3px",color:"#7b8884"}}>{activeEvent ? (featuredEvent.participated ? "참여 완료" : "지금 참여 가능") : formatEventTime(featuredEvent.starts_at) + " ~ " + formatEventTime(featuredEvent.ends_at)}</small></div><b>›</b></button>}
+                {homeNotice?.is_active && <section style={{marginTop:"10px",padding:"13px 14px",borderRadius:"14px",background:"#f6f8f7",border:"1px solid #dde3e0"}}><span style={{display:"block",fontSize:"9px",fontWeight:900,color:"#62756e"}}>중요 공지</span><strong style={{display:"block",marginTop:"4px",fontSize:"13px",color:"#2d3b37"}}>{homeNotice.title}</strong><p style={{margin:"5px 0 0",fontSize:"10px",lineHeight:1.55,color:"#71807b",whiteSpace:"pre-wrap"}}>{homeNotice.body}</p></section>}
                 <section className="vip-home-v20-alerts">
                   {unreadPrivate > 0 && <button type="button" onClick={() => changeTab("private")}><i>🎧</i><span><b>1:1 새 답변 {unreadPrivate}</b><small>관리자 답변을 확인하세요</small></span><em>›</em></button>}
                   {activeEvent && <button type="button" onClick={() => changeTab("event")}><i>🎁</i><span><b>{activeEvent.participated ? "이벤트 참여 완료" : "이벤트 지금 참여 가능"}</b><small>{activeEvent.title}</small></span><em>›</em></button>}
@@ -3129,11 +3213,11 @@ export default function Home() {
                   </div>
                 </section>
                 <section className="vip-home-v20-process" onClick={() => changeTab("ai")} role="button" tabIndex={0}>
-                  <div className="vip-home-v20-process-top"><span>MY AI PROCESS</span><em>{aiSession?.status === "running" ? "진행 중" : "대기"}</em></div>
+                  <div className="vip-home-v20-process-top"><span>내 AI PROCESS</span><em>{aiSession?.status === "running" ? "진행 중" : "대기"}</em></div>
                   <div className="vip-home-v20-process-main"><div><small>현재 평가금액</small><strong>{aiSession?.status === "running" ? aiKrw(aiSession?.current_amount || aiCurrentStartMoney) : "진행 중인 PROCESS가 없습니다"}</strong></div>{aiSession?.status === "running" && <b className={(aiSession?.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedKrw(aiSession?.total_profit || 0)} · {aiSignedPct(aiSession?.total_return || 0)}</b>}</div>
                   <div className="vip-home-v20-process-foot"><span>{aiSession?.status === "running" ? "다음 반영 " + aiCountdown : "관리자가 PROCESS 시작 시 자동 표시됩니다."}</span><em>자세히 보기 ›</em></div>
                 </section>
-                {featuredEvent && <button type="button" className="vip-home-v20-event" onClick={() => changeTab("event")}><div><span>{activeEvent ? "LIVE EVENT" : "NEXT EVENT"}</span><h3>{featuredEvent.title}</h3><p>{activeEvent ? (featuredEvent.participated ? "참여 완료 · 결과를 기다려주세요" : "지금 참여할 수 있습니다") : formatEventTime(featuredEvent.starts_at) + " ~ " + formatEventTime(featuredEvent.ends_at)}</p></div><div className="vip-home-v20-event-icon">{eventIcon(featuredEvent.event_type)}</div></button>}
+                {featuredEvent && <button type="button" className="vip-home-v20-event" onClick={() => changeTab("event")}><div><span>{activeEvent ? "진행 중 이벤트" : "다음 이벤트"}</span><h3>{featuredEvent.title}</h3><p>{activeEvent ? (featuredEvent.participated ? "참여 완료 · 결과를 기다려주세요" : "지금 참여할 수 있습니다") : formatEventTime(featuredEvent.starts_at) + " ~ " + formatEventTime(featuredEvent.ends_at)}</p></div><div className="vip-home-v20-event-icon">{eventIcon(featuredEvent.event_type)}</div></button>}
               </div>
             )}
             {chatTab === "admin" && profile?.role === "admin" && (
@@ -3396,24 +3480,6 @@ export default function Home() {
                   <div ref={groupBottomRef} style={{height:"1px",width:"100%"}} />
                 </div>
 
-                {profile?.role !== "admin" && (
-                  <section style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:"9px",margin:"0 0 12px"}}>
-                    <button type="button" onClick={()=>setChatTab("ai")} style={{textAlign:"left",border:"1px solid #c9d8e7",borderRadius:"16px",padding:"14px",background:"linear-gradient(145deg,#eef6ff,#e5effb)",color:"#17324d",cursor:"pointer"}}><span style={{display:"block",fontSize:"8px",fontWeight:900,letterSpacing:"1.1px",color:"#527ba1"}}>AI PROCESS SPECIAL</span><strong style={{display:"block",marginTop:"4px",fontSize:"14px"}}>{aiDemo?.status === "running" ? "모의체험 진행 중" : "AI PROCESS 돌발 체험"}</strong><p style={{margin:"6px 0 0",fontSize:"10px",lineHeight:1.5,color:"#60778b"}}>{aiDemo?.status === "running" ? `체험금 ${aiKrw(aiDemo.start_amount)} · 현재 ${aiKrw(aiDemo.current_amount)} · ${aiSignedKrw(aiDemo.total_profit || 0)}` : "선정 회원에게 실제 잔액과 분리된 체험금으로 AI PROCESS가 자동 진행됩니다."}</p><em style={{display:"block",marginTop:"8px",fontStyle:"normal",fontSize:"9px",fontWeight:900,color:"#2a6498"}}>{aiDemo?.status === "running" ? "체험 화면 보기 ›" : "선정 시 자동 안내됩니다"}</em></button>
-                    <div style={{border:"1px solid #ead4ad",borderRadius:"16px",padding:"14px",background:"linear-gradient(145deg,#fff9ec,#f8ecd4)",color:"#4d351c"}}><span style={{display:"block",fontSize:"8px",fontWeight:900,letterSpacing:"1.1px",color:"#a47332"}}>MY REWARDS</span><strong style={{display:"block",marginTop:"4px",fontSize:"14px"}}>내 이벤트 혜택 {myEventRewards.length}건</strong>{myEventRewards[0] ? <><p style={{margin:"6px 0 0",fontSize:"10px",lineHeight:1.45}}>{myEventRewards[0].reward_name}</p><em style={{display:"block",marginTop:"7px",fontStyle:"normal",fontSize:"9px",fontWeight:900,color:"#8c5d22"}}>{myEventRewards[0].status === "delivered" ? "지급 완료" : myEventRewards[0].reward_type === "ai_process" ? "체험 활성" : "지급 대기"}</em></> : <p style={{margin:"6px 0 0",fontSize:"10px",color:"#9a8266"}}>당첨 혜택은 이곳에 자동 표시됩니다.</p>}</div>
-                  </section>
-                )}
-                {featuredEvent && (
-                  <button type="button" onClick={() => setChatTab("event")} style={styles.refNextEvent}>
-                    <div style={styles.refNextGift}>{eventIcon(featuredEvent.event_type)}</div>
-                    <div style={styles.refNextCopy}>
-                      <span>{activeEvent ? "LIVE EVENT" : "NEXT EVENT"}</span>
-                      <strong>{featuredEvent.title}</strong>
-                      <small>{activeEvent ? (featuredEvent.participated ? "✓ 참여 완료 · 결과를 기다려주세요" : "지금 참여 가능 · 눌러서 바로 이동") : (formatEventTime(featuredEvent.starts_at) + " ~ " + formatEventTime(featuredEvent.ends_at))}</small>
-                    </div>
-                    <div style={styles.refNextArrow}>›</div>
-                  </button>
-                )}
-
                 <form onSubmit={sendMessage} style={styles.refComposer}>
                   <label style={styles.refPlus}>
                     +
@@ -3466,19 +3532,25 @@ export default function Home() {
 
             {chatTab === "event" && (
               <div style={styles.refEventScreen}>
+                {profile?.role === "admin" && <section style={{margin:"0 0 14px",padding:"14px",border:"1px solid #dbe3e0",borderRadius:"16px",background:"#f8faf9"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"12px",marginBottom:"11px"}}><div><strong style={{display:"block",fontSize:"15px",color:"#293a35"}}>이벤트 운영센터</strong><small style={{display:"block",marginTop:"3px",fontSize:"10px",color:"#73817c"}}>일정 · 참여 · 당첨 · 지급 상태를 한곳에서 관리합니다.</small></div><button type="button" onClick={toggleEventRuntimeEnabled} style={{border:0,borderRadius:"999px",padding:"8px 11px",background:eventRuntimeEnabled?"#275c4c":"#ecefee",color:eventRuntimeEnabled?"#fff":"#63706c",fontSize:"9px",fontWeight:900,cursor:"pointer"}}>자동 이벤트 {eventRuntimeEnabled?"ON":"OFF"}</button></div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:"7px",marginBottom:"10px"}}>{[["오늘 회차",adminEventOps.length],["참여",adminEventOps.reduce((s,x)=>s+Number(x.participant_count||0),0)],["당첨",adminEventOps.reduce((s,x)=>s+Number(x.winner_count||0),0)],["지급대기",adminEventRewards.filter((x)=>x.status!=="delivered").length]].map(([label,value])=><div key={label} style={{padding:"10px 6px",borderRadius:"11px",background:"#fff",border:"1px solid #e1e6e4",textAlign:"center"}}><small style={{display:"block",fontSize:"8px",color:"#7d8a86"}}>{label}</small><b style={{display:"block",marginTop:"4px",fontSize:"13px",color:"#2b3d37"}}>{value}</b></div>)}</div>
+                  <details><summary style={{cursor:"pointer",fontSize:"10px",fontWeight:900,color:"#4b655d"}}>오늘 회차별 참여 현황 보기</summary><div style={{display:"grid",gap:"6px",marginTop:"9px"}}>{adminEventOps.map((item)=><div key={item.event_id} style={{display:"grid",gridTemplateColumns:"38px 1fr 60px 60px",gap:"8px",alignItems:"center",padding:"8px 9px",borderRadius:"10px",background:"#fff",fontSize:"9px"}}><b>{item.round_number}회</b><span>{item.title}</span><span>참여 {item.participant_count}</span><span>{item.status === "active" ? "진행" : item.status === "completed" ? "완료" : "예정"}</span></div>)}</div></details>
+                  <div style={{marginTop:"12px",paddingTop:"12px",borderTop:"1px solid #e1e6e4"}}><strong style={{display:"block",fontSize:"11px",color:"#31453f"}}>홈 중요 공지</strong><div style={{display:"grid",gridTemplateColumns:"1fr",gap:"7px",marginTop:"7px"}}><input value={homeNoticeTitle} onChange={(e)=>setHomeNoticeTitle(e.target.value)} placeholder="공지 제목" style={{border:"1px solid #d7dfdc",borderRadius:"9px",padding:"8px",fontSize:"10px"}}/><textarea value={homeNoticeBody} onChange={(e)=>setHomeNoticeBody(e.target.value)} placeholder="공지 내용" style={{minHeight:"58px",border:"1px solid #d7dfdc",borderRadius:"9px",padding:"8px",fontSize:"10px",resize:"vertical"}}/><button type="button" onClick={saveHomeNotice} style={{border:0,borderRadius:"9px",padding:"8px",background:"#29483f",color:"#fff",fontSize:"9px",fontWeight:900,cursor:"pointer"}}>공지 저장</button></div></div>
+                </section>}
                 {profile?.role === "admin" && (
                   <section style={{margin:"0 0 14px",padding:"14px",border:"1px solid #e1cfb4",borderRadius:"16px",background:"#fffaf2"}}>
                     <div style={{display:"flex",justifyContent:"space-between",gap:"10px",alignItems:"flex-start",marginBottom:"10px"}}>
-                      <div><span style={{display:"block",fontSize:"9px",fontWeight:900,letterSpacing:"1.2px",color:"#a77a3f"}}>EVENT REWARD CENTER</span><strong style={{display:"block",marginTop:"3px",fontSize:"15px",color:"#34251d"}}>이벤트 혜택 관리</strong><small style={{display:"block",marginTop:"3px",fontSize:"10px",color:"#8d7867"}}>실제 상품과 AI PROCESS 체험 혜택을 분리해 등록하고 운영합니다.</small></div>
+                      <div><span style={{display:"block",fontSize:"9px",fontWeight:900,letterSpacing:"1.2px",color:"#a77a3f"}}>이벤트 혜택 관리</span><strong style={{display:"block",marginTop:"3px",fontSize:"15px",color:"#34251d"}}>이벤트 혜택 관리</strong><small style={{display:"block",marginTop:"3px",fontSize:"10px",color:"#8d7867"}}>실제 상품과 AI PROCESS 체험 혜택을 분리해 등록하고 운영합니다.</small></div>
                       <span style={{padding:"5px 8px",borderRadius:"999px",background:"#f4e6ca",fontSize:"9px",fontWeight:900,color:"#7c5724"}}>{eventPrizes.length} ITEMS</span>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"120px minmax(180px,1fr) 110px 90px",gap:"7px",marginBottom:"8px"}}>
-                      <select value={newEventRewardType} onChange={(e)=>setNewEventRewardType(e.target.value)} style={{border:"1px solid #dccbb6",borderRadius:"10px",padding:"9px 8px",background:"#fff",fontSize:"10px",fontWeight:800}}><option value="physical">실제 상품</option><option value="ai_process">AI PROCESS 혜택</option></select>
+                      <select value={newEventRewardType} onChange={(e)=>setNewEventRewardType(e.target.value)} style={{border:"1px solid #d8dfdc",borderRadius:"10px",padding:"9px 8px",background:"#fff",fontSize:"10px",fontWeight:800}}><option value="physical">실제 상품</option><option value="ai_process">AI PROCESS 체험금</option><option value="event_bonus">이벤트 전용 보너스</option><option value="custom">관리자 지정 혜택</option></select>
                       <input value={newEventPrize} onChange={(e)=>setNewEventPrize(e.target.value)} placeholder={newEventRewardType === "physical" ? "예: 스타벅스 아메리카노" : "예: AI PROCESS 1만원 체험"} style={{minWidth:0,border:"1px solid #dccbb6",borderRadius:"10px",padding:"9px 10px",background:"#fff",fontSize:"11px"}}/>
                       {newEventRewardType === "physical" ? <input value={newEventPrizeValue} onChange={(e)=>setNewEventPrizeValue(e.target.value.replace(/[^0-9]/g,""))} placeholder="금액(원)" style={{border:"1px solid #dccbb6",borderRadius:"10px",padding:"9px",background:"#fff",fontSize:"10px"}}/> : <input value={newAiDemoAmount} onChange={(e)=>setNewAiDemoAmount(e.target.value.replace(/[^0-9]/g,""))} placeholder="체험금" style={{border:"1px solid #dccbb6",borderRadius:"10px",padding:"9px",background:"#fff",fontSize:"10px"}}/>}
-                      {newEventRewardType === "physical" ? <input value={newEventPrizeQty} onChange={(e)=>setNewEventPrizeQty(e.target.value.replace(/[^0-9]/g,""))} placeholder="수량" style={{border:"1px solid #dccbb6",borderRadius:"10px",padding:"9px",background:"#fff",fontSize:"10px"}}/> : <input value={newAiDemoMinutes} onChange={(e)=>setNewAiDemoMinutes(e.target.value.replace(/[^0-9]/g,""))} placeholder="분" style={{border:"1px solid #dccbb6",borderRadius:"10px",padding:"9px",background:"#fff",fontSize:"10px"}}/>}
+                      {newEventRewardType === "physical" ? <input value={newEventPrizeQty} onChange={(e)=>setNewEventPrizeQty(e.target.value.replace(/[^0-9]/g,""))} placeholder="수량" style={{border:"1px solid #dccbb6",borderRadius:"10px",padding:"9px",background:"#fff",fontSize:"10px"}}/> : <div style={{border:"1px solid #d7dfdc",borderRadius:"10px",padding:"9px",background:"#f7f9f8",fontSize:"9px",fontWeight:900,color:"#567067"}}>목표 수익률 도달 시 자동 종료</div>}
                     </div>
-                    {newEventRewardType === "physical" && <input value={newEventPrizeImage} onChange={(e)=>setNewEventPrizeImage(e.target.value)} placeholder="상품 이미지 URL · 선택" style={{width:"100%",boxSizing:"border-box",marginBottom:"8px",border:"1px solid #dccbb6",borderRadius:"10px",padding:"9px 10px",background:"#fff",fontSize:"10px"}}/>}
+                    {newEventRewardType === "physical" && <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"8px"}}><label style={{border:"1px solid #d5dedb",borderRadius:"10px",padding:"9px 11px",background:"#fff",fontSize:"10px",fontWeight:900,cursor:"pointer"}}>상품 이미지 업로드<input type="file" accept="image/*" hidden onChange={(e)=>uploadPrizeImage(e.target.files?.[0])}/></label>{newEventPrizeImage && <><img src={newEventPrizeImage} alt="상품" style={{width:"42px",height:"42px",objectFit:"cover",borderRadius:"9px"}}/><small style={{fontSize:"9px",color:"#5b776e"}}>이미지 등록 완료</small></>}</div>}
                     <button type="button" disabled={prizeWorking || newEventPrize.trim().length<2} onClick={addEventPrize} style={{width:"100%",marginBottom:"10px",border:"1px solid #c7903b",borderRadius:"10px",padding:"9px 11px",background:"#fff0cf",color:"#6b4619",fontSize:"10px",fontWeight:900,cursor:"pointer"}}>+ 새 이벤트 혜택 등록</button>
                     <div style={{display:"flex",flexWrap:"wrap",gap:"7px"}}>
                       {eventPrizes.map((prize)=>(
@@ -3503,7 +3575,7 @@ export default function Home() {
                 )}
                 {profile?.role === "admin" && (
                   <section style={{margin:"0 0 14px",padding:"14px",border:"1px solid #d8ccb9",borderRadius:"16px",background:"#211d1a",color:"#fff8ed"}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"10px",marginBottom:"10px"}}><div><span style={{display:"block",fontSize:"8px",fontWeight:900,letterSpacing:"1.2px",color:"#d4a75e"}}>WINNER & DELIVERY</span><strong style={{display:"block",marginTop:"3px",fontSize:"14px"}}>당첨 · 지급 관리</strong></div><button type="button" disabled={eventRewardWorking} onClick={startSurpriseAiDemo} style={{border:"1px solid #c49348",borderRadius:"10px",background:"#3a2b1d",color:"#ffd992",padding:"8px 10px",fontSize:"9px",fontWeight:900,cursor:"pointer"}}>⚡ AI PROCESS 돌발 체험 추첨</button></div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"10px",marginBottom:"10px"}}><div><span style={{display:"block",fontSize:"8px",fontWeight:900,letterSpacing:"1.2px",color:"#d4a75e"}}>당첨 · 지급</span><strong style={{display:"block",marginTop:"3px",fontSize:"14px"}}>당첨 · 지급 관리</strong></div><button type="button" disabled={eventRewardWorking} onClick={startSurpriseAiDemo} style={{border:"1px solid #c49348",borderRadius:"10px",background:"#3a2b1d",color:"#ffd992",padding:"8px 10px",fontSize:"9px",fontWeight:900,cursor:"pointer"}}>⚡ AI PROCESS 돌발 체험 추첨</button></div>
                     <div style={{display:"grid",gap:"7px"}}>
                       {adminEventRewards.slice(0,8).map((reward)=><div key={reward.id} style={{display:"grid",gridTemplateColumns:"minmax(90px,1fr) minmax(120px,1.6fr) 80px 78px",gap:"8px",alignItems:"center",padding:"9px 10px",borderRadius:"10px",background:"rgba(255,255,255,.055)",fontSize:"10px"}}><b>{reward.nickname}</b><span>{reward.reward_type === "ai_process" ? "◆ " : "🎁 "}{reward.reward_name}</span><em style={{fontStyle:"normal",color:reward.status === "delivered" ? "#83d9b1" : "#e8bf79"}}>{reward.status === "delivered" ? "지급완료" : reward.reward_type === "ai_process" ? "체험활성" : "지급대기"}</em>{reward.status !== "delivered" ? <button type="button" disabled={eventRewardWorking} onClick={()=>markEventRewardDelivered(reward.id)} style={{border:"1px solid #6c5a45",borderRadius:"8px",background:"#332a22",color:"#fff3df",padding:"6px",fontSize:"9px",cursor:"pointer"}}>완료 처리</button> : <small>완료</small>}</div>)}
                       {!adminEventRewards.length && <div style={{padding:"12px",borderRadius:"10px",background:"rgba(255,255,255,.04)",fontSize:"10px",color:"#b9aa99"}}>아직 당첨·지급 기록이 없습니다.</div>}
@@ -3598,6 +3670,7 @@ export default function Home() {
                     );
                   })}
                 </div>
+                {profile?.role !== "admin" && autoEvents.some((item)=>item.participated) && <section style={{marginTop:"12px",padding:"14px",border:"1px solid #dde4e1",borderRadius:"16px",background:"#fff"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"9px"}}><strong style={{fontSize:"14px",color:"#2c3b37"}}>내 참여 기록</strong><small style={{fontSize:"9px",color:"#7b8a85"}}>오늘 {autoEvents.filter((item)=>item.participated).length}회</small></div><div style={{display:"grid",gap:"7px"}}>{autoEvents.filter((item)=>item.participated).map((item)=><div key={item.event_id} style={{display:"grid",gridTemplateColumns:"34px 1fr auto",gap:"9px",alignItems:"center",padding:"9px 10px",borderRadius:"11px",background:"#f7f9f8"}}><span style={{fontSize:"19px"}}>{eventIcon(item.event_type)}</span><div><b style={{display:"block",fontSize:"11px",color:"#30413c"}}>{item.title}</b><small style={{fontSize:"9px",color:"#82908b"}}>{formatEventTime(item.starts_at)} · {item.my_result_text || (item.status === "completed" ? "결과 확인 가능" : "참여 완료")}</small></div><em style={{fontStyle:"normal",fontSize:"9px",fontWeight:900,color:item.winner_nickname===profile.nickname?"#2c765d":"#71807b"}}>{item.winner_nickname===profile.nickname?"당첨":"참여"}</em></div>)}</div></section>}
                 {notice && <div style={styles.refNotice}>{notice}</div>}
               </div>
             )}
@@ -3631,7 +3704,7 @@ export default function Home() {
 
                 {profile?.role !== "admin" && aiDemo && (
                   <section style={{margin:"0 0 14px",padding:"14px 16px",borderRadius:"16px",border:"1px solid #b9d5ef",background:"linear-gradient(145deg,#f0f7ff,#e7f1fb)",color:"#193a5a"}}>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}><div><span style={{display:"block",fontSize:"8px",fontWeight:900,letterSpacing:"1.2px",color:"#5d82a4"}}>SIMULATION MODE</span><strong style={{display:"block",marginTop:"4px",fontSize:"15px"}}>AI PROCESS 모의체험 {aiDemo.status === "running" ? "진행 중" : "완료"}</strong><p style={{margin:"5px 0 0",fontSize:"10px",color:"#627d95"}}>실제 투자금과 분리된 이벤트 체험금으로 운영됩니다.</p></div><div style={{textAlign:"right"}}><small style={{display:"block",fontSize:"9px",color:"#728ba1"}}>현재 체험금</small><b style={{display:"block",marginTop:"3px",fontSize:"16px"}}>{aiKrw(aiDemo.current_amount)}</b><em className={Number(aiDemo.total_profit||0)>=0?"is-profit":"is-loss"} style={{fontStyle:"normal",fontSize:"10px",fontWeight:900}}>{aiSignedKrw(aiDemo.total_profit||0)} · {aiSignedPct(aiDemo.total_return||0)}</em></div></div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}><div><span style={{display:"block",fontSize:"8px",fontWeight:900,letterSpacing:"1.2px",color:"#5d82a4"}}>모의체험</span><strong style={{display:"block",marginTop:"4px",fontSize:"15px"}}>AI PROCESS 모의체험 {aiDemo.status === "running" ? "진행 중" : "완료"}</strong><p style={{margin:"5px 0 0",fontSize:"10px",color:"#627d95"}}>실제 투자금과 분리된 이벤트 체험금으로 운영됩니다.</p></div><div style={{textAlign:"right"}}><small style={{display:"block",fontSize:"9px",color:"#728ba1"}}>현재 체험금</small><b style={{display:"block",marginTop:"3px",fontSize:"16px"}}>{aiKrw(aiDemo.current_amount)}</b><em className={Number(aiDemo.total_profit||0)>=0?"is-profit":"is-loss"} style={{fontStyle:"normal",fontSize:"10px",fontWeight:900}}>{aiSignedKrw(aiDemo.total_profit||0)} · {aiSignedPct(aiDemo.total_return||0)}</em></div></div>
                     {aiDemo.last_asset_name && <div style={{marginTop:"10px",paddingTop:"9px",borderTop:"1px solid #cfe0ef",fontSize:"10px",display:"flex",justifyContent:"space-between",gap:"10px"}}><span>최근 연동 · {aiDemo.last_asset_name}</span><b className={Number(aiDemo.last_market_pct)>=0?"is-profit":"is-loss"}>{aiSignedPct(aiDemo.last_market_pct||0)}</b></div>}
                   </section>
                 )}
@@ -3697,12 +3770,12 @@ export default function Home() {
                   <div className="ai-v2-summary-card"><span>진행 기간</span><strong>{aiSession?.status === "running" ? (aiSession?.ends_at ? aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours}) : "기간 미정") : "대기"}</strong><small>{aiSession?.status === "running" && !aiSession?.ends_at ? "관리자 종료 시까지 진행" : "최대 30일 진행"}</small></div>
                 </div>
 
-                <section className="ai-v2-panel" style={{marginBottom:"14px",padding:"16px"}}>
-                  <div className="ai-v2-panel-head"><div><span>PROCESS FLOW</span><strong>AI PROCESS 현재 단계</strong></div><small style={{fontSize:"10px",fontWeight:900,color:"#718092"}}>{aiSession?.status === "running" ? "자동 진행 중" : "대기"}</small></div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:"7px",marginTop:"12px"}}>
-                    {["시장 탐색","AI 분석","대상 선별","결과 반영"].map((label,index)=>{const activeIndex=aiSimLoading?1:aiSession?.status === "running"?3:0; const done=aiSession?.status === "running" && index<activeIndex; const active=index===activeIndex; return <div key={label} style={{padding:"11px 8px",borderRadius:"12px",border:active?"1px solid #7fb8a2":"1px solid #e1e7ea",background:active?"#eaf8f2":done?"#f4f8f6":"#f8fafb",textAlign:"center"}}><small style={{display:"block",fontSize:"8px",fontWeight:900,color:active?"#2f7961":"#8b98a1"}}>{done?"✓":"0"+(index+1)}</small><b style={{display:"block",marginTop:"4px",fontSize:"10px",color:active?"#1e604d":"#42505b"}}>{label}</b></div>})}
+                <section className="ai-v2-panel" style={{marginBottom:"14px",padding:"15px 16px"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
+                    <div><span style={{display:"block",fontSize:"9px",fontWeight:900,color:"#6b7c76"}}>현재 단계</span><strong style={{display:"block",marginTop:"4px",fontSize:"15px",color:"#263833"}}>{aiSimLoading ? "AI 분석 중" : aiSession?.status === "running" ? "결과 반영 · 재분석" : "대기"}</strong></div>
+                    <span style={{padding:"6px 9px",borderRadius:"999px",background:aiSession?.status === "running"?"#e7f5f0":"#f0f2f1",color:aiSession?.status === "running"?"#32705e":"#7a8581",fontSize:"9px",fontWeight:900}}>{aiSession?.status === "running" ? "자동 진행 중" : "대기"}</span>
                   </div>
-                  <p style={{margin:"10px 0 0",fontSize:"10px",lineHeight:1.55,color:"#78838d"}}>{aiSession?.status === "running" ? (aiLastResult ? `${aiLastResult.name} 시장 움직임을 반영해 최근 결과가 기록되었습니다.` : "실시간 시장 데이터를 탐색하고 현재 조건에 맞는 대상을 선별하고 있습니다.") : "AI PROCESS 시작 시 탐색부터 결과 반영까지 자동으로 진행됩니다."}</p>
+                  <p style={{margin:"8px 0 0",fontSize:"10px",lineHeight:1.55,color:"#788680"}}>{aiLastResult ? aiLastResult.name + " 시장 움직임이 최근 결과에 반영되었습니다." : "시장 데이터를 분석하고 조건에 맞는 대상을 선별합니다."}</p>
                 </section>
 
                 <section className="ai-v2-live-members">
@@ -3739,7 +3812,7 @@ export default function Home() {
                   <section className="ai-v2-panel ai-v2-chart-panel">
                     <div className="ai-v2-panel-head">
                       <div>
-                        <span>PERFORMANCE</span>
+                        <span>평가금액 변화</span>
                         <strong>AI PROCESS 자산 변화</strong>
                       </div>
                       <button type="button" onClick={updateAiSimulation} disabled={aiSimLoading}>{aiSimLoading ? "분석 중" : "지금 갱신"}</button>
@@ -3773,7 +3846,7 @@ export default function Home() {
                               className={Number(node.delta || 0) < 0 ? "ai-v2-point is-loss" : Number(node.delta || 0) > 0 ? "ai-v2-point is-profit" : "ai-v2-point"}
                               onMouseEnter={() => setAiChartHover(node)}
                               onMouseLeave={() => setAiChartHover(null)}
-                              onClick={() => setAiChartHover((current) => current?.at === node.at ? null : node)}
+                              onClick={() => { setAiChartHover((current) => current?.at === node.at ? null : node); window.setTimeout(() => document.querySelector(`[data-ai-at="${node.at}"]`)?.scrollIntoView({behavior:"smooth",block:"center"}), 30); }}
                               style={{cursor:"pointer"}}
                             />
                           ))}
@@ -3816,10 +3889,10 @@ export default function Home() {
 
                   <section className="ai-v2-panel ai-v2-market-panel" style={{alignSelf:"start"}}>
                     <div className="ai-v2-panel-head">
-                      <div><span>MARKET LINK</span><strong>실시간 시장 연동</strong></div>
+                      <div><span>시장 연동</span><strong>실시간 시장 연동</strong></div>
                       <button type="button" onClick={()=>setAiMarketExpanded((value)=>!value)}>{aiMarketExpanded ? "접기" : `펼쳐보기 · ${aiMarketRows.length}개`}</button>
                     </div>
-                    {!aiMarketExpanded ? <div style={{padding:"12px 2px 3px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"10px",fontSize:"10px",color:"#78838c"}}><span>주식 {aiMarketRows.filter((item)=>item.type !== "crypto").length} · 코인 {aiMarketRows.filter((item)=>item.type === "crypto").length}</span><b style={{color:"#44515b"}}>최근 시장 데이터를 보조 지표로 분석 중</b></div> : <div className="ai-v2-market-grid">
+                    {!aiMarketExpanded ? <div style={{padding:"12px 2px 3px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"10px",fontSize:"10px",color:"#78838c"}}><span>최근 선택 · <b style={{color:"#44515b"}}>{aiLastResult?.name || "분석 중"}</b>{aiLastResult ? " " + aiSignedPct(aiLastResult.intervalPct) : ""}</span><small>전체 시장 {aiMarketRows.length}개 · 펼치기에서 확인</small></div> : <div className="ai-v2-market-grid">
                       {aiMarketRows.length ? aiMarketRows.map((item) => {
                         const pct = Number(item.changePct || 0);
                         return (
@@ -3841,7 +3914,7 @@ export default function Home() {
                   </div>
                   <div className="ai-v2-history-list">
                     {aiRecentResults.length ? aiRecentResults.map((item, index) => (
-                      <div className="ai-v2-history-row" key={`${item.at}-${item.symbol}-${index}`}>
+                      <div className={`ai-v2-history-row ${aiChartHover?.at === item.at ? "is-selected" : ""}`} data-ai-at={item.at} key={`${item.at}-${item.symbol}-${index}`} style={aiChartHover?.at === item.at ? {outline:"2px solid #7eb5a5",outlineOffset:"-2px",background:"#f1f8f5"} : undefined}>
                         <div className={`ai-v2-history-sign ${item.resultType === "loss" || Number(item.intervalProfit) < 0 ? "is-loss" : "is-profit"}`}>{item.resultType === "loss" || Number(item.intervalProfit) < 0 ? "−" : "+"}</div>
                         <div className="ai-v2-history-asset"><strong>{item.name}</strong><span>{item.symbol} · {item.type === "crypto" ? "CRYPTO" : "STOCK"}</span></div>
                         <div className="ai-v2-history-market"><span>실제 3분</span><strong className={Number(item.intervalPct) >= 0 ? "is-profit" : "is-loss"}>{aiSignedPct(item.intervalPct)}</strong></div>
