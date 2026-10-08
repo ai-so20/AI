@@ -1,4 +1,4 @@
-name: Apply V35 event message formatting
+name: Apply V36 chat marker cleanup
 on:
   push:
     paths:
@@ -11,8 +11,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Apply V35 patch
-        run: node scripts/apply-v35-event-message-linebreaks.mjs
+      - name: Remove leaked V35 marker
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app/page.js')
+          s = p.read_text()
+          bad = '>/* V35 preserve chat line breaks */'
+          if bad not in s:
+              print('marker already absent')
+          else:
+              p.write_text(s.replace(bad, '>'))
+              print('marker removed')
+          PY
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Build validation
@@ -28,6 +39,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No changes'
           else
-            git commit -m 'fix: preserve event message line breaks'
+            git commit -m 'fix: remove visible V35 marker from chat'
             git push
           fi
