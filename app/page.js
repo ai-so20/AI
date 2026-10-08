@@ -102,6 +102,7 @@ export default function Home() {
   const [isStandaloneApp, setIsStandaloneApp] = useState(false);
   const [showInstallGuide, setShowInstallGuide] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [showAiDemoInfo, setShowAiDemoInfo] = useState(false);
 
   const [aiSession, setAiSession] = useState(null);
   const [aiSessions, setAiSessions] = useState([]);
@@ -2934,7 +2935,7 @@ export default function Home() {
               <section className="vip-welcome-card">
                 <button type="button" className="vip-welcome-close" onClick={() => setShowWelcomeModal(false)}>×</button>
                 <div className="vip-welcome-medal"><span>VIP</span></div>
-                <div className="vip-welcome-eyebrow">AI PROCESS · VIP MEMBERSHIP</div>
+                <div className="vip-welcome-eyebrow">AI PROCESS · VIP 회원HIP</div>
                 <h2>VIP 라운지에 오신 것을<br/>환영합니다.</h2>
                 <p className="vip-welcome-lead">AI PROCESS VIP 회원만을 위한 그룹 라운지, 이벤트, AI 프로세스와 1:1 전용 지원을 이용하실 수 있습니다.</p>
                 <div className="vip-welcome-benefit">
@@ -2983,7 +2984,7 @@ export default function Home() {
                 <div style={styles.refBrandTitle} className="vip-brand-title">AI PROCESS <span>VIP</span></div>
                 <div style={styles.refBrandSub} className="vip-brand-sub">
                   {profile?.role === "admin"
-                    ? (chatTab === "admin" ? "ADMIN CONSOLE" : chatTab === "members" ? "ADMIN · MEMBERS" : chatTab === "group" ? "ADMIN · GROUP" : chatTab === "event" ? "ADMIN · EVENT" : chatTab === "ai" ? "ADMIN · AI PROCESS" : "ADMIN · MEMBER SUPPORT")
+                    ? (chatTab === "admin" ? "ADMIN CONSOLE" : chatTab === "members" ? "ADMIN · 회원" : chatTab === "group" ? "ADMIN · GROUP" : chatTab === "event" ? "ADMIN · EVENT" : chatTab === "ai" ? "ADMIN · AI PROCESS" : "ADMIN · MEMBER SUPPORT")
                     : (chatTab === "home" ? "VIP DASHBOARD" : chatTab === "group" ? "Private Community" : chatTab === "event" ? "Event Schedule" : chatTab === "ai" ? "AI Market Process" : "Private Support")}
                 </div>
               </div>
@@ -3088,45 +3089,58 @@ export default function Home() {
               </div>
             </div>
           )}
+          {showAiDemoInfo && profile?.role !== "admin" && (()=>{
+            const offer = myEventRewards.find((reward)=>reward.reward_type === "ai_process" && reward.status !== "delivered");
+            const running = aiDemo?.status === "running";
+            return (
+              <div className="vip-v47-modal-backdrop" onClick={()=>setShowAiDemoInfo(false)}>
+                <section className="vip-v47-info-modal" onClick={(e)=>e.stopPropagation()}>
+                  <button type="button" className="vip-v47-modal-close" onClick={()=>setShowAiDemoInfo(false)}>×</button>
+                  <div className="vip-v47-modal-kicker">AI PROCESS · 돌발 체험</div>
+                  <h3>AI PROCESS 돌발 체험 안내</h3>
+                  <p className="vip-v47-modal-lead">선정된 회원에게 1회 제공되는 모의 체험 이벤트입니다.</p>
+                  <div className="vip-v47-info-list">
+                    <div><b>01</b><span><strong>참여 방법</strong><small>랜덤 선정된 회원에게 체험 혜택이 표시되며, 선정된 회원만 시작할 수 있습니다.</small></span></div>
+                    <div><b>02</b><span><strong>진행 확인</strong><small>체험 시작 후 AI PROCESS 화면에서 평가금액과 수익·손실 기록을 실시간으로 확인합니다.</small></span></div>
+                    <div><b>03</b><span><strong>완료 안내</strong><small>목표 수익률에 도달하면 자동 종료되며, 체험권은 1회 사용 후 다시 표시되지 않습니다.</small></span></div>
+                  </div>
+                  <div className="vip-v47-sim-note">실제 잔액 및 실제 정산과 분리된 모의체험입니다.</div>
+                  {running ? (
+                    <button type="button" className="vip-v47-modal-primary" onClick={()=>{setShowAiDemoInfo(false);changeTab("ai");}}>AI PROCESS에서 확인</button>
+                  ) : offer ? (
+                    <button type="button" className="vip-v47-modal-primary" disabled={eventRewardWorking} onClick={async()=>{await claimAiDemoReward(offer.id);setShowAiDemoInfo(false);changeTab("ai");}}>{eventRewardWorking?"시작 중...":"체험 시작하기"}</button>
+                  ) : (
+                    <button type="button" className="vip-v47-modal-primary" onClick={()=>setShowAiDemoInfo(false)}>확인</button>
+                  )}
+                </section>
+              </div>
+            );
+          })()}
 
           {showInstallGuide && (
-            <div style={styles.installGuideBackdrop} onClick={() => setShowInstallGuide(false)}>
-              <div style={styles.installGuideCard} onClick={(e) => e.stopPropagation()}>
-                <button type="button" onClick={() => setShowInstallGuide(false)} style={styles.installGuideClose}>×</button>
-                <div style={styles.installGuideIcon}>📲</div>
-                <div style={styles.installGuideEyebrow}>AI PROCESS VIP</div>
-                <h3 style={styles.installGuideTitle}>홈 화면에 VIP 앱 추가</h3>
-
-                {isIOSDevice() ? (
-                  <>
-                    <p style={styles.installGuideText}>
-                      아이폰은 보안 정책상 사이트 버튼으로 홈 화면 아이콘을 자동 생성할 수 없습니다.
-                      <br />Safari에서 아래 순서로 한 번만 추가해주세요.
-                    </p>
-                    <div style={styles.installGuideSteps}>
-                      <div><b>1</b><span>Safari의 <strong>공유 버튼</strong> 누르기</span></div>
-                      <div><b>2</b><span>메뉴에서 <strong>홈 화면에 추가</strong> 선택</span></div>
-                      <div><b>3</b><span><strong>추가</strong> 후 홈 화면의 VIP 아이콘 실행</span></div>
-                      <div><b>4</b><span>VIP 앱에서 <strong>🔔 알림</strong> → 허용</span></div>
-                    </div>
-                    <div style={styles.installGuideTip}>Chrome·카카오·인스타 내부 브라우저라면 Safari에서 사이트를 먼저 열어주세요.</div>
-                  </>
-                ) : (
-                  <>
-                    <p style={styles.installGuideText}>
-                      안드로이드 홈화면에 추가하기
-                    </p>
-                    <div style={styles.installGuideSteps}>
-                      <div><b>1</b><span>브라우저 오른쪽 위 <strong>⋮ 메뉴</strong> 누르기</span></div>
-                      <div><b>2</b><span><strong>홈 화면에 추가</strong> 선택</span></div>
-                      <div><b>3</b><span><strong>추가</strong> 누르기</span></div>
-                      <div><b>4</b><span>홈 화면의 <strong>AI PROCESS VIP</strong> 아이콘 실행</span></div>
-                    </div>
-                    <button type="button" onClick={() => setShowInstallGuide(false)} style={styles.installGuideOk}>확인</button>
-                  </>
-                )}
-                <button type="button" onClick={dismissInstallGuideForever} style={{marginTop:"12px",border:0,background:"transparent",color:"#9a836d",fontSize:"11px",fontWeight:800,cursor:"pointer"}}>이 설치 안내 다시 보지 않기</button>
-              </div>
+            <div className="vip-v47-modal-backdrop" onClick={() => setShowInstallGuide(false)}>
+              <section className="vip-v47-install-card" onClick={(e)=>e.stopPropagation()}>
+                <button type="button" className="vip-v47-modal-close" onClick={() => setShowInstallGuide(false)}>×</button>
+                <div className="vip-v47-install-icon">📲</div>
+                <div className="vip-v47-modal-kicker">AI PROCESS VIP</div>
+                <h3>홈 화면에 VIP 앱 추가</h3>
+                <p className="vip-v47-install-device">{isIOSDevice() ? "iPhone · Safari" : "Android · Chrome / Samsung Internet"}</p>
+                <div className="vip-v47-install-steps">
+                  {(isIOSDevice() ? [
+                    ["01","공유 버튼 열기","Safari 하단의 공유 버튼을 눌러주세요."],
+                    ["02","홈 화면에 추가","메뉴에서 ‘홈 화면에 추가’를 선택합니다."],
+                    ["03","추가 확인","오른쪽 위 ‘추가’를 눌러주세요."],
+                    ["04","VIP 앱 실행","홈 화면에 생성된 AI PROCESS VIP 아이콘을 실행합니다."],
+                  ] : [
+                    ["01","브라우저 메뉴 열기","오른쪽 위 ⋮ 메뉴를 눌러주세요."],
+                    ["02","홈 화면에 추가","‘홈 화면에 추가’ 또는 ‘앱 설치’를 선택합니다."],
+                    ["03","추가 확인","표시되는 창에서 ‘추가’를 눌러주세요."],
+                    ["04","VIP 앱 실행","홈 화면에 생성된 AI PROCESS VIP 아이콘을 실행합니다."],
+                  ]).map(([num,title,text])=><div key={num}><b>{num}</b><span><strong>{title}</strong><small>{text}</small></span></div>)}
+                </div>
+                <button type="button" className="vip-v47-modal-primary" onClick={()=>setShowInstallGuide(false)}>확인</button>
+                <button type="button" className="vip-v47-modal-secondary" onClick={dismissInstallGuideForever}>이 설치 안내 다시 보지 않기</button>
+              </section>
             </div>
           )}
 
@@ -3184,11 +3198,11 @@ export default function Home() {
                   {myEventRewards[0] && <button type="button" onClick={() => changeTab("event")} style={{width:"100%",marginTop:"10px",border:"1px solid #e2c892",background:"#fff3d8",borderRadius:"11px",padding:"9px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",color:"#5b401f",fontSize:"10px",fontWeight:900,cursor:"pointer"}}><span>🎁 최근 혜택 · {myEventRewards[0].reward_name}</span><em style={{fontStyle:"normal"}}>{myEventRewards[0].status === "delivered" ? "지급완료" : myEventRewards[0].reward_type === "ai_process" ? "체험 활성" : "지급대기"} ›</em></button>}
                 </section>
                 <section style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:"10px",marginTop:"12px"}}>
-                  <button type="button" onClick={()=>changeTab("ai")} style={{textAlign:"left",border:"1px solid #cbdcd7",borderRadius:"16px",padding:"14px",background:"linear-gradient(145deg,#f1f7f5,#e8f1ee)",color:"#23443a",cursor:"pointer"}}>
+                  <button type="button" onClick={()=>setShowAiDemoInfo(true)} style={{textAlign:"left",border:"1px solid #cbdcd7",borderRadius:"16px",padding:"14px",background:"linear-gradient(145deg,#f1f7f5,#e8f1ee)",color:"#23443a",cursor:"pointer"}}>
                     <span style={{display:"block",fontSize:"9px",fontWeight:900,color:"#4d7a6d"}}>AI PROCESS 체험</span>
                     <strong style={{display:"block",marginTop:"4px",fontSize:"14px"}}>{aiDemo?.status === "running" ? "모의체험 진행 중" : "AI PROCESS 돌발 체험"}</strong>
                     <p style={{margin:"6px 0 0",fontSize:"10px",lineHeight:1.5,color:"#667b75"}}>{aiDemo?.status === "running" ? "현재 " + aiKrw(aiDemo.current_amount) + " · " + aiSignedPct(aiDemo.total_return || 0) : "선정된 회원에게 1회 체험 혜택이 표시됩니다."}</p>
-                    <em style={{display:"block",marginTop:"8px",fontStyle:"normal",fontSize:"9px",fontWeight:900,color:"#356b5d"}}>{aiDemo?.status === "running" ? "체험 화면 보기 ›" : "선정 시 AI PROCESS에서 시작"}</em>
+                    <em style={{display:"block",marginTop:"8px",fontStyle:"normal",fontSize:"9px",fontWeight:900,color:"#356b5d"}}>{aiDemo?.status === "running" ? "진행 안내 보기 ›" : "안내 보기 ›"}</em>
                   </button>
                   <button type="button" onClick={()=>changeTab("event")} style={{textAlign:"left",border:"1px solid #dfe3e1",borderRadius:"16px",padding:"14px",background:"#fff",color:"#303a37",cursor:"pointer"}}>
                     <span style={{display:"block",fontSize:"9px",fontWeight:900,color:"#74827e"}}>내 이벤트 혜택</span>
@@ -3204,13 +3218,6 @@ export default function Home() {
                   {activeEvent && <button type="button" onClick={() => changeTab("event")}><i>🎁</i><span><b>{activeEvent.participated ? "이벤트 참여 완료" : "이벤트 지금 참여 가능"}</b><small>{activeEvent.title}</small></span><em>›</em></button>}
                   {aiSession?.status === "running" && <button type="button" onClick={() => changeTab("ai")}><i>◆</i><span><b>AI PROCESS 진행 중</b><small>{aiKrw(aiSession?.current_amount || aiCurrentStartMoney)} · {aiSignedPct(aiSession?.total_return || 0)}</small></span><em>›</em></button>}
                   {unreadPrivate === 0 && !activeEvent && aiSession?.status !== "running" && <div className="vip-home-v20-quiet"><i>✓</i><span><b>새로 확인할 알림이 없습니다.</b><small>필요한 기능은 아래에서 바로 이용할 수 있습니다.</small></span></div>}
-                </section>
-                <section className="vip-home-v20-section">
-                  <div className="vip-home-v20-section-head"><div><span>COMMUNICATION</span><h3>대화</h3></div><small>자주 쓰는 공간</small></div>
-                  <div className="vip-home-v20-chatlist">
-                    <button type="button" onClick={() => changeTab("group")}><div className="vip-home-v20-chat-icon is-group">💬</div><div className="vip-home-v20-chat-copy"><b>VIP 그룹채팅</b><span>{memberGroupChatLocked ? "현재 운영시간 외 · 11:00~18:30" : "지금 대화 가능 · VIP 회원 " + approvedMemberCount + "명"}</span></div><div className="vip-home-v20-chat-meta"><small>{memberGroupChatLocked ? "OFF" : "LIVE"}</small><em>›</em></div></button>
-                    <button type="button" onClick={() => changeTab("private")}><div className="vip-home-v20-chat-icon is-private">🎧</div><div className="vip-home-v20-chat-copy"><b>1:1 문의</b><span>{unreadPrivate > 0 ? "새 답변 " + unreadPrivate + "건이 있습니다." : "관리자와 개인 상담 및 지급 안내"}</span></div><div className="vip-home-v20-chat-meta">{unreadPrivate > 0 && <strong>{unreadPrivate}</strong>}<em>›</em></div></button>
-                  </div>
                 </section>
                 <section className="vip-home-v20-process" onClick={() => changeTab("ai")} role="button" tabIndex={0}>
                   <div className="vip-home-v20-process-top"><span>내 AI PROCESS</span><em>{aiSession?.status === "running" ? "진행 중" : "대기"}</em></div>
@@ -3239,7 +3246,7 @@ export default function Home() {
                     <span>승인 대기</span><strong>{adminPendingMembers.length.toLocaleString("ko-KR")}명</strong><small>신규 가입 신청</small>
                   </button>
                   <button type="button" onClick={() => changeTab("ai")}>
-                    <span>진행 중 프로젝트</span><strong>{aiPublicSessions.length.toLocaleString("ko-KR")}개</strong><small>AI PROCESS LIVE</small>
+                    <span>진행 중 프로젝트</span><strong>{aiPublicSessions.length.toLocaleString("ko-KR")}개</strong><small>AI PROCESS 진행 중</small>
                   </button>
                   <button type="button" onClick={() => changeTab("private")}>
                     <span>읽지 않은 문의</span><strong>{unreadPrivate.toLocaleString("ko-KR")}건</strong><small>1:1 상담 확인</small>
@@ -3410,7 +3417,7 @@ export default function Home() {
                         <path d="M14.4 14.2c2.8-.5 4.9.9 5.5 3.3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity=".72"/>
                       </svg>
                     </span>
-                    <span style={styles.refMemberCountLabel}>MEMBERS</span>
+                    <span style={styles.refMemberCountLabel}>회원</span>
                     <strong style={styles.refMemberCountNumber}>{approvedMemberCount.toLocaleString("ko-KR")}명</strong>
                   </div>
                   {profile?.role === "admin" && (
@@ -3424,15 +3431,12 @@ export default function Home() {
                   <div style={styles.refLockNotice}>🔒 그룹채팅 운영시간은 11:00 ~ 18:30입니다.</div>
                 )}
 
-                {profile?.role !== "admin" && (activeEvent || memberUnreadCount > 0 || aiSession?.status === "running") && (
+                {profile?.role !== "admin" && (activeEvent || memberUnreadCount > 0) && (
                   <div style={{display:"flex",gap:"7px",padding:"8px 12px",background:"#fff8eb",borderBottom:"1px solid #ead9bd",overflowX:"auto",flexShrink:0}}>
                     {activeEvent && (
                       <button type="button" onClick={() => setChatTab("event")} style={{border:"1px solid #dfbe7b",background:activeEvent.participated?"#f7f0e2":"#fff1ca",color:"#5a3a18",borderRadius:"999px",padding:"7px 11px",fontSize:"11px",fontWeight:900,whiteSpace:"nowrap",cursor:"pointer"}}>
                         {activeEvent.participated ? "✓ 이벤트 참여 완료" : "🎁 이벤트 바로 참여"}
                       </button>
-                    )}
-                    {aiSession?.status === "running" && (
-                      <button type="button" onClick={() => setChatTab("ai")} style={{border:"1px solid #c6d5e8",background:"#eef5ff",color:"#173b69",borderRadius:"999px",padding:"7px 11px",fontSize:"11px",fontWeight:900,whiteSpace:"nowrap",cursor:"pointer"}}>◆ AI PROCESS 진행 중</button>
                     )}
                     {memberUnreadCount > 0 && (
                       <button type="button" onClick={() => setChatTab("private")} style={{border:"1px solid #dfc9aa",background:"#fff",color:"#5a3a18",borderRadius:"999px",padding:"7px 11px",fontSize:"11px",fontWeight:900,whiteSpace:"nowrap",cursor:"pointer"}}>🎧 1:1 새 답변 {memberUnreadCount}</button>
@@ -3533,7 +3537,7 @@ export default function Home() {
             {chatTab === "event" && (
               <div style={styles.refEventScreen}>
                 {profile?.role === "admin" && <section style={{margin:"0 0 14px",padding:"14px",border:"1px solid #dbe3e0",borderRadius:"16px",background:"#f8faf9"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"12px",marginBottom:"11px"}}><div><strong style={{display:"block",fontSize:"15px",color:"#293a35"}}>이벤트 운영센터</strong><small style={{display:"block",marginTop:"3px",fontSize:"10px",color:"#73817c"}}>일정 · 참여 · 당첨 · 지급 상태를 한곳에서 관리합니다.</small></div><button type="button" onClick={toggleEventRuntimeEnabled} style={{border:0,borderRadius:"999px",padding:"8px 11px",background:eventRuntimeEnabled?"#275c4c":"#ecefee",color:eventRuntimeEnabled?"#fff":"#63706c",fontSize:"9px",fontWeight:900,cursor:"pointer"}}>자동 이벤트 {eventRuntimeEnabled?"ON":"OFF"}</button></div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"12px",marginBottom:"11px"}}><div><strong style={{display:"block",fontSize:"15px",color:"#293a35"}}>이벤트 운영센터</strong><small style={{display:"block",marginTop:"3px",fontSize:"10px",color:"#73817c"}}>일정 · 참여 · 당첨 · 지급 상태를 한곳에서 관리합니다.</small></div><button type="button" onClick={toggleEventRuntimeEnabled} style={{border:0,borderRadius:"999px",padding:"8px 11px",background:eventRuntimeEnabled?"#275c4c":"#ecefee",color:eventRuntimeEnabled?"#fff":"#63706c",fontSize:"9px",fontWeight:900,cursor:"pointer"}}>자동 이벤트 {eventRuntimeEnabled?"ON":"운영 종료"}</button></div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:"7px",marginBottom:"10px"}}>{[["오늘 회차",adminEventOps.length],["참여",adminEventOps.reduce((s,x)=>s+Number(x.participant_count||0),0)],["당첨",adminEventOps.reduce((s,x)=>s+Number(x.winner_count||0),0)],["지급대기",adminEventRewards.filter((x)=>x.status!=="delivered").length]].map(([label,value])=><div key={label} style={{padding:"10px 6px",borderRadius:"11px",background:"#fff",border:"1px solid #e1e6e4",textAlign:"center"}}><small style={{display:"block",fontSize:"8px",color:"#7d8a86"}}>{label}</small><b style={{display:"block",marginTop:"4px",fontSize:"13px",color:"#2b3d37"}}>{value}</b></div>)}</div>
                   <details><summary style={{cursor:"pointer",fontSize:"10px",fontWeight:900,color:"#4b655d"}}>오늘 회차별 참여 현황 보기</summary><div style={{display:"grid",gap:"6px",marginTop:"9px"}}>{adminEventOps.map((item)=><div key={item.event_id} style={{display:"grid",gridTemplateColumns:"38px 1fr 60px 60px",gap:"8px",alignItems:"center",padding:"8px 9px",borderRadius:"10px",background:"#fff",fontSize:"9px"}}><b>{item.round_number}회</b><span>{item.title}</span><span>참여 {item.participant_count}</span><span>{item.status === "active" ? "진행" : item.status === "completed" ? "완료" : "예정"}</span></div>)}</div></details>
                   <div style={{marginTop:"12px",paddingTop:"12px",borderTop:"1px solid #e1e6e4"}}><strong style={{display:"block",fontSize:"11px",color:"#31453f"}}>홈 중요 공지</strong><div style={{display:"grid",gridTemplateColumns:"1fr",gap:"7px",marginTop:"7px"}}><input value={homeNoticeTitle} onChange={(e)=>setHomeNoticeTitle(e.target.value)} placeholder="공지 제목" style={{border:"1px solid #d7dfdc",borderRadius:"9px",padding:"8px",fontSize:"10px"}}/><textarea value={homeNoticeBody} onChange={(e)=>setHomeNoticeBody(e.target.value)} placeholder="공지 내용" style={{minHeight:"58px",border:"1px solid #d7dfdc",borderRadius:"9px",padding:"8px",fontSize:"10px",resize:"vertical"}}/><button type="button" onClick={saveHomeNotice} style={{border:0,borderRadius:"9px",padding:"8px",background:"#29483f",color:"#fff",fontSize:"9px",fontWeight:900,cursor:"pointer"}}>공지 저장</button></div></div>
@@ -3596,9 +3600,9 @@ export default function Home() {
                     <div>
                       <span style={{display:"block",fontSize:"9px",fontWeight:900,letterSpacing:"1.4px",color:"#a77839"}}>VIP EVENT CENTER</span>
                       <strong style={{display:"block",marginTop:"4px",fontSize:"18px",color:"#2f251f"}}>오늘의 VIP 이벤트</strong>
-                      <p style={{margin:"6px 0 0",fontSize:"11px",lineHeight:1.55,color:"#756558"}}>매일 진행되는 LIVE 이벤트에 참여하고 결과와 혜택을 한곳에서 확인하세요. 당첨 결과는 이벤트 종료 후 자동 안내됩니다.</p>
+                      <p style={{margin:"6px 0 0",fontSize:"11px",lineHeight:1.55,color:"#756558"}}>매일 진행되는 진행 중 이벤트에 참여하고 결과와 혜택을 한곳에서 확인하세요. 당첨 결과는 이벤트 종료 후 자동 안내됩니다.</p>
                     </div>
-                    <span style={{padding:"6px 9px",borderRadius:"999px",background:activeEvent?"#173f35":"#efe1c7",color:activeEvent?"#d9f8ea":"#76552a",fontSize:"9px",fontWeight:900,whiteSpace:"nowrap"}}>{activeEvent ? "LIVE" : "TODAY"}</span>
+                    <span style={{padding:"6px 9px",borderRadius:"999px",background:activeEvent?"#173f35":"#efe1c7",color:activeEvent?"#d9f8ea":"#76552a",fontSize:"9px",fontWeight:900,whiteSpace:"nowrap"}}>{activeEvent ? "진행 중" : "TODAY"}</span>
                   </div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:"7px",marginTop:"14px"}}>
                     {[
@@ -3618,7 +3622,7 @@ export default function Home() {
                 {featuredEvent && (
                   <div style={{...styles.refHeroEvent, backgroundImage:eventHeroBackground(featuredEvent.event_type)}}>
                     <div style={styles.refHeroEventTop}>
-                      <span>{activeEvent ? "◆ LIVE" : "◆ NEXT"}</span>
+                      <span>{activeEvent ? "◆ 진행 중" : "◆ NEXT"}</span>
                       <b>⏱ {formatEventTime(featuredEvent.starts_at)} ~ {formatEventTime(featuredEvent.ends_at)}</b>
                     </div>
                     <div style={styles.refHeroEventMain}>
@@ -3681,7 +3685,7 @@ export default function Home() {
                 {profile?.role !== "admin" && aiDemo?.status === "running" && <section style={{marginBottom:"12px",padding:"10px 12px",borderRadius:"12px",background:"#edf5f3",border:"1px solid #ccddd8",fontSize:"10px",color:"#41645b"}}><b>모의체험 진행 중</b> · 실제 자산 및 정산에 반영되지 않습니다. 목표 수익률 도달 시 자동 종료됩니다.</section>}
                 <section className="ai-v2-hero">
                   <div className="ai-v2-hero-copy">
-                    <div className="ai-v2-eyebrow"><span className="ai-v2-live-dot"></span> AI PROCESS · LIVE</div>
+                    <div className="ai-v2-eyebrow"><span className="ai-v2-live-dot"></span> AI PROCESS · 진행 중</div>
                     <h2>내 AI PROCESS</h2>
                     <p>진행 상태, 평가금액, 수익·손실 기록을 한눈에 확인하세요.</p>
                     <div className="ai-v2-status-row">
@@ -3780,7 +3784,7 @@ export default function Home() {
 
                 <section className="ai-v2-live-members">
                   <div className="ai-v2-live-members-head">
-                    <div><span>LIVE MEMBERS</span><strong>지금 함께 진행 중인 회원</strong><small>다른 회원은 요약 수익만 표시됩니다.</small></div>
+                    <div><span>진행 중 회원</span><strong>지금 함께 진행 중인 회원</strong><small>다른 회원은 요약 수익만 표시됩니다.</small></div>
                     <div className="ai-v2-live-count"><i></i>{aiPublicSessions.length}건 진행 중</div>
                   </div>
                   {aiPublicLoading && !aiPublicSessions.length ? <div className="ai-v2-live-empty">진행 현황을 불러오는 중입니다.</div> : aiPublicSessions.length ? (
@@ -3980,7 +3984,7 @@ export default function Home() {
                     <div ref={privateMessagesRef} style={styles.refPrivateMessages}>
                       {profile?.role !== "admin" && (
                         <section className="vip-private-intro vip-private-intro-in-chat" style={{margin:"2px 0 18px",flexShrink:0}}>
-                          <div className="vip-private-chip">VIP MEMBERSHIP</div>
+                          <div className="vip-private-chip">VIP 회원HIP</div>
                           <h3>VIP 회원님, 환영합니다. <span>♛</span></h3>
                           <p>1:1 문의는 이 채팅에서 편하게 남겨주세요. 이벤트 당첨 상품과 주요 안내도 이곳으로 전달됩니다.</p>
                           <div className="vip-private-event">

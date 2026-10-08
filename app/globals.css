@@ -920,3 +920,29 @@
 .vip-home-v20-process{margin-top:12px;padding:18px 19px;border-radius:19px;background:linear-gradient(135deg,#23211f,#312a23);color:#fff;cursor:pointer}.vip-home-v20-process-top,.vip-home-v20-process-foot{display:flex;justify-content:space-between;gap:12px}.vip-home-v20-process-top em{font-style:normal;font-size:8px;color:#7be0b5}.vip-home-v20-process-main{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:16px 0 14px}.vip-home-v20-process-main small{display:block;color:#a9a099;font-size:8px}.vip-home-v20-process-main strong{display:block;margin-top:5px;font-size:25px}.vip-home-v20-process-main>b{font-size:11px}.vip-home-v20-process .is-profit{color:#6dd6a8!important}.vip-home-v20-process .is-loss{color:#ff8e94!important}.vip-home-v20-process-foot{font-size:8px;color:#aca49d}.vip-home-v20-process-foot em{font-style:normal;color:#e1c48d}
 .vip-home-v20-event{width:100%;margin-top:12px;padding:17px 18px;border-radius:18px;border:1px solid #ead9bd;background:linear-gradient(135deg,#fff9ed,#fff3dc);display:flex;align-items:center;justify-content:space-between;gap:14px;text-align:left;color:#3a3027}.vip-home-v20-event h3{margin:5px 0 3px;font-size:14px}.vip-home-v20-event p{margin:0;font-size:8.5px;color:#9a8774}.vip-home-v20-event-icon{width:50px;height:50px;border-radius:16px;display:grid;place-items:center;background:#fff;border:1px solid #efd9ae;font-size:22px}
 @media(max-width:700px){.vip-home-v20{padding:10px}.vip-home-v20-welcome{padding:17px 15px}.vip-home-v20-welcome h2{font-size:19px}.vip-home-v20-welcome p{font-size:8px}.vip-home-v20-welcome img{width:48px;height:48px}.vip-home-v20-alerts{grid-template-columns:1fr;gap:6px}.vip-home-v20-chatlist>button{grid-template-columns:40px 1fr auto;padding:12px}.vip-home-v20-chat-icon{width:38px;height:38px}.vip-home-v20-process{padding:15px}.vip-home-v20-process-main{display:block}.vip-home-v20-process-main strong{font-size:21px}.vip-home-v20-process-main>b{display:block;margin-top:7px}}
+
+
+/* V47 DESIGN SYSTEM CLEANUP */
+
+:root{--vip47-bg:#f4f6f5;--vip47-card:#ffffff;--vip47-line:#dfe6e3;--vip47-text:#24332e;--vip47-sub:#74817d;--vip47-green:#29594b;--vip47-green-soft:#edf5f2;--vip47-navy:#263b4b}
+.vip-v47-modal-backdrop{position:fixed;inset:0;z-index:2147483200;background:rgba(17,25,22,.58);backdrop-filter:blur(9px);display:grid;place-items:center;padding:18px}
+.vip-v47-info-modal,.vip-v47-install-card{position:relative;width:min(480px,100%);max-height:90vh;overflow:auto;border-radius:26px;background:#fff;border:1px solid #e1e7e4;box-shadow:0 28px 80px rgba(18,34,28,.26);padding:26px;color:var(--vip47-text)}
+.vip-v47-modal-close{position:absolute;right:16px;top:16px;width:36px;height:36px;border:0;border-radius:50%;background:#eef1ef;color:#5f6c67;font-size:22px;cursor:pointer}
+.vip-v47-modal-kicker{font-size:10px;font-weight:900;letter-spacing:1.15px;color:#4d7468;margin-bottom:8px}
+.vip-v47-info-modal h3,.vip-v47-install-card h3{margin:0;padding-right:44px;font-size:23px;line-height:1.3;letter-spacing:-.7px;color:#24332e}
+.vip-v47-modal-lead{margin:10px 0 18px;font-size:12px;line-height:1.65;color:#6d7a76}
+.vip-v47-info-list,.vip-v47-install-steps{display:grid;gap:10px;margin:18px 0}
+.vip-v47-info-list>div,.vip-v47-install-steps>div{display:grid;grid-template-columns:42px 1fr;gap:11px;align-items:start;padding:12px;border-radius:14px;background:#f7f9f8;border:1px solid #e4e9e7}
+.vip-v47-info-list>div>b,.vip-v47-install-steps>div>b{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:#e8f1ee;color:#315f52;font-size:10px;font-weight:950}
+.vip-v47-info-list span strong,.vip-v47-install-steps span strong{display:block;font-size:12px;color:#2b3b36}
+.vip-v47-info-list span small,.vip-v47-install-steps span small{display:block;margin-top:4px;font-size:10px;line-height:1.55;color:#74817d}
+.vip-v47-sim-note{margin:12px 0 14px;padding:10px 12px;border-radius:12px;background:#f1f5f3;color:#63726d;font-size:10px;line-height:1.55}
+.vip-v47-modal-primary{width:100%;border:0;border-radius:13px;padding:13px 14px;background:var(--vip47-green);color:#fff;font-size:11px;font-weight:900;cursor:pointer}
+.vip-v47-modal-primary:disabled{opacity:.55;cursor:default}
+.vip-v47-modal-secondary{display:block;margin:10px auto 0;border:0;background:transparent;color:#89948f;font-size:9px;font-weight:800;cursor:pointer}
+.vip-v47-install-icon{width:54px;height:54px;display:grid;place-items:center;margin:0 0 14px;border-radius:16px;background:#edf4f1;font-size:26px}
+.vip-v47-install-device{display:inline-flex;margin:10px 0 0;padding:6px 9px;border-radius:999px;background:#edf2f0;color:#52665f;font-size:9px;font-weight:900}
+.vip-home-v20-alerts{margin-top:10px}
+.vip-home-v20-process{border-color:#dde5e2!important;box-shadow:0 8px 24px rgba(31,54,47,.06)!important}
+.vip-home-v20-event{border-color:#dde5e2!important;box-shadow:0 8px 24px rgba(31,54,47,.05)!important}
+@media(max-width:620px){.vip-v47-info-modal,.vip-v47-install-card{padding:22px 18px;border-radius:22px}.vip-v47-info-modal h3,.vip-v47-install-card h3{font-size:20px}.vip-v47-info-list>div,.vip-v47-install-steps>div{grid-template-columns:38px 1fr;padding:10px}.vip-v47-info-list>div>b,.vip-v47-install-steps>div>b{width:30px;height:30px}.vip-home-v20{padding-bottom:84px!important}}
