@@ -3131,7 +3131,7 @@ export default function Home() {
                           <div style={{maxWidth:"76%"}}>
                             {!mine && <div style={styles.refMsgName}>{getMessageNickname(item)}{adminAccountBadge(item.member_id)}</div>}
                             <div style={{display:"flex",gap:"6px",alignItems:"flex-end",flexDirection:mine?"row-reverse":"row"}}>
-                              <div style={{...styles.refBubble,...(mine?styles.refMyBubble:styles.refOtherBubble)}}>
+                              <div style={{...styles.refBubble,...(mine?styles.refMyBubble:styles.refOtherBubble),whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>/* V35 preserve chat line breaks */
                                 {renderMessageContent(item.content)}
                               </div>
                               <span style={styles.refMsgTime}>{formatChatTime(item.created_at)}</span>
