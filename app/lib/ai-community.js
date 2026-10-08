@@ -535,7 +535,7 @@ async function recentChatContext(db, limit = 40) {
   const rows = messages || [];
   const memberIds = [...new Set(rows.map((r) => r.member_id).filter(Boolean))];
   const { data: profiles } = memberIds.length
-    ? await db.from("profiles").select("id,nickname,account_type").in("id", memberIds)
+    ? await db.from("profiles").select("id,nickname,account_type,role").in("id", memberIds)
     : { data: [] };
   const profileMap = new Map((profiles || []).map((p) => [p.id, p]));
   const ordered = [...rows].reverse();
@@ -551,11 +551,14 @@ async function recentChatContext(db, limit = 40) {
 
 async function findLatestUnhandledHuman(db) {
   const { rows, profileMap } = await recentChatContext(db, 100);
-  const humanRows = rows.filter((r) =>
-    r.member_id &&
-    r.message_type !== "event" &&
-    profileMap.get(r.member_id)?.account_type === "human"
-  );
+  // V33: exclude admin/system event messages from human conversation detection
+  const humanRows = rows.filter((r) => {
+    const p = profileMap.get(r.member_id);
+    return r.member_id &&
+      r.message_type !== "event" &&
+      p?.account_type === "human" &&
+      p?.role !== "admin";
+  });
   if (!humanRows.length) return null;
   const ids = humanRows.map((r) => r.id);
   const { data: receipts } = await db.from("ai_human_message_receipts").select("message_id").in("message_id", ids);
@@ -666,7 +669,10 @@ async function getDueTurn(db) {
 
 async function hasRecentHuman(db, quietMinutes, now = new Date()) {
   const context = await recentChatContext(db, 80);
-  const row = context.rows.find((r) => r.member_id && context.profileMap.get(r.member_id)?.account_type === "human");
+  const row = context.rows.find((r) => {
+    const p = context.profileMap.get(r.member_id);
+    return r.member_id && r.message_type !== "event" && p?.account_type === "human" && p?.role !== "admin";
+  });
   if (!row) return false;
   return now.getTime() - new Date(row.created_at).getTime() < Number(quietMinutes || 4) * 60 * 1000;
 }
