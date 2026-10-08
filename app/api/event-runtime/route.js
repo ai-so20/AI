@@ -62,12 +62,32 @@ function quizCategory(question) {
 }
 
 async function ensureQuizBank(db) {
-  const { data: existing } = await db.from("event_quiz_bank").select("question").limit(1000);
+  const { data: existing, error: readError } = await db.from("event_quiz_bank").select("question").limit(1000);
+  if (readError) throw new Error(`quiz_bank_read_failed: ${readError.message}`);
   const have = new Set((existing || []).map((row) => row.question));
-  const missing = QUIZ_SEEDS.filter((q) => !have.has(q[0])).map((q) => ({
-    question: q[0], option_1: q[1], option_2: q[2], option_3: q[3], option_4: q[4], correct_option: q[5], active: true,
-  }));
-  if (missing.length) await db.from("event_quiz_bank").insert(missing);
+  const missing = QUIZ_SEEDS
+    .filter((q) => Array.isArray(q) && q.length >= 6)
+    .filter((q) => q.slice(0, 5).every((value) => String(value ?? "").trim().length > 0))
+    .filter((q) => Number.isInteger(Number(q[5])) && Number(q[5]) >= 1 && Number(q[5]) <= 4)
+    .filter((q) => !have.has(q[0]))
+    .map((q) => ({
+      question: String(q[0]).trim(),
+      option_1: String(q[1]).trim(),
+      option_2: String(q[2]).trim(),
+      option_3: String(q[3]).trim(),
+      option_4: String(q[4]).trim(),
+      correct_option: Number(q[5]),
+      active: true,
+    }));
+
+  // 큰 seed 배열을 한 번에 보내면 PostgREST 요청 크기/문장 제한에서 조용히 실패할 수 있어
+  // 40개씩 나눠 넣고 오류를 즉시 드러내도록 합니다.
+  for (let i = 0; i < missing.length; i += 40) {
+    const chunk = missing.slice(i, i + 40);
+    const { error } = await db.from("event_quiz_bank").insert(chunk);
+    if (error) throw new Error(`quiz_seed_insert_failed[${i}-${i + chunk.length - 1}]: ${error.message}`);
+  }
+  return missing.length;
 }
 
 async function ensureQuizSetup(db, event) {
@@ -210,7 +230,7 @@ export async function POST() {
   if (!db) return Response.json({ ok: false, error: "server_not_configured" }, { status: 500 });
 
   try {
-    await ensureQuizBank(db);
+    const seededQuizCount = await ensureQuizBank(db);
     const admin = await findAdmin(db);
     const characters = await aiCharacters(db);
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
@@ -236,7 +256,7 @@ export async function POST() {
       }
     }
 
-    return Response.json({ ok: true, announcements, aiEntries, quizSeeds: QUIZ_SEEDS.length });
+    return Response.json({ ok: true, announcements, aiEntries, quizSeeds: QUIZ_SEEDS.length, seededQuizCount });
   } catch (error) {
     console.error("event runtime error", error);
     return Response.json({ ok: false, error: error?.message || "event_runtime_failed" }, { status: 500 });
