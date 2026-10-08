@@ -1761,16 +1761,20 @@ export default function Home() {
   }
 
   async function loadMessages() {
+    // V34: always load the newest group-chat messages
+    // 200개가 넘는 방에서는 ascending + limit(200)이 가장 오래된 메시지만 가져와
+    // 방금 보낸 메시지가 화면에서 사라지는 문제가 생깁니다. 최신 200개를 가져온 뒤
+    // 화면 표시 순서만 오래된→최신으로 되돌립니다.
     const { data, error } = await supabase
       .from("group_messages")
       .select("*")
       .eq("room_id", ROOM_ID)
       .eq("is_deleted", false)
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: false })
       .limit(200);
 
     if (!error && data) {
-      setMessages(data);
+      setMessages([...data].reverse());
     }
   }
 
