@@ -129,6 +129,9 @@ export default function Home() {
   const [newEventRewardType, setNewEventRewardType] = useState("physical");
   const [newEventPrizeValue, setNewEventPrizeValue] = useState("");
   const [newEventPrizeQty, setNewEventPrizeQty] = useState("1");
+  const [newEventPrizeImage, setNewEventPrizeImage] = useState("");
+  const [giftBulkLinks, setGiftBulkLinks] = useState({});
+  const [giftInventorySummary, setGiftInventorySummary] = useState({});
   const [newAiDemoAmount, setNewAiDemoAmount] = useState("10000");
   const [newAiDemoMinutes, setNewAiDemoMinutes] = useState("60");
   const [aiDemo, setAiDemo] = useState(null);
@@ -1125,7 +1128,7 @@ export default function Home() {
     if (profile?.role !== "admin") return;
     const { data, error } = await supabase
       .from("event_prize_catalog")
-      .select("id,name,is_active,is_selected,reward_type,face_value,stock_qty,used_qty,ai_demo_amount,ai_demo_minutes,notes,created_at,updated_at")
+      .select("id,name,is_active,is_selected,reward_type,face_value,stock_qty,used_qty,ai_demo_amount,ai_demo_minutes,notes,image_url,created_at,updated_at")
       .eq("is_active", true)
       .order("is_selected", { ascending: false })
       .order("created_at", { ascending: true });
@@ -1148,12 +1151,14 @@ export default function Home() {
       p_ai_demo_amount: newEventRewardType === "ai_process" ? Math.max(1000, Number(newAiDemoAmount) || 10000) : null,
       p_ai_demo_minutes: newEventRewardType === "ai_process" ? Math.max(3, Number(newAiDemoMinutes) || 60) : null,
       p_notes: null,
+      p_image_url: newEventRewardType === "physical" ? (newEventPrizeImage.trim() || null) : null,
     });
     if (error) setNotice(`혜택 등록 실패: ${error.message}`);
     else {
       setNewEventPrize("");
       setNewEventPrizeValue("");
       setNewEventPrizeQty("1");
+      setNewEventPrizeImage("");
       setNotice(`이벤트 혜택 “${name}”을 등록했습니다.`);
       await loadEventPrizes();
     }
@@ -1191,6 +1196,45 @@ export default function Home() {
     }
     if (profile.role === "admin") setAdminEventRewards(data || []);
     else setMyEventRewards(data || []);
+  }
+
+  async function loadGiftInventorySummary() {
+    if (profile?.role !== "admin") return;
+    const { data, error } = await supabase.rpc("get_admin_gift_inventory_summary");
+    if (error) return;
+    const map = {};
+    (data || []).forEach((row) => { map[row.prize_catalog_id] = row; });
+    setGiftInventorySummary(map);
+  }
+
+  async function addGiftLinks(prizeId) {
+    const links = String(giftBulkLinks[prizeId] || "").trim();
+    if (!links || prizeWorking) return;
+    setPrizeWorking(true);
+    const { data, error } = await supabase.rpc("admin_add_gift_links", { p_prize_id: prizeId, p_links: links });
+    if (error) setNotice(`기프티콘 등록 실패: ${error.message}`);
+    else {
+      setGiftBulkLinks((current) => ({ ...current, [prizeId]: "" }));
+      setNotice(`기프티콘 ${Number(data || 0)}개를 재고에 추가했습니다.`);
+      await Promise.all([loadEventPrizes(), loadGiftInventorySummary()]);
+    }
+    setPrizeWorking(false);
+  }
+
+  async function openGiftDelivery(deliveryId) {
+    const { data, error } = await supabase.rpc("get_my_gift_link", { p_delivery_id: deliveryId });
+    if (error || !data) { setNotice(error?.message || "기프티콘을 확인할 수 없습니다."); return; }
+    window.open(data, "_blank", "noopener,noreferrer");
+    await loadEventRewards();
+  }
+
+  async function claimAiDemoReward(deliveryId) {
+    if (eventRewardWorking) return;
+    setEventRewardWorking(true);
+    const { error } = await supabase.rpc("claim_ai_process_demo_reward", { p_delivery_id: deliveryId });
+    if (error) setNotice(`체험 시작 실패: ${error.message}`);
+    else { setNotice("AI PROCESS 모의체험을 시작했습니다."); await Promise.all([loadEventRewards(), loadAiDemo()]); }
+    setEventRewardWorking(false);
   }
 
   async function markEventRewardDelivered(deliveryId) {
@@ -1241,7 +1285,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!profile) return;
-    if (profile.role === "admin") loadEventPrizes();
+    if (profile.role === "admin") { loadEventPrizes(); loadGiftInventorySummary(); }
     loadEventRewards();
     loadAiDemo();
   }, [profile?.role, user?.id]);
@@ -1753,6 +1797,20 @@ export default function Home() {
 
   function renderMessageContent(content) {
     if (!content) return null;
+
+    if (content.startsWith("[[GIFT]]")) {
+      const payload = content.slice(8);
+      const splitAt = payload.indexOf("|");
+      const deliveryId = splitAt >= 0 ? payload.slice(0, splitAt) : payload;
+      const giftName = splitAt >= 0 ? payload.slice(splitAt + 1) : "이벤트 당첨 상품";
+      return (
+        <div style={{minWidth:"220px",padding:"12px",borderRadius:"14px",background:"linear-gradient(145deg,#fffaf1,#f3eadc)",border:"1px solid #dfccb0",color:"#30271f"}}>
+          <span style={{display:"block",fontSize:"10px",fontWeight:900,color:"#8b6738"}}>🎁 이벤트 당첨 상품</span>
+          <strong style={{display:"block",marginTop:"5px",fontSize:"14px"}}>{giftName}</strong>
+          <button type="button" onClick={() => openGiftDelivery(deliveryId)} style={{width:"100%",marginTop:"10px",border:0,borderRadius:"10px",padding:"9px",background:"#243d38",color:"#fff",fontWeight:900,cursor:"pointer"}}>기프티콘 확인하기</button>
+        </div>
+      );
+    }
 
     if (content.startsWith("[[IMAGE]]")) {
       const url = content.slice(9);
@@ -3420,6 +3478,7 @@ export default function Home() {
                       {newEventRewardType === "physical" ? <input value={newEventPrizeValue} onChange={(e)=>setNewEventPrizeValue(e.target.value.replace(/[^0-9]/g,""))} placeholder="금액(원)" style={{border:"1px solid #dccbb6",borderRadius:"10px",padding:"9px",background:"#fff",fontSize:"10px"}}/> : <input value={newAiDemoAmount} onChange={(e)=>setNewAiDemoAmount(e.target.value.replace(/[^0-9]/g,""))} placeholder="체험금" style={{border:"1px solid #dccbb6",borderRadius:"10px",padding:"9px",background:"#fff",fontSize:"10px"}}/>}
                       {newEventRewardType === "physical" ? <input value={newEventPrizeQty} onChange={(e)=>setNewEventPrizeQty(e.target.value.replace(/[^0-9]/g,""))} placeholder="수량" style={{border:"1px solid #dccbb6",borderRadius:"10px",padding:"9px",background:"#fff",fontSize:"10px"}}/> : <input value={newAiDemoMinutes} onChange={(e)=>setNewAiDemoMinutes(e.target.value.replace(/[^0-9]/g,""))} placeholder="분" style={{border:"1px solid #dccbb6",borderRadius:"10px",padding:"9px",background:"#fff",fontSize:"10px"}}/>}
                     </div>
+                    {newEventRewardType === "physical" && <input value={newEventPrizeImage} onChange={(e)=>setNewEventPrizeImage(e.target.value)} placeholder="상품 이미지 URL · 선택" style={{width:"100%",boxSizing:"border-box",marginBottom:"8px",border:"1px solid #dccbb6",borderRadius:"10px",padding:"9px 10px",background:"#fff",fontSize:"10px"}}/>}
                     <button type="button" disabled={prizeWorking || newEventPrize.trim().length<2} onClick={addEventPrize} style={{width:"100%",marginBottom:"10px",border:"1px solid #c7903b",borderRadius:"10px",padding:"9px 11px",background:"#fff0cf",color:"#6b4619",fontSize:"10px",fontWeight:900,cursor:"pointer"}}>+ 새 이벤트 혜택 등록</button>
                     <div style={{display:"flex",flexWrap:"wrap",gap:"7px"}}>
                       {eventPrizes.map((prize)=>(
@@ -3428,6 +3487,17 @@ export default function Home() {
                           {!prize.is_selected && <button type="button" onClick={()=>disableEventPrize(prize.id)} style={{width:"18px",height:"18px",border:0,borderRadius:"50%",background:"#f4eee6",color:"#9a7f67",fontSize:"11px",cursor:"pointer"}} aria-label="상품 비활성화">×</button>}
                         </div>
                       ))}
+                    </div>
+                  </section>
+                )}
+                {profile?.role === "admin" && eventPrizes.some((prize)=>prize.reward_type === "physical") && (
+                  <section style={{margin:"0 0 14px",padding:"14px",border:"1px solid #d7e0dd",borderRadius:"16px",background:"#f8fbfa"}}>
+                    <div style={{marginBottom:"10px"}}><strong style={{fontSize:"14px",color:"#263b36"}}>기프티콘 자동지급 재고</strong><p style={{margin:"4px 0 0",fontSize:"10px",color:"#6c7c77"}}>여러 링크를 한 번에 붙여넣으면 당첨 시 1:1 문의로 자동 지급됩니다.</p></div>
+                    <div style={{display:"grid",gap:"9px"}}>
+                      {eventPrizes.filter((prize)=>prize.reward_type === "physical").map((prize)=>{ const stock=giftInventorySummary[prize.id] || {}; return <div key={prize.id} style={{padding:"10px",border:"1px solid #dce4e1",borderRadius:"12px",background:"#fff"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",gap:"10px",alignItems:"center"}}><b style={{fontSize:"11px"}}>{prize.name}</b><span style={{fontSize:"9px",fontWeight:900,color:Number(stock.available_count||0)<=3?"#b14848":"#39715e"}}>남음 {Number(stock.available_count||0)} · 지급 {Number(stock.assigned_count||0)+Number(stock.opened_count||0)}</span></div>
+                        <div style={{display:"flex",gap:"7px",marginTop:"8px"}}><textarea value={giftBulkLinks[prize.id] || ""} onChange={(e)=>setGiftBulkLinks((current)=>({...current,[prize.id]:e.target.value}))} placeholder="기프티콘 링크 여러 개 붙여넣기" style={{flex:1,minHeight:"58px",resize:"vertical",border:"1px solid #d5dfdb",borderRadius:"9px",padding:"8px",fontSize:"10px"}}/><button type="button" disabled={prizeWorking || !(giftBulkLinks[prize.id]||"").trim()} onClick={()=>addGiftLinks(prize.id)} style={{border:0,borderRadius:"9px",padding:"0 12px",background:"#29483f",color:"#fff",fontSize:"10px",fontWeight:900,cursor:"pointer"}}>재고 추가</button></div>
+                      </div>;})}
                     </div>
                   </section>
                 )}
@@ -3534,6 +3604,8 @@ export default function Home() {
 
             {chatTab === "ai" && (
               <div style={{...styles.refAiScreen,...styles.refAiScreenV2}} className="ai-v2-shell">
+                {profile?.role !== "admin" && aiDemo?.status !== "running" && myEventRewards.find((reward)=>reward.reward_type === "ai_process" && reward.status !== "delivered") && (()=>{ const offer=myEventRewards.find((reward)=>reward.reward_type === "ai_process" && reward.status !== "delivered"); return <section style={{marginBottom:"14px",padding:"16px",borderRadius:"18px",background:"linear-gradient(145deg,#eef5f3,#ffffff)",border:"1px solid #cbdcd7",boxShadow:"0 8px 22px rgba(30,65,55,.07)"}}><span style={{fontSize:"9px",fontWeight:900,color:"#3f7768"}}>AI PROCESS 체험 혜택</span><div style={{display:"flex",justifyContent:"space-between",gap:"14px",alignItems:"center",marginTop:"5px"}}><div><strong style={{display:"block",fontSize:"17px",color:"#243b35"}}>{offer.reward_name}</strong><p style={{margin:"5px 0 0",fontSize:"10px",lineHeight:1.55,color:"#667b75"}}>실제 잔액과 분리된 모의체험입니다. 시작하면 이 체험권은 사용 완료되어 다시 표시되지 않습니다.</p></div><button type="button" disabled={eventRewardWorking} onClick={()=>claimAiDemoReward(offer.id)} style={{border:0,borderRadius:"12px",padding:"11px 14px",background:"#25483e",color:"#fff",fontSize:"11px",fontWeight:900,cursor:"pointer",whiteSpace:"nowrap"}}>체험 시작</button></div></section>; })()}
+                {profile?.role !== "admin" && aiDemo?.status === "running" && <section style={{marginBottom:"12px",padding:"10px 12px",borderRadius:"12px",background:"#edf5f3",border:"1px solid #ccddd8",fontSize:"10px",color:"#41645b"}}><b>모의체험 진행 중</b> · 실제 자산 및 정산에 반영되지 않습니다. 목표 수익률 도달 시 자동 종료됩니다.</section>}
                 <section className="ai-v2-hero">
                   <div className="ai-v2-hero-copy">
                     <div className="ai-v2-eyebrow"><span className="ai-v2-live-dot"></span> AI PROCESS · LIVE</div>
