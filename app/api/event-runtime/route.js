@@ -116,42 +116,10 @@ async function findAdmin(db) {
 }
 
 async function ensureAnnouncement(db, event, admin) {
-  if (!admin || event.status !== "active") return false;
-  const since = new Date(new Date(event.starts_at || Date.now()).getTime() - 60_000).toISOString();
-  const { data: recent } = await db.from("group_messages")
-    .select("id,content,created_at")
-    .eq("room_id", event.room_id)
-    .eq("message_type", "event")
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-    .limit(30);
-
-  const exists = (recent || []).some((row) => String(row.content || "").includes(event.id));
-  if (exists) return false;
-
-  const endText = event.ends_at
-    ? new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(event.ends_at))
-    : "진행 중";
-  const content = [
-    "🎁 LIVE EVENT 시작",
-    "",
-    event.title || "이벤트",
-    event.description || "지금 이벤트 메뉴에서 참여할 수 있습니다.",
-    event.prize ? `🎁 상품: ${event.prize}` : "",
-    `⏰ 종료: ${endText}`,
-    "",
-    "이벤트 메뉴에서 바로 참여해주세요.",
-  ].filter(Boolean).join("\n");
-
-  const { error } = await db.from("group_messages").insert({
-    room_id: event.room_id,
-    member_id: admin.id,
-    message_type: "event",
-    content,
-    is_deleted: false,
-  });
+  if (!admin || event.status !== "active" || event.group_message_id) return false;
+  const { data, error } = await db.rpc("ensure_event_start_announcement", { p_event_id: event.id });
   if (error) throw error;
-  return true;
+  return Boolean(data);
 }
 
 async function ensureCommunityEvent(db, event) {
@@ -247,7 +215,7 @@ export async function POST() {
     const characters = await aiCharacters(db);
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
     const { data: events, error } = await db.from("events")
-      .select("id,room_id,title,description,prize,event_type,status,starts_at,ends_at,auto_event,schedule_date")
+      .select("id,room_id,title,description,prize,event_type,status,starts_at,ends_at,auto_event,schedule_date,group_message_id")
       .eq("auto_event", true)
       .eq("schedule_date", today)
       .in("status", ["scheduled", "active"])

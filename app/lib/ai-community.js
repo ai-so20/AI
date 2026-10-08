@@ -3,7 +3,6 @@ import { createClient } from "@supabase/supabase-js";
 export const AI_ROOM_ID = "0a495a02-bcb8-4e38-b3ef-4e7059c2a883";
 const CLOUDFLARE_MODEL = process.env.CLOUDFLARE_MODEL || "@cf/openai/gpt-oss-20b";
 const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
-const FIXED_AI_TURN_DELAY_SECONDS = 60;
 
 class AIProviderError extends Error {
   constructor(provider, status, code, message, details = null) {
@@ -30,6 +29,11 @@ function randInt(min, max) {
   const high = Math.floor(Number(max || low));
   if (high <= low) return low;
   return Math.floor(Math.random() * (high - low + 1)) + low;
+}
+
+function nextAiTurnDelaySeconds() {
+  // 같은 간격으로 기계적으로 말하지 않도록 일반 대화 턴 간격을 흔듭니다.
+  return randInt(25, 110);
 }
 
 function clamp(value, min, max) {
@@ -626,7 +630,7 @@ async function queueTurn(db, threadId, {
   generationMode = null,
   now = new Date(),
 } = {}) {
-  const seconds = delaySeconds ?? FIXED_AI_TURN_DELAY_SECONDS;
+  const seconds = delaySeconds ?? nextAiTurnDelaySeconds();
   const scheduledAt = new Date(now.getTime() + seconds * 1000);
   const parts = kstParts(scheduledAt);
   if (parts.minutes >= timeToMinutes("18:30")) return null;
@@ -1299,10 +1303,10 @@ async function publishPreparedNow(db, thread, characters, settings, prepared, no
   const remaining = prepared.slice(1);
   if (remaining.length) {
     await queueTurn(db, thread.id, {
-      delaySeconds: FIXED_AI_TURN_DELAY_SECONDS,
+      delaySeconds: nextAiTurnDelaySeconds(),
       preferredMemberId: remaining[0].member_id,
       targetMessageId: published?.inserted?.id || thread.last_message_id || null,
-      turnKind: thread.thread_type,
+      turnKind: ["human_reply","welcome","celebration","loss","event_start","event_winner"].includes(thread.thread_type) ? thread.thread_type : "continue",
       priority: thread.priority || 70,
       preparedPayload: remaining,
       preparedProvider: provider,
@@ -1717,7 +1721,7 @@ async function publishGeneratedTurn(db, thread, speaker, generated, settings, no
     const kind = thread.thread_type === "autonomous" ? "continue" : thread.thread_type;
     const priority = thread.thread_type === "autonomous" ? 10 : 70;
     await queueTurn(db, thread.id, {
-      delaySeconds: FIXED_AI_TURN_DELAY_SECONDS,
+      delaySeconds: nextAiTurnDelaySeconds(),
       targetMessageId: inserted.id,
       turnKind: ["human_reply","welcome","celebration","loss"].includes(kind) ? kind : "continue",
       priority,
@@ -1757,7 +1761,7 @@ async function processTurn(db, turn, characters, settings, now = new Date()) {
     if (remaining.length) {
       await db.from("ai_turn_queue").update({
         status: "queued",
-        scheduled_at: new Date(now.getTime() + FIXED_AI_TURN_DELAY_SECONDS * 1000).toISOString(),
+        scheduled_at: new Date(now.getTime() + nextAiTurnDelaySeconds() * 1000).toISOString(),
         preferred_member_id: remaining[0].member_id,
         target_message_id: published?.inserted?.id || turn.target_message_id || null,
         prepared_payload: remaining,
