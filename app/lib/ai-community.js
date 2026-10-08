@@ -1198,8 +1198,7 @@ async function load72HourLocalLocks(db, now = new Date()) {
 
 function buildReplyLine() {
   const a = Math.floor(Math.random() * LOCAL_REPLY_A.length);
-  const b = Math.floor(Math.random() * LOCAL_REPLY_B.length);
-  return { id: `reply-${a}-${b}`, text: `${LOCAL_REPLY_A[a]}${LOCAL_REPLY_B[b] ? ` ${LOCAL_REPLY_B[b]}` : ""}`.trim() };
+  return { id: `reply-${a}`, text: LOCAL_REPLY_A[a] };
 }
 
 async function localAutonomousMessages(db, selected, topic, now = new Date()) {
@@ -1316,12 +1315,36 @@ function localEventMessages(selected, event, winner = null) {
       act: "celebration",
     }));
   }
-  const label = event?.title || "이벤트";
-  return selected.map((c, i) => ({
-    member_id: c.member_id,
-    message: styleLocalText(c, i === 0 ? `${label} 저도 참여했어요ㅎㅎ` : pickOne(["오 저도 넣었어요ㅋㅋ", "저도 참여 완료!", "이번엔 좀 기대되네요ㅎㅎ"])),
-    act: "agree",
-  }));
+  const eventType = String(event?.event_type || "").toLowerCase();
+  const title = String(event?.title || "");
+  let pool = [
+    "오 이번 것도 해볼게요ㅋㅋ", "저도 슬쩍 참여했어요ㅎㅎ", "이번엔 운 좀 따라줬으면 좋겠네요ㅋㅋ",
+    "저 방금 넣었어요", "이번엔 뭐 나올지 궁금하네요", "저도 방금 했어요ㅋㅋ"
+  ];
+  if (eventType.includes("gift") || title.includes("선물상자")) pool = [
+    "선물상자 뭐 나올지 궁금하네요ㅋㅋ", "저도 하나 골랐어요ㅎㅎ", "이번엔 좋은 거 나왔으면ㅋㅋ",
+    "저 방금 하나 골랐어요ㅋㅋ", "이번 건 괜히 기대되네요ㅎㅎ", "선물상자 은근 고르는 맛 있네요ㅎㅎ"
+  ];
+  else if (eventType.includes("quiz") || title.includes("퀴즈")) pool = [
+    "이번 문제 은근 헷갈리네요ㅋㅋ", "저 답 넣었어요ㅎㅎ", "이건 좀 고민되는데요ㅋㅋ",
+    "이번 문제는 자신 없네요ㅎㅎ", "오 이건 알 것 같기도 한데ㅋㅋ"
+  ];
+  else if (eventType.includes("roulette") || title.includes("룰렛")) pool = [
+    "저도 돌려봤어요ㅋㅋ", "이번엔 어디 걸리려나ㅎㅎ", "룰렛은 괜히 두근거리네요ㅋㅋ", "저도 한번 가봅니다"
+  ];
+  else if (eventType.includes("number") || title.includes("숫자")) pool = [
+    "저도 숫자 하나 찍었어요ㅋㅋ", "이번엔 감으로 골랐어요ㅎㅎ", "숫자 고르는 게 더 어렵네요ㅋㅋ", "이번엔 제 숫자 맞았으면ㅎㅎ"
+  ];
+  else if (eventType.includes("attendance") || title.includes("출석")) pool = [
+    "저도 출석 완료ㅎㅎ", "출석 체크했어요ㅋㅋ", "오늘 것도 챙겼습니다ㅎㅎ", "출석은 놓치면 아쉽죠ㅋㅋ"
+  ];
+  const used = new Set();
+  return selected.map((c) => {
+    let message = pickOne(pool);
+    for (let i = 0; i < 5 && used.has(message); i += 1) message = pickOne(pool);
+    used.add(message);
+    return { member_id: c.member_id, message: styleLocalText(c, message), act: "agree" };
+  });
 }
 
 function preparedGenerated(item, remainingCount = 0, provider = "local") {
@@ -2070,7 +2093,13 @@ async function startEventCommunityThread(db, communityEvent, characters, setting
       await db.from("ai_community_events").update({ status: "cancelled", processed_at: now.toISOString() }).eq("id", communityEvent.id);
       return { started: 0, cancelled: true };
     }
-    const selected = weightedSample(participantCharacters, Math.min(participantCharacters.length, randInt(1, 2)), (c) => Number(c.general_reply_rate || 10) + 5);
+    const reactionRoll = Math.random();
+    const reactionCount = reactionRoll < 0.30 ? 0 : reactionRoll < 0.85 ? 1 : 2;
+    if (reactionCount === 0) {
+      await db.from("ai_community_events").update({ status: "done", processed_at: now.toISOString() }).eq("id", communityEvent.id);
+      return { started: 0, type: "event_start", skipped: true, apiCalls: 0 };
+    }
+    const selected = weightedSample(participantCharacters, Math.min(participantCharacters.length, reactionCount), (c) => Number(c.general_reply_rate || 10) + 5);
     const thread = await insertThread(db, {
       thread_type: "event_start", source_event_id: event.id, status: "active",
       min_turns: selected.length, max_turns: selected.length, energy: 0.82,

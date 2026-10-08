@@ -121,6 +121,7 @@ export default function Home() {
   const [rouletteSpins, setRouletteSpins] = useState({});
   const [eventSuccess, setEventSuccess] = useState(null);
   const [eventPrizes, setEventPrizes] = useState([]);
+  const [showAllEvents, setShowAllEvents] = useState(false);
   const [newEventPrize, setNewEventPrize] = useState("");
   const [prizeWorking, setPrizeWorking] = useState(false);
   const [installDismissed, setInstallDismissed] = useState(false); // V37 COMPLETE MISSING FEATURES
@@ -1429,6 +1430,15 @@ export default function Home() {
 
       return Number(a.round_number || 0) - Number(b.round_number || 0);
     });
+  }
+
+  function getVisibleAutoEvents() {
+    const sorted = getSortedAutoEvents();
+    if (showAllEvents) return sorted;
+    const active = sorted.filter((item) => item.status === "active");
+    const scheduled = sorted.filter((item) => item.status === "scheduled").slice(0, 3);
+    const completed = sorted.filter((item) => item.status === "completed").slice(0, 1);
+    return [...active, ...scheduled, ...completed];
   }
 
   async function checkSession() {
@@ -3329,6 +3339,30 @@ export default function Home() {
                     </div>
                   </div>
                 )}
+                <section style={{margin:"0 0 12px",padding:"16px",borderRadius:"18px",background:"linear-gradient(145deg,#fffaf2,#f6ead9)",border:"1px solid #e4d2ba",boxShadow:"0 8px 20px rgba(86,57,35,.08)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:"12px"}}>
+                    <div>
+                      <span style={{display:"block",fontSize:"9px",fontWeight:900,letterSpacing:"1.4px",color:"#a77839"}}>VIP EVENT CENTER</span>
+                      <strong style={{display:"block",marginTop:"4px",fontSize:"18px",color:"#2f251f"}}>오늘의 VIP 이벤트</strong>
+                      <p style={{margin:"6px 0 0",fontSize:"11px",lineHeight:1.55,color:"#756558"}}>매일 진행되는 LIVE 이벤트에 참여하고 결과와 혜택을 한곳에서 확인하세요. 당첨 결과는 이벤트 종료 후 자동 안내됩니다.</p>
+                    </div>
+                    <span style={{padding:"6px 9px",borderRadius:"999px",background:activeEvent?"#173f35":"#efe1c7",color:activeEvent?"#d9f8ea":"#76552a",fontSize:"9px",fontWeight:900,whiteSpace:"nowrap"}}>{activeEvent ? "LIVE" : "TODAY"}</span>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:"7px",marginTop:"14px"}}>
+                    {[
+                      ["오늘 회차", autoEvents.length + "회"],
+                      ["내 참여", autoEvents.filter((item)=>item.participated).length + "회"],
+                      ["진행 중", autoEvents.filter((item)=>item.status === "active").length + "회"],
+                      ["완료", autoEvents.filter((item)=>item.status === "completed").length + "회"],
+                    ].map(([label,value]) => (
+                      <div key={label} style={{padding:"10px 6px",borderRadius:"12px",background:"rgba(255,255,255,.72)",border:"1px solid #eadac6",textAlign:"center"}}>
+                        <small style={{display:"block",fontSize:"8px",color:"#9b8979"}}>{label}</small>
+                        <strong style={{display:"block",marginTop:"4px",fontSize:"13px",color:"#33271f"}}>{value}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
                 {featuredEvent && (
                   <div style={{...styles.refHeroEvent, backgroundImage:eventHeroBackground(featuredEvent.event_type)}}>
                     <div style={styles.refHeroEventTop}>
@@ -3357,12 +3391,12 @@ export default function Home() {
                 )}
 
                 <div style={styles.refSectionTitle}>
-                  <div><strong>오늘의 이벤트</strong><span>자동 진행 일정</span></div>
-                  <small>{autoEvents.length}개 회차</small>
+                  <div><strong>오늘의 이벤트</strong><span>진행 중 · 예정 회차</span></div>
+                  <button type="button" onClick={() => setShowAllEvents((value) => !value)} style={{border:"1px solid #dfc8a8",background:"#fffaf2",color:"#7d5a2e",borderRadius:"999px",padding:"5px 8px",fontSize:"9px",fontWeight:900,cursor:"pointer"}}>{showAllEvents ? "간단히" : `전체 ${autoEvents.length}회`}</button>
                 </div>
 
                 <div style={styles.refEventList}>
-                  {getSortedAutoEvents().map((item) => {
+                  {getVisibleAutoEvents().map((item) => {
                     const active = item.status === "active";
                     const done = item.status === "completed";
                     const participated = Boolean(item.participated);
