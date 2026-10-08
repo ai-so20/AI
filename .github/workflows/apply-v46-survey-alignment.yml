@@ -1,0 +1,34 @@
+name: Apply V46 survey alignment
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/apply-v46-survey-alignment.mjs'
+      - '.github/workflows/apply-v46-survey-alignment.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://build-check.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-check-key
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply V46 patch
+        run: node scripts/apply-v46-survey-alignment.mjs
+      - name: Install dependencies
+        run: npm install
+      - name: Build validation
+        run: npm run build
+      - name: Commit changes
+        run: |
+          if git diff --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/page.js
+          git commit -m "feat: V46 survey alignment UX and event operations"
+          git push
