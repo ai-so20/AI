@@ -8,10 +8,22 @@ const ASSETS = [
   { symbol: "NVDA", yahoo: "NVDA", name: "NVIDIA", type: "stock" },
   { symbol: "MSFT", yahoo: "MSFT", name: "Microsoft", type: "stock" },
   { symbol: "TSLA", yahoo: "TSLA", name: "Tesla", type: "stock" },
+  { symbol: "AMZN", yahoo: "AMZN", name: "Amazon", type: "stock" },
+  { symbol: "META", yahoo: "META", name: "Meta", type: "stock" },
+  { symbol: "GOOGL", yahoo: "GOOGL", name: "Alphabet", type: "stock" },
+  { symbol: "AMD", yahoo: "AMD", name: "AMD", type: "stock" },
+  { symbol: "NFLX", yahoo: "NFLX", name: "Netflix", type: "stock" },
+  { symbol: "AVGO", yahoo: "AVGO", name: "Broadcom", type: "stock" },
+  { symbol: "PLTR", yahoo: "PLTR", name: "Palantir", type: "stock" },
+  { symbol: "COIN", yahoo: "COIN", name: "Coinbase", type: "stock" },
   { symbol: "BTC/USD", yahoo: "BTC-USD", name: "Bitcoin", type: "crypto" },
   { symbol: "ETH/USD", yahoo: "ETH-USD", name: "Ethereum", type: "crypto" },
   { symbol: "SOL/USD", yahoo: "SOL-USD", name: "Solana", type: "crypto" },
   { symbol: "XRP/USD", yahoo: "XRP-USD", name: "XRP", type: "crypto" },
+  { symbol: "BNB/USD", yahoo: "BNB-USD", name: "BNB", type: "crypto" },
+  { symbol: "ADA/USD", yahoo: "ADA-USD", name: "Cardano", type: "crypto" },
+  { symbol: "DOGE/USD", yahoo: "DOGE-USD", name: "Dogecoin", type: "crypto" },
+  { symbol: "LINK/USD", yahoo: "LINK-USD", name: "Chainlink", type: "crypto" },
 ];
 
 const CACHE_KEY = "main";

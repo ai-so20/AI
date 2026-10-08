@@ -180,6 +180,11 @@ export default function Home() {
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   }
 
+  function isAndroidDevice() {
+    if (typeof navigator === "undefined") return false;
+    return /android/i.test(navigator.userAgent);
+  }
+
   async function installVipApp() {
     if (typeof window === "undefined") return;
 
@@ -2845,11 +2850,11 @@ export default function Home() {
             })}
           </nav>
 
-          {profile?.role !== "admin" && !isStandaloneApp && !installDismissed && (
+          {profile?.role !== "admin" && !isStandaloneApp && !installDismissed && (isIOSDevice() || isAndroidDevice()) && (
             <div style={{margin:"0 12px 10px",padding:"10px 12px",border:"1px solid #e5c98f",borderRadius:"14px",background:"linear-gradient(135deg,#fff8e8,#f8ead0)",display:"flex",alignItems:"center",gap:"10px",boxShadow:"0 5px 18px rgba(92,62,25,.08)"}}>
               <div style={{fontSize:"22px",lineHeight:1}}>📲</div>
-              <div style={{minWidth:0,flex:1}}><b style={{display:"block",fontSize:"12px",color:"#3d2c22"}}>AI PROCESS VIP 앱으로 더 편하게 이용하세요</b><span style={{display:"block",marginTop:"2px",fontSize:"10px",color:"#8b735e"}}>바탕화면에 설치하면 VIP 라운지를 바로 열 수 있습니다.</span></div>
-              <button type="button" onClick={installVipApp} style={{border:"1px solid #c9943d",background:"#fff",color:"#6b4619",borderRadius:"10px",padding:"7px 10px",fontSize:"10px",fontWeight:900,cursor:"pointer",whiteSpace:"nowrap"}}>앱 설치</button>
+              <div style={{minWidth:0,flex:1}}><b style={{display:"block",fontSize:"12px",color:"#3d2c22"}}>AI PROCESS VIP 홈화면에 추가하기</b><span style={{display:"block",marginTop:"2px",fontSize:"10px",color:"#8b735e"}}>홈화면에서 VIP 라운지를 바로 열 수 있습니다.</span></div>
+              <button type="button" onClick={installVipApp} style={{border:"1px solid #c9943d",background:"#fff",color:"#6b4619",borderRadius:"10px",padding:"7px 10px",fontSize:"10px",fontWeight:900,cursor:"pointer",whiteSpace:"nowrap"}}>홈화면에 추가하기</button>
               <button type="button" onClick={dismissInstallGuideForever} style={{border:0,background:"transparent",color:"#9c8773",fontSize:"10px",fontWeight:800,cursor:"pointer",whiteSpace:"nowrap"}}>다시 안 보기</button>
             </div>
           )}
@@ -2896,9 +2901,14 @@ export default function Home() {
                 ) : (
                   <>
                     <p style={styles.installGuideText}>
-                      자동 설치창을 사용할 수 없는 브라우저입니다.
-                      <br />브라우저 메뉴의 <strong>앱 설치</strong> 또는 <strong>홈 화면에 추가</strong>를 선택해주세요.
+                      안드로이드 홈화면에 추가하기
                     </p>
+                    <div style={styles.installGuideSteps}>
+                      <div><b>1</b><span>브라우저 오른쪽 위 <strong>⋮ 메뉴</strong> 누르기</span></div>
+                      <div><b>2</b><span><strong>홈 화면에 추가</strong> 선택</span></div>
+                      <div><b>3</b><span><strong>추가</strong> 누르기</span></div>
+                      <div><b>4</b><span>홈 화면의 <strong>AI PROCESS VIP</strong> 아이콘 실행</span></div>
+                    </div>
                     <button type="button" onClick={() => setShowInstallGuide(false)} style={styles.installGuideOk}>확인</button>
                   </>
                 )}
