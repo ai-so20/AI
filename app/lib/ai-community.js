@@ -1386,15 +1386,19 @@ ${chars}
 규칙:
 - 응답자는 2~3명이다. 각 캐릭터는 자기 응답률과 말투 차이를 유지한다.
 - 서로 독립된 발표문을 쓰지 말고 같은 방에서 바로 앞 대화를 실제로 들은 사람처럼 이어간다.
-- 첫 번째 답변은 실제회원의 핵심 말에 바로 반응한다. 회원이 "여러분?", "계세요?", "왜 답이 없어요"처럼 호출하면 호출 자체에 먼저 답한다.
+- 첫 번째 답변은 실제회원이 방금 말한 구체적인 내용에 바로 반응한다. 회원이 "여러분?", "계세요?", "왜 답이 없어요"처럼 방 전체를 호출하면 호출 자체에 먼저 답한다.
+- 회원이 특정 캐릭터 닉네임을 언급했더라도 문장 전체 의미를 먼저 읽는다. 예: "바람따라님 축하드려요" → 바람따라는 "감사합니다ㅎㅎ", "헉 감사해요!"처럼 답한다.
+- 회원이 축하/감사/질문/불만/경험을 말하면 그 행위에 직접 반응한다. 이름 호출 여부보다 문장의 의미가 우선이다.
 - 두 번째/세 번째 답변은 회원에게 직접 답하거나 바로 앞 AI의 한 단어/의견을 받아 이어간다. 각자 새 주제를 꺼내지 않는다.
+- 회원의 말이 아직 살아있는 동안 AI끼리 허브티, 날씨, 퇴근 같은 새 일상 주제로 넘어가지 않는다.
 - 짧은 답을 정상 대화로 취급한다. 2명이 답하면 적어도 1개는 25자 이하가 자연스럽다. 3명이 답하면 적어도 1개는 12자 안팎의 짧은 리액션이어도 된다.
 - 대부분 5~45자. 정말 필요한 경우만 90자 이내, 최대 2문장. 상담원처럼 매번 완성된 설명을 하지 않는다.
 - 같은 의견을 여러 명이 완성문장으로 반복하지 않는다. 한 명이 충분히 말했으면 다음 사람은 "맞아요", "저도요ㅋㅋ", "오", "대박", "그건 인정"처럼 끝내도 된다.
 - 질문은 전체 답변 중 최대 1개. 매번 공감→설명→질문 패턴으로 끝내지 않는다.
 - 실제 사람이 자주 그러듯 앞사람의 과거 말을 기억하고 있으면 짧게 받아줄 수 있다. 기억에 없는 일은 지어내지 않는다.
 - 대화가 살아있는 동안 새 주제를 억지로 만들지 않는다. 주제 전환을 선언하지도 않는다. 자연스럽게 끊기면 그대로 멈춰도 된다.
-- 이벤트/공지 직후에는 모든 사람이 반응하지 않는다. 선택된 응답자만 짧게 반응하고, 다음 대화에서는 기존 일상 주제로 돌아가도 된다.
+- 이벤트/공지 직후에도 현재 회원이 말을 걸었다면 회원 메시지가 우선이다. 선택된 2~3명만 회원의 말에 반응한다.
+- 회원이 당첨자에게 축하를 보냈고 그 당첨자가 AI 캐릭터라면, 그 캐릭터의 첫 반응은 감사/놀람/상품에 대한 짧은 기쁨 중 하나여야 한다.
 - '그런 것 같아요/좋을 것 같아요/괜히 궁금해지네요/도움이 될 거예요/천천히 둘러보세요/다행이에요' 같은 무난한 AI 상투문장을 연속으로 쓰지 않는다.
 - 사용자의 말을 길게 바꿔 말하거나 요약한 뒤 답하지 않는다. 바로 반응한다.
 - 의견 차이가 있으면 가볍게 반대해도 된다. 모든 캐릭터가 항상 친절하게 동의할 필요는 없다.
@@ -1887,12 +1891,10 @@ async function selectHumanResponders(characters, situation, count, now = new Dat
 
 async function startHumanThread(db, info, characters, settings, now = new Date()) {
   const situation = detectSituation(info.latest.content);
-  let count;
-  if (situation === "celebration") {
-    count = Math.min(characters.length, Math.max(Number(settings.celebration_min || 5), randInt(5, 7)));
-  } else {
-    count = randInt(Number(settings.human_reply_min || 2), Number(settings.human_reply_max || 3));
-  }
+  // 실제회원 메시지는 항상 소수 인원이 집중해서 반응합니다.
+  // 이벤트 시스템 당첨 축하는 별도 event_winner 흐름에서 처리합니다.
+  let count = randInt(Number(settings.human_reply_min || 2), Number(settings.human_reply_max || 3));
+  count = Math.max(1, Math.min(3, count, characters.length));
 
   let selected = await selectHumanResponders(characters, situation, count, now);
   const mentioned = characters.find((c) => {
@@ -1957,18 +1959,12 @@ async function startHumanThread(db, info, characters, settings, now = new Date()
       act: "answer",
       reply_to_message_id: info.latest.id,
     }];
-  } else if (intent !== "other" || situation !== "general") {
-    const effectiveIntent = situation === "celebration" ? "celebration" : situation === "loss" ? "loss" : intent;
-    prepared = selected.map((c) => ({
-      member_id: c.member_id,
-      message: localReplyForHuman(c, effectiveIntent, info.latest.content),
-      act: effectiveIntent === "loss" ? "support" : effectiveIntent === "celebration" ? "celebration" : "agree",
-      reply_to_message_id: info.latest.id,
-    }));
   } else {
-    const context = await recentChatContext(db, 10);
+    // V40: 실제회원 메시지는 템플릿보다 문맥 이해를 우선합니다.
+    // 인사/축하/감사/손실도 최근 대화와 캐릭터 성향을 함께 읽고 답합니다.
+    const context = await recentChatContext(db, 14);
     try {
-      const batch = await generateHumanBatch(db, info.latest.content, selected, context, "human_batch");
+      const batch = await generateHumanBatch(db, info.latest.content, selected, context, "human_batch_v40");
       prepared = batch.replies.map((r) => ({ ...r, reply_to_message_id: info.latest.id }));
       provider = batch.provider;
     } catch (error) {
@@ -1976,13 +1972,14 @@ async function startHumanThread(db, info, characters, settings, now = new Date()
         level: "warning",
         category: error?.code || "AI_BATCH_FALLBACK_LOCAL",
         provider: error?.provider || null,
-        message: error?.message || "배치 생성 실패, 로컬 반응으로 대체",
+        message: error?.message || "회원 문맥 생성 실패, 로컬 반응으로 대체",
         meta: { source_message_id: info.latest.id },
       });
+      const effectiveIntent = situation === "celebration" ? "celebration" : situation === "loss" ? "loss" : intent;
       prepared = selected.map((c, i) => ({
         member_id: c.member_id,
-        message: styleLocalText(c, i === 0 ? "음 그건 저도 좀 궁금하네요" : pickOne(["저도 비슷하게 생각했어요", "이건 다른 분들 생각도 궁금하네요ㅎㅎ", "저는 일단 조금 더 봐야 알 것 같아요"])),
-        act: "agree",
+        message: localReplyForHuman(c, effectiveIntent === "other" ? "agree" : effectiveIntent, info.latest.content),
+        act: effectiveIntent === "loss" ? "support" : effectiveIntent === "celebration" ? "celebration" : i === 0 ? "answer" : "agree",
         reply_to_message_id: info.latest.id,
       }));
       provider = "local_fallback";
