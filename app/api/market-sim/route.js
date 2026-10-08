@@ -15,8 +15,9 @@ const ASSETS = [
 ];
 
 const CACHE_KEY = "main";
-const MARKET_FRESH_MS = 5 * 60 * 1000;
-const ENGINE_MAX_STALE_MS = 6 * 60 * 1000;
+const MARKET_FRESH_MS = 3 * 60 * 1000;
+const ENGINE_MAX_STALE_MS = 4 * 60 * 1000;
+const ENGINE_REUSE_MS = 45 * 1000;
 
 function serverSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -103,8 +104,8 @@ function jsonFromCache(cache, age, extra = {}) {
     ...cache.payload,
     success: true,
     cached: true,
-    processRefreshSeconds: 60,
-    marketRefreshSeconds: 300,
+    processRefreshSeconds: 180,
+    marketRefreshSeconds: 180,
     cacheAgeSeconds: Number.isFinite(age) ? Math.max(0, Math.floor(age / 1000)) : null,
     ...extra,
   });
@@ -136,8 +137,8 @@ async function fetchTwelveData(cache, cacheAge, apiKey) {
       success: true,
       updatedAt: new Date().toISOString(),
       quotes: withMarketChanges(normalized, cache?.payload, cacheAge),
-      processRefreshSeconds: 60,
-      marketRefreshSeconds: 300,
+      processRefreshSeconds: 180,
+      marketRefreshSeconds: 180,
       provider: "twelvedata",
     };
   } finally {
@@ -147,7 +148,7 @@ async function fetchTwelveData(cache, cacheAge, apiKey) {
 
 async function fetchYahooQuote(asset) {
   const includePrePost = asset.type === "stock" ? "true" : "false";
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(asset.yahoo)}?interval=5m&range=2d&includePrePost=${includePrePost}`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(asset.yahoo)}?interval=1m&range=2d&includePrePost=${includePrePost}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 7000);
   try {
@@ -212,8 +213,8 @@ async function fetchKeylessMarket(cache, cacheAge) {
     success: true,
     updatedAt: new Date().toISOString(),
     quotes: withMarketChanges(quotes, cache?.payload, cacheAge),
-    processRefreshSeconds: 60,
-    marketRefreshSeconds: 300,
+    processRefreshSeconds: 180,
+    marketRefreshSeconds: 180,
     provider: "yahoo",
   };
 }
@@ -249,8 +250,8 @@ export async function GET(request) {
     });
   }
 
-  // Cron 엔진 호출은 5분 이내 캐시를 재사용하면서 PROCESS만 1분 단위로 진행합니다.
-  if (engineMode && cache && Number.isFinite(cacheAge) && cacheAge < MARKET_FRESH_MS) {
+  // 3분 Cron은 직전 호출이 45초 이내인 경우에만 같은 캐시를 재사용합니다.
+  if (engineMode && cache && Number.isFinite(cacheAge) && cacheAge < ENGINE_REUSE_MS) {
     await runProcessEngine(db, cache.payload, cacheAge);
     await runAiCommunityTick({ source: "market_cron" });
     return jsonFromCache(cache, cacheAge, { stale: false, engineMode: true });

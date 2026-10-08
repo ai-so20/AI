@@ -125,7 +125,7 @@ export default function Home() {
   const [aiSimLoading, setAiSimLoading] = useState(false);
   const [aiSimError, setAiSimError] = useState("");
   const [aiNextUpdate, setAiNextUpdate] = useState(null);
-  const [aiCountdown, setAiCountdown] = useState("05:00");
+  const [aiCountdown, setAiCountdown] = useState("03:00");
   const [aiChartHover, setAiChartHover] = useState(null);
 
   const messagesRef = useRef(null);
@@ -138,7 +138,7 @@ export default function Home() {
   const aiSimRequestSeq = useRef(0);
 
   const AI_START_MONEY = 5000000;
-  const AI_REFRESH_MS = 60 * 1000;
+  const AI_REFRESH_MS = 3 * 60 * 1000;
   const AI_PROFIT_CHANCE = 0.85;
 
   async function refreshPushStatus() {
@@ -3356,10 +3356,10 @@ export default function Home() {
 
                 <div className="ai-v2-summary-grid">
                   <div className="ai-v2-summary-card"><span>시작 운용금액</span><strong>{aiSession?.status === "running" ? aiKrw(aiCurrentStartMoney) : "대기"}</strong><small>프로세스 시작 기준</small></div>
-                  <div className="ai-v2-summary-card"><span>현재 평가금액</span><strong>{aiSession?.status === "running" ? aiKrw(aiDisplayAmount) : "-"}</strong><small>1분 단위 현재금액 갱신</small></div>
+                  <div className="ai-v2-summary-card"><span>현재 평가금액</span><strong>{aiSession?.status === "running" ? aiKrw(aiDisplayAmount) : "-"}</strong><small>3분 단위 현재금액 갱신</small></div>
                   <div className="ai-v2-summary-card"><span>누적 손익</span><strong className={aiDisplayProfit >= 0 ? "is-profit" : "is-loss"}>{aiSession?.status === "running" ? aiSignedKrw(aiDisplayProfit) : "-"}</strong><small>{aiSession?.status === "running" ? aiSignedPct(aiDisplayReturn) : "PROCESS WAIT"}</small></div>
                   <div className="ai-v2-summary-card"><span>진행 기간</span><strong>{aiSession?.status === "running" ? (aiSession?.ends_at ? aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours}) : "기간 미정") : "대기"}</strong><small>{aiSession?.status === "running" && !aiSession?.ends_at ? "관리자 종료 시까지 진행" : "최대 30일 진행"}</small></div>
-                  <div className="ai-v2-summary-card"><span>5분 시장</span><strong>{aiPositiveMarkets}↑ / {aiNegativeMarkets}↓</strong><small>주식·코인 8종 · 5분</small></div>
+                  <div className="ai-v2-summary-card"><span>3분 시장</span><strong>{aiPositiveMarkets}↑ / {aiNegativeMarkets}↓</strong><small>주식·코인 8종 · 3분</small></div>
                 </div>
 
                 <section className="ai-v2-live-members">
@@ -3405,7 +3405,7 @@ export default function Home() {
                     <div className="ai-v2-chart-kpis">
                       <div><span>현재</span><b>{aiSession?.status === "running" ? aiKrw(aiDisplayAmount) : "-"}</b></div>
                       <div><span>시작</span><b>{aiSession?.status === "running" ? aiKrw(aiCurrentStartMoney) : "-"}</b></div>
-                      <div><span>5분 연동</span><b>{aiLastResult ? `${aiLastResult.name} ${aiSignedPct(aiLastResult.intervalPct)}` : "대기 중"}</b></div>
+                      <div><span>3분 연동</span><b>{aiLastResult ? `${aiLastResult.name} ${aiSignedPct(aiLastResult.intervalPct)}` : "대기 중"}</b></div>
                     </div>
 
                     <div className="ai-v2-chart-wrap">
@@ -3436,7 +3436,7 @@ export default function Home() {
                           ))}
                         </svg>
                       ) : (
-                        <div className="ai-v2-chart-empty">첫 5분 시장 구간을 기록하고 있습니다.</div>
+                        <div className="ai-v2-chart-empty">첫 3분 시장 구간을 기록하고 있습니다.</div>
                       )}
                       {aiChartHover && (
                         <div
@@ -3473,7 +3473,7 @@ export default function Home() {
 
                   <section className="ai-v2-panel ai-v2-market-panel">
                     <div className="ai-v2-panel-head">
-                      <div><span>실시간 시장</span><strong>5분 시장 현황</strong></div>
+                      <div><span>실시간 시장</span><strong>3분 시장 현황</strong></div>
                       <div className="ai-v2-market-count">8 ASSETS</div>
                     </div>
                     <div className="ai-v2-market-grid">
@@ -3501,19 +3501,19 @@ export default function Home() {
                       <div className="ai-v2-history-row" key={`${item.at}-${item.symbol}-${index}`}>
                         <div className={`ai-v2-history-sign ${item.resultType === "loss" || Number(item.intervalProfit) < 0 ? "is-loss" : "is-profit"}`}>{item.resultType === "loss" || Number(item.intervalProfit) < 0 ? "−" : "+"}</div>
                         <div className="ai-v2-history-asset"><strong>{item.name}</strong><span>{item.symbol} · {item.type === "crypto" ? "CRYPTO" : "STOCK"}</span></div>
-                        <div className="ai-v2-history-market"><span>실제 5분</span><strong className={Number(item.intervalPct) >= 0 ? "is-profit" : "is-loss"}>{aiSignedPct(item.intervalPct)}</strong></div>
+                        <div className="ai-v2-history-market"><span>실제 3분</span><strong className={Number(item.intervalPct) >= 0 ? "is-profit" : "is-loss"}>{aiSignedPct(item.intervalPct)}</strong></div>
                         <div className="ai-v2-history-result"><span>AI PROCESS</span><strong className={Number(item.intervalProfit) >= 0 ? "is-profit" : "is-loss"}>{aiSignedKrw(item.intervalProfit)}</strong></div>
                         <div className="ai-v2-history-balance"><span>반영 후</span><strong>{aiKrw(item.portfolioValue)}</strong></div>
                         <time>{aiTime(item.at)}</time>
                       </div>
                     )) : (
-                      <div className="ai-v2-history-empty">시장 연결 후 5분 스냅샷마다 연동 종목과 누적 손익이 기록됩니다.</div>
+                      <div className="ai-v2-history-empty">시장 연결 후 3분 스냅샷마다 연동 종목과 누적 손익이 기록됩니다.</div>
                     )}
                   </div>
                 </section>
 
                 <div className="ai-v2-disclaimer">
-                  <b>연동 기준</b> · 실제 5분 시장 움직임을 기준으로 연동 종목을 선택하고, 현재금액은 서버에서 1분 단위로 갱신합니다. 연동기록은 5분 스냅샷 1건으로 압축 저장되며 실제 주문·체결 내역을 의미하지 않습니다.
+                  <b>연동 기준</b> · 실제 3분 시장 움직임을 기준으로 연동 종목을 선택하고, 현재금액과 자산 그래프는 서버에서 3분 단위로 갱신합니다. 지급 결과는 3분 스냅샷 1건으로 기록되며 실제 주문·체결 내역을 의미하지 않습니다.
                 </div>
               </div>
             )}
