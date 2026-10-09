@@ -19,6 +19,9 @@ jobs:
         run: npm install
       - name: Build validation
         run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-validation-only
       - name: Commit changes
         run: |
           if git diff --quiet; then
