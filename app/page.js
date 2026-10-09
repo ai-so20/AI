@@ -1669,7 +1669,7 @@ export default function Home() {
     if (showAllEvents) return sorted;
     const active = sorted.filter((item) => item.status === "active");
     const scheduled = sorted.filter((item) => item.status === "scheduled").slice(0, 3);
-    const completed = sorted.filter((item) => item.status === "completed").slice(0, 1);
+    const completed = sorted.filter((item) => item.status === "completed");
     return [...active, ...scheduled, ...completed];
   }
 
@@ -3580,7 +3580,7 @@ export default function Home() {
             )}
 
             {chatTab === "event" && (
-              <div style={styles.refEventScreen}>
+              <div className="vip-v55-event-screen" style={styles.refEventScreen}>
                 {profile?.role === "admin" && <section style={{margin:"0 0 14px",padding:"14px",border:"1px solid #dbe3e0",borderRadius:"16px",background:"#f8faf9"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"12px",marginBottom:"11px"}}><div><strong style={{display:"block",fontSize:"15px",color:"#293a35"}}>이벤트 운영센터</strong><small style={{display:"block",marginTop:"3px",fontSize:"10px",color:"#73817c"}}>일정 · 참여 · 당첨 · 지급 상태를 한곳에서 관리합니다.</small></div><button type="button" onClick={toggleEventRuntimeEnabled} style={{border:0,borderRadius:"999px",padding:"8px 11px",background:eventRuntimeEnabled?"#275c4c":"#ecefee",color:eventRuntimeEnabled?"#fff":"#63706c",fontSize:"9px",fontWeight:900,cursor:"pointer"}}>자동 이벤트 {eventRuntimeEnabled?"ON":"운영 종료"}</button></div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:"7px",marginBottom:"10px"}}>{[["오늘 회차",adminEventOps.length],["참여",adminEventOps.reduce((s,x)=>s+Number(x.participant_count||0),0)],["당첨",adminEventOps.reduce((s,x)=>s+Number(x.winner_count||0),0)],["지급대기",adminEventRewards.filter((x)=>x.status!=="delivered").length]].map(([label,value])=><div key={label} style={{padding:"10px 6px",borderRadius:"11px",background:"#fff",border:"1px solid #e1e6e4",textAlign:"center"}}><small style={{display:"block",fontSize:"8px",color:"#7d8a86"}}>{label}</small><b style={{display:"block",marginTop:"4px",fontSize:"13px",color:"#2b3d37"}}>{value}</b></div>)}</div>
@@ -3691,18 +3691,18 @@ export default function Home() {
                   </div>
                 )}
 
-                <div style={styles.refSectionTitle}>
-                  <div><strong>오늘의 이벤트</strong><span>진행 중 · 예정 회차</span></div>
+                <div className="vip-v55-event-titlebar" style={styles.refSectionTitle}>
+                  <div><strong>오늘의 이벤트</strong><span>진행 중 · 예정 · 완료 회차</span></div>
                   <button type="button" onClick={() => setShowAllEvents((value) => !value)} style={{border:"1px solid #dfc8a8",background:"#fffaf2",color:"#7d5a2e",borderRadius:"999px",padding:"5px 8px",fontSize:"9px",fontWeight:900,cursor:"pointer"}}>{showAllEvents ? "간단히" : `전체 ${autoEvents.length}회`}</button>
                 </div>
 
-                <div style={styles.refEventList}>
+                <div className="vip-v55-event-list" style={styles.refEventList}>
                   {getVisibleAutoEvents().map((item) => {
                     const active = item.status === "active";
                     const done = item.status === "completed";
                     const participated = Boolean(item.participated);
                     return (
-                      <div id={`ref-event-${item.event_id}`} key={item.event_id} style={{...styles.refEventRow,...(active?styles.refEventRowActive:{})}}>
+                      <div className={`vip-v55-event-row ${active ? "is-active" : done ? "is-done" : "is-scheduled"}`} id={`ref-event-${item.event_id}`} key={item.event_id} style={{...styles.refEventRow,...(active?styles.refEventRowActive:{})}}>
                         <div style={styles.refRound}>{item.round_number}<span>회</span></div>
                         <div style={styles.refEventIcon}>{eventIcon(item.event_type)}</div>
                         <div style={styles.refEventInfo}>
