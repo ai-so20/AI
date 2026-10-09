@@ -3211,14 +3211,15 @@ export default function Home() {
                     <em style={{display:"block",marginTop:"7px",fontStyle:"normal",fontSize:"9px",fontWeight:900,color:"#4d665e"}}>혜택 확인 ›</em>
                   </button>
                 </section>
-                {featuredEvent && <button type="button" onClick={()=>changeTab("event")} style={{width:"100%",marginTop:"10px",padding:"13px 14px",border:"1px solid #dde3e0",borderRadius:"16px",background:"#fff",display:"flex",alignItems:"center",gap:"11px",textAlign:"left",cursor:"pointer",color:"#293633"}}><div style={{fontSize:"24px"}}>{eventIcon(featuredEvent.event_type)}</div><div style={{flex:1,minWidth:0}}><span style={{display:"block",fontSize:"9px",fontWeight:900,color:"#6b7d77"}}>{activeEvent ? "진행 중 이벤트" : "다음 이벤트"}</span><strong style={{display:"block",marginTop:"3px",fontSize:"13px"}}>{featuredEvent.title}</strong><small style={{display:"block",marginTop:"3px",color:"#7b8884"}}>{activeEvent ? (featuredEvent.participated ? "참여 완료" : "지금 참여 가능") : formatEventTime(featuredEvent.starts_at) + " ~ " + formatEventTime(featuredEvent.ends_at)}</small></div><b>›</b></button>}
+                
                 {homeNotice?.is_active && <section style={{marginTop:"10px",padding:"13px 14px",borderRadius:"14px",background:"#f6f8f7",border:"1px solid #dde3e0"}}><span style={{display:"block",fontSize:"9px",fontWeight:900,color:"#62756e"}}>중요 공지</span><strong style={{display:"block",marginTop:"4px",fontSize:"13px",color:"#2d3b37"}}>{homeNotice.title}</strong><p style={{margin:"5px 0 0",fontSize:"10px",lineHeight:1.55,color:"#71807b",whiteSpace:"pre-wrap"}}>{homeNotice.body}</p></section>}
-                <section className="vip-home-v20-alerts">
-                  {unreadPrivate > 0 && <button type="button" onClick={() => changeTab("private")}><i>🎧</i><span><b>1:1 새 답변 {unreadPrivate}</b><small>관리자 답변을 확인하세요</small></span><em>›</em></button>}
-                  {activeEvent && <button type="button" onClick={() => changeTab("event")}><i>🎁</i><span><b>{activeEvent.participated ? "이벤트 참여 완료" : "이벤트 지금 참여 가능"}</b><small>{activeEvent.title}</small></span><em>›</em></button>}
-                  {aiSession?.status === "running" && <button type="button" onClick={() => changeTab("ai")}><i>◆</i><span><b>AI PROCESS 진행 중</b><small>{aiKrw(aiSession?.current_amount || aiCurrentStartMoney)} · {aiSignedPct(aiSession?.total_return || 0)}</small></span><em>›</em></button>}
-                  {unreadPrivate === 0 && !activeEvent && aiSession?.status !== "running" && <div className="vip-home-v20-quiet"><i>✓</i><span><b>새로 확인할 알림이 없습니다.</b><small>필요한 기능은 아래에서 바로 이용할 수 있습니다.</small></span></div>}
-                </section>
+                {unreadPrivate > 0 && (
+                  <section className="vip-home-v20-alerts">
+                    <button type="button" onClick={() => changeTab("private")}>
+                      <i>🎧</i><span><b>1:1 새 답변 {unreadPrivate}</b><small>관리자 답변을 확인하세요</small></span><em>›</em>
+                    </button>
+                  </section>
+                )}
                 <section className="vip-home-v20-process" onClick={() => changeTab("ai")} role="button" tabIndex={0}>
                   <div className="vip-home-v20-process-top"><span>내 AI PROCESS</span><em>{aiSession?.status === "running" ? "진행 중" : "대기"}</em></div>
                   <div className="vip-home-v20-process-main"><div><small>현재 평가금액</small><strong>{aiSession?.status === "running" ? aiKrw(aiSession?.current_amount || aiCurrentStartMoney) : "진행 중인 PROCESS가 없습니다"}</strong></div>{aiSession?.status === "running" && <b className={(aiSession?.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedKrw(aiSession?.total_profit || 0)} · {aiSignedPct(aiSession?.total_return || 0)}</b>}</div>
