@@ -115,6 +115,7 @@ export default function Home() {
   const [aiAdminIndefinite, setAiAdminIndefinite] = useState(false);
   const [aiAdminWorking, setAiAdminWorking] = useState(false);
   const [aiAccountsWorking, setAiAccountsWorking] = useState(false);
+  const [aiAdminControlAmounts, setAiAdminControlAmounts] = useState({});
 
   const [autoEvents, setAutoEvents] = useState([]);
   const [eventWorkingId, setEventWorkingId] = useState(null);
@@ -598,16 +599,59 @@ export default function Home() {
     }
   }
 
-  async function adminStopAiProcess(targetProcessId) {
-    if (profile?.role !== "admin" || !targetProcessId || aiAdminWorking) return;
+  async function adminStopAiProcess(targetUserId, nickname, currentAmount) {
+    if (profile?.role !== "admin" || !targetUserId || aiAdminWorking) return;
+    const label = nickname || "회원";
+    const amountText = Number.isFinite(Number(currentAmount)) ? aiKrw(currentAmount) : "현재 평가금액";
+    if (typeof window !== "undefined" && !window.confirm(label + "님의 AI PROCESS를 종료하시겠습니까?\n최종 평가금액: " + amountText)) return;
     setAiAdminWorking(true);
     try {
-      const { error } = await supabase.rpc("admin_stop_ai_process", { target_process_id: targetProcessId });
+      const { error } = await supabase.rpc("admin_stop_ai_process", { target_user_id: targetUserId });
       if (error) throw error;
+      setNotice(label + "님의 AI PROCESS를 종료했습니다.");
       await loadAiProcessState();
     } catch (error) {
       console.error(error);
       setNotice(`AI PROCESS 종료 실패: ${error.message || "오류"}`);
+    } finally { setAiAdminWorking(false); }
+  }
+
+  async function adminAdjustAiProcess(targetUserId, adjustmentType, nickname) {
+    if (profile?.role !== "admin" || !targetUserId || aiAdminWorking) return;
+    const raw = String(aiAdminControlAmounts[targetUserId] || "").replace(/,/g, "");
+    const amount = Number(raw);
+    if (!Number.isFinite(amount) || amount <= 0) { setNotice("조정할 금액을 입력해주세요."); return; }
+    setAiAdminWorking(true);
+    try {
+      const { error } = await supabase.rpc("admin_adjust_ai_process", {
+        target_user_id: targetUserId,
+        adjustment_type: adjustmentType,
+        adjustment_amount: amount,
+      });
+      if (error) throw error;
+      const actionLabel = adjustmentType === "deposit" ? "투자금을 추가" : adjustmentType === "profit" ? "수익금을 추가" : "손실을 반영";
+      setNotice((nickname || "회원") + "님의 AI PROCESS에 " + aiKrw(amount) + " " + actionLabel + "했습니다.");
+      setAiAdminControlAmounts((prev) => ({...prev,[targetUserId]:""}));
+      await loadAiProcessState();
+    } catch (error) {
+      console.error(error);
+      setNotice(`AI PROCESS 금액 조정 실패: ${error.message || "오류"}`);
+    } finally { setAiAdminWorking(false); }
+  }
+
+  async function adminRestartAiProcess(targetUserId, nickname) {
+    if (profile?.role !== "admin" || !targetUserId || aiAdminWorking) return;
+    const label = nickname || "회원";
+    if (typeof window !== "undefined" && !window.confirm(label + "님의 AI PROCESS를 현재 평가금액 기준으로 재시작하시겠습니까?")) return;
+    setAiAdminWorking(true);
+    try {
+      const { error } = await supabase.rpc("admin_restart_ai_process", { target_user_id: targetUserId });
+      if (error) throw error;
+      setNotice(label + "님의 AI PROCESS를 재시작했습니다.");
+      await loadAiProcessState();
+    } catch (error) {
+      console.error(error);
+      setNotice(`AI PROCESS 재시작 실패: ${error.message || "오류"}`);
     } finally { setAiAdminWorking(false); }
   }
 
@@ -3769,43 +3813,61 @@ export default function Home() {
                 )}
 
                 <div className="ai-v2-summary-grid">
-                  <div className="ai-v2-summary-card"><span>시작 운용금액</span><strong>{aiSession?.status === "running" ? aiKrw(aiCurrentStartMoney) : "대기"}</strong><small>프로세스 시작 기준</small></div>
-                  <div className="ai-v2-summary-card"><span>현재 평가금액</span><strong>{aiSession?.status === "running" ? aiKrw(aiDisplayAmount) : "-"}</strong><small>3분 단위 현재금액 갱신</small></div>
-                  <div className="ai-v2-summary-card"><span>누적 손익</span><strong className={aiDisplayProfit >= 0 ? "is-profit" : "is-loss"}>{aiSession?.status === "running" ? aiSignedKrw(aiDisplayProfit) : "-"}</strong><small>{aiSession?.status === "running" ? aiSignedPct(aiDisplayReturn) : "PROCESS WAIT"}</small></div>
-                  <div className="ai-v2-summary-card"><span>진행 기간</span><strong>{aiSession?.status === "running" ? (aiSession?.ends_at ? aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours}) : "기간 미정") : "대기"}</strong><small>{aiSession?.status === "running" && !aiSession?.ends_at ? "관리자 종료 시까지 진행" : "최대 30일 진행"}</small></div>
+                  <div className="ai-v2-summary-card"><span>시작 운용금액</span><strong>{aiSession ? aiKrw(aiCurrentStartMoney) : "대기"}</strong><small>프로세스 시작 기준</small></div>
+                  <div className="ai-v2-summary-card"><span>{aiSession?.status === "stopped" ? "최종 평가금액" : "현재 평가금액"}</span><strong>{aiSession ? aiKrw(aiDisplayAmount) : "-"}</strong><small>{aiSession?.status === "stopped" ? "종료 시점 최종 금액" : "시장 상황 자동 반영"}</small></div>
+                  <div className="ai-v2-summary-card"><span>누적 손익</span><strong className={aiDisplayProfit >= 0 ? "is-profit" : "is-loss"}>{aiSession ? aiSignedKrw(aiDisplayProfit) : "-"}</strong><small>{aiSession ? aiSignedPct(aiDisplayReturn) : "PROCESS WAIT"}</small></div>
+                  <div className="ai-v2-summary-card"><span>진행 상태</span><strong>{aiSession?.status === "running" ? (aiSession?.ends_at ? aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours}) : "기간 미정") : aiSession?.status === "stopped" ? "PROCESS 종료" : "대기"}</strong><small>{aiSession?.status === "stopped" ? "최종 결과가 확정되었습니다" : aiSession?.status === "running" && !aiSession?.ends_at ? "관리자 종료 시까지 진행" : "최대 30일 진행"}</small></div>
                 </div>
 
                 <section className="ai-v2-panel" style={{marginBottom:"14px",padding:"15px 16px"}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
-                    <div><span style={{display:"block",fontSize:"9px",fontWeight:900,color:"#6b7c76"}}>현재 단계</span><strong style={{display:"block",marginTop:"4px",fontSize:"15px",color:"#263833"}}>{aiSimLoading ? "AI 분석 중" : aiSession?.status === "running" ? "결과 반영 · 재분석" : "대기"}</strong></div>
-                    <span style={{padding:"6px 9px",borderRadius:"999px",background:aiSession?.status === "running"?"#e7f5f0":"#f0f2f1",color:aiSession?.status === "running"?"#32705e":"#7a8581",fontSize:"9px",fontWeight:900}}>{aiSession?.status === "running" ? "자동 진행 중" : "대기"}</span>
+                    <div><span style={{display:"block",fontSize:"9px",fontWeight:900,color:"#6b7c76"}}>현재 단계</span><strong style={{display:"block",marginTop:"4px",fontSize:"15px",color:"#263833"}}>{aiSession?.status === "stopped" ? "PROCESS 종료" : aiSimLoading ? "AI 분석 중" : aiSession?.status === "running" ? "결과 반영 · 재분석" : "대기"}</strong></div>
+                    <span style={{padding:"6px 9px",borderRadius:"999px",background:aiSession?.status === "running"?"#e7f5f0":"#f0f2f1",color:aiSession?.status === "running"?"#32705e":"#7a8581",fontSize:"9px",fontWeight:900}}>{aiSession?.status === "running" ? "자동 진행 중" : aiSession?.status === "stopped" ? "종료됨" : "대기"}</span>
                   </div>
                   <p style={{margin:"8px 0 0",fontSize:"10px",lineHeight:1.55,color:"#788680"}}>{aiLastResult ? aiLastResult.name + " 시장 움직임이 최근 결과에 반영되었습니다." : "시장 데이터를 분석하고 조건에 맞는 대상을 선별합니다."}</p>
                 </section>
 
                 <section className="ai-v2-live-members">
                   <div className="ai-v2-live-members-head">
-                    <div><span>진행 중 회원</span><strong>지금 함께 진행 중인 회원</strong><small>다른 회원은 요약 수익만 표시됩니다.</small></div>
-                    <div className="ai-v2-live-count"><i></i>{aiPublicSessions.length}건 진행 중</div>
+                    <div><span>{profile?.role === "admin" ? "PROCESS CONTROL" : "진행 중 회원"}</span><strong>{profile?.role === "admin" ? "회원 AI PROCESS 관리" : "지금 함께 진행 중인 회원"}</strong><small>{profile?.role === "admin" ? "투자금·손익·종료·재시작을 회원별 카드에서 관리합니다." : "다른 회원은 요약 수익만 표시됩니다."}</small></div>
+                    <div className="ai-v2-live-count"><i></i>{profile?.role === "admin" ? `진행 ${aiPublicSessions.filter((x)=>x.status === "running").length} · 종료 ${aiPublicSessions.filter((x)=>x.status === "stopped").length}` : `${aiPublicSessions.length}건 진행 중`}</div>
                   </div>
                   {aiPublicLoading && !aiPublicSessions.length ? <div className="ai-v2-live-empty">진행 현황을 불러오는 중입니다.</div> : aiPublicSessions.length ? (
                     <div className="ai-v2-live-member-grid">
                       {aiPublicSessions.map((item) => (
-                        <article className={`ai-v2-live-member-card ${item.user_id === user.id ? "is-me" : ""}`} key={item.process_id || `${item.user_id}-${item.started_at}`}>
-                          <img src={avatarSrc(item.avatar)} alt=""/>
-                          <div className="ai-v2-live-member-main">
-                            <div className="ai-v2-live-member-name"><strong>{item.nickname}</strong>{item.user_id === user.id && <em>ME</em>}<span>● 진행 중</span><small>#{String(item.process_id || "").slice(0,6).toUpperCase()}</small></div>
-                            <div className="ai-v2-live-member-profit">
-                              <b className={Number(item.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedKrw(item.total_profit || 0)}</b>
-                              <small className={Number(item.total_return || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedPct(item.total_return || 0)}</small>
+                        profile?.role === "admin" ? (
+                          <article className={`ai-v50-control-card ${item.status === "stopped" ? "is-stopped" : ""}`} key={item.user_id}>
+                            <div className="ai-v50-control-head">
+                              <div className="ai-v50-control-member"><img src={avatarSrc(item.avatar)} alt=""/><div><strong>{item.nickname}</strong><small>{item.status === "running" ? "AI PROCESS 진행 중" : "AI PROCESS 종료"}</small></div></div>
+                              <span className={item.status === "running" ? "is-running" : "is-stopped"}>{item.status === "running" ? "● 진행 중" : "종료됨"}</span>
                             </div>
-                            <div className="ai-v2-live-member-meta">
-                              <span>{item.last_asset_name || "시장 분석 중"}{item.last_market_pct != null ? ` ${aiSignedPct(item.last_market_pct)}` : ""}</span>
-                              <time>{aiTime(item.updated_at)}</time>
+                            <div className="ai-v50-control-stats">
+                              <div><span>투자금</span><b>{aiKrw(item.start_amount || 0)}</b></div>
+                              <div><span>현재 평가금액</span><b>{aiKrw(item.current_amount || 0)}</b></div>
+                              <div><span>누적 손익</span><b className={Number(item.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedKrw(item.total_profit || 0)}</b></div>
+                              <div><span>수익률</span><b className={Number(item.total_return || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedPct(item.total_return || 0)}</b></div>
                             </div>
-                          </div>
-                          {profile?.role === "admin" && <button type="button" className="ai-v2-stop" onClick={() => adminStopAiProcess(item.process_id)}>종료</button>}
-                        </article>
+                            <div className="ai-v50-control-meta"><span>{item.ends_at ? aiRemainingText({startedAt:item.started_at,durationHours:item.duration_hours}) : "기간 미정"}</span><span>{item.last_asset_name || (item.status === "running" ? "시장 자동 반영 중" : "최종 결과 확정")}</span></div>
+                            {item.status === "running" ? <>
+                              <div className="ai-v50-control-input"><input value={aiAdminControlAmounts[item.user_id] || ""} onChange={(e)=>setAiAdminControlAmounts((prev)=>({...prev,[item.user_id]:e.target.value.replace(/[^0-9]/g,"")}))} inputMode="numeric" placeholder="조정 금액 입력"/><span>원</span></div>
+                              <div className="ai-v50-control-actions">
+                                <button type="button" disabled={aiAdminWorking} onClick={()=>adminAdjustAiProcess(item.user_id,"deposit",item.nickname)}>투자금 추가</button>
+                                <button type="button" disabled={aiAdminWorking} onClick={()=>adminAdjustAiProcess(item.user_id,"profit",item.nickname)}>+ 수익금</button>
+                                <button type="button" disabled={aiAdminWorking} onClick={()=>adminAdjustAiProcess(item.user_id,"loss",item.nickname)}>- 손실</button>
+                                <button type="button" className="is-danger" disabled={aiAdminWorking} onClick={()=>adminStopAiProcess(item.user_id,item.nickname,item.current_amount)}>{aiAdminWorking ? "처리 중..." : "PROCESS 종료"}</button>
+                              </div>
+                            </> : <button type="button" className="ai-v50-restart" disabled={aiAdminWorking} onClick={()=>adminRestartAiProcess(item.user_id,item.nickname)}>{aiAdminWorking ? "처리 중..." : "PROCESS 재시작"}</button>}
+                          </article>
+                        ) : (
+                          <article className={`ai-v2-live-member-card ${item.user_id === user.id ? "is-me" : ""}`} key={item.user_id}>
+                            <img src={avatarSrc(item.avatar)} alt=""/>
+                            <div className="ai-v2-live-member-main">
+                              <div className="ai-v2-live-member-name"><strong>{item.nickname}</strong>{item.user_id === user.id && <em>ME</em>}<span>● 진행 중</span></div>
+                              <div className="ai-v2-live-member-profit"><b className={Number(item.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedKrw(item.total_profit || 0)}</b><small className={Number(item.total_return || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedPct(item.total_return || 0)}</small></div>
+                              <div className="ai-v2-live-member-meta"><span>{item.last_asset_name || "시장 분석 중"}{item.last_market_pct != null ? ` ${aiSignedPct(item.last_market_pct)}` : ""}</span><time>{aiTime(item.updated_at)}</time></div>
+                            </div>
+                          </article>
+                        )
                       ))}
                     </div>
                   ) : <div className="ai-v2-live-empty">현재 진행 중인 AI PROCESS 회원이 없습니다.</div>}
@@ -3820,12 +3882,12 @@ export default function Home() {
                         <span>평가금액 변화</span>
                         <strong>AI PROCESS 자산 변화</strong>
                       </div>
-                      <button type="button" onClick={updateAiSimulation} disabled={aiSimLoading}>{aiSimLoading ? "분석 중" : "지금 갱신"}</button>
+                      <span className="ai-v50-auto-badge">시장 자동 반영</span>
                     </div>
 
                     <div className="ai-v2-chart-kpis">
-                      <div><span>현재</span><b>{aiSession?.status === "running" ? aiKrw(aiDisplayAmount) : "-"}</b></div>
-                      <div><span>시작</span><b>{aiSession?.status === "running" ? aiKrw(aiCurrentStartMoney) : "-"}</b></div>
+                      <div><span>현재</span><b>{aiSession ? aiKrw(aiDisplayAmount) : "-"}</b></div>
+                      <div><span>시작</span><b>{aiSession ? aiKrw(aiCurrentStartMoney) : "-"}</b></div>
                       <div><span>3분 연동</span><b>{aiLastResult ? `${aiLastResult.name} ${aiSignedPct(aiLastResult.intervalPct)}` : "대기 중"}</b></div>
                     </div>
 
@@ -3912,9 +3974,9 @@ export default function Home() {
                   </section>
                 </div>
 
-                <section className="ai-v2-panel ai-v2-log-panel">
+                <section className="ai-v2-panel ai-v2-log-panel" style={profile?.role === "admin" ? {display:"none"} : undefined}>
                   <div className="ai-v2-panel-head">
-                    <div><span>운용 기록</span><strong>최근 AI PROCESS 연동 기록</strong></div>
+                    <div><span>운용 기록</span><strong>최근 운용 기록</strong></div>
                     <div className="ai-v2-history-count">최근 {aiRecentResults.length}건</div>
                   </div>
                   <div className="ai-v2-history-list">
