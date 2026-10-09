@@ -16,7 +16,7 @@ jobs:
       - name: Apply V52 patch
         run: node scripts/apply-v52-design-system.mjs
       - name: Install dependencies
-        run: npm ci
+        run: npm install
       - name: Build validation
         run: npm run build
       - name: Commit changes
