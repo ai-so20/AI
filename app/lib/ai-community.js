@@ -119,13 +119,13 @@ function directNicknameCallReply(character, text) {
   // "OO님 축하드려요"는 호출이 아니라 축하 인사다. 당첨자는 감사 반응을 해야 한다.
   if (isDirectCongratulation(raw, nickname)) {
     const thanks = [
-      "감사합니다~",
-      "헉 감사합니다ㅎㅎ",
+      "감사합니다~!",
       "감사해요!!",
       "감사합니당~!",
-      "헉 당첨됐네요ㅋㅋ 감사해요",
-      "와 감사합니다ㅎㅎ 잘 쓸게요",
-      "감사해요 ㅎㅎ 기분 좋네요",
+      "정말 감사합니다!",
+      "축하해주셔서 감사해요~",
+      "고마워요! 기분 좋네요",
+      "감사드려요 잘 받을게요!",
     ];
     return thanks[randInt(0, thanks.length - 1)];
   }
@@ -1011,13 +1011,66 @@ const LOCAL_REACTIONS = {
   greeting: ["안녕하세요ㅎㅎ", "반가워요!", "오 안녕하세요", "어서오세요~", "안녕하세요 :)"],
   thanks: ["별말씀을요ㅎㅎ", "아니에요 괜찮아요", "도움이 됐다니 다행이에요", "ㅎㅎ 다행이네요"],
   laugh: ["ㅋㅋㅋㅋ", "아 이건 좀 웃기네요ㅋㅋ", "ㅋㅋ 저도 웃었어요", "아 그건 인정이에요ㅋㅋ"],
-  celebration: ["와 축하해요!", "오 대박 축하드려요ㅎㅎ", "헉 축하해요ㅋㅋ", "와 이건 좀 부럽네요", "좋은 소식이네요. 축하해요!"],
+  celebration: ["축하드립니다!!", "축하드려요~~!", "축하해용!", "당첨 축하드려요!", "당첨 축하해요", "추카추카~~~~", "축하해요~", "좋은 결과 축하드립니다!", "축하합니당~", "진심으로 축하드려요!"],
   loss: ["아이고 아쉽네요", "이건 좀 속상하겠어요", "ㅠㅠ 그래도 너무 마음 쓰진 마세요", "아쉽네요 진짜"],
   agree: ["맞아요", "그러게요ㅎㅎ", "아 그건 인정이에요", "저도 비슷한 편이에요"],
 };
 
 // 카카오톡 오픈채팅처럼 기본은 존댓말로 유지합니다.
 // opener는 72시간 동안 같은 계열을 다시 쓰지 않도록 충분히 넓게 둡니다.
+const LOCAL_DAILY_OPENERS = [
+  () => "오늘은 유난히 시간이 빨리 가는 느낌이네요.",
+  () => "요즘 집에 들어가면 바로 눕고 싶더라고요ㅎㅎ",
+  () => "이번 주는 왜 이렇게 길게 느껴지는지 모르겠어요.",
+  () => "요즘은 저녁 메뉴 고르는 게 제일 어렵네요.",
+  () => "오늘은 괜히 달달한 게 하나 땡기네요.",
+  () => "저는 요즘 잠깐 걷는 시간이 꽤 좋더라고요.",
+  () => "최근에 집 정리 조금 했더니 생각보다 속이 시원하네요.",
+  () => "요즘은 새로 사는 것보다 있는 걸 잘 쓰게 돼요.",
+  () => "주말 계획 아직 하나도 안 정했어요ㅋㅋ",
+  () => "저는 요즘 음악을 예전에 듣던 것만 다시 듣게 돼요.",
+  () => "오늘은 이상하게 계속 간식 생각이 나네요.",
+  () => "요즘 사진 정리 미뤄둔 게 너무 많아요.",
+  () => "저는 요즘 배달을 좀 줄여보려고 하는 중이에요.",
+  () => "오늘은 그냥 조용히 쉬고 싶은 날이네요.",
+  () => "요즘은 잠깐 멍하니 있는 시간도 괜찮더라고요.",
+  () => "저는 최근에 이어폰 없이 걷는 게 은근 좋더라고요.",
+  () => "오늘 집 가는 길에 편의점 들를까 고민 중이에요.",
+  () => "요즘은 아침보다 저녁 시간이 훨씬 편해요.",
+  () => "저는 주말 약속을 너무 많이 안 잡으려고 해요.",
+  () => "오늘은 따뜻한 거 하나 마시면 딱 좋을 것 같아요.",
+  () => "요즘은 하루가 끝나면 시간이 어디 갔나 싶어요.",
+  () => "저는 빨래 돌려놓고 까먹는 일이 자꾸 생기네요ㅋㅋ",
+  () => "요즘 집에 있는 시간이 생각보다 편해졌어요.",
+  () => "오늘은 뭔가 집중이 잘 안 되는 날이네요.",
+  () => "저는 요즘 자기 전에 영상 하나만 보려다가 계속 늦게 자요.",
+  () => "이번 주말엔 그냥 늦잠 좀 자고 싶네요.",
+  () => "요즘 옷 입기가 애매해서 아침마다 고민돼요.",
+  () => "오늘은 커피를 마셨는데도 졸리네요ㅎㅎ",
+  () => "저는 요즘 알람 한 번에 못 일어나겠어요.",
+  () => "집에 쌓인 택배 박스부터 정리해야 하는데 계속 미루는 중이에요.",
+  () => "요즘 뭐 하나 사려다가도 꼭 한 번 더 고민하게 되네요.",
+  () => "오늘은 유난히 밖에 나가기 귀찮네요ㅋㅋ",
+  () => "저는 요즘 냉장고에 뭐 있는지도 모르고 또 장을 봐요.",
+  () => "요즘 하루에 물을 좀 더 마셔보려고 하는데 쉽지 않네요.",
+  () => "저는 최근에 방 조명 하나 바꿨는데 분위기가 꽤 달라졌어요.",
+  () => "오늘은 저녁 먹고 아무것도 안 하고 쉬고 싶어요.",
+  () => "요즘은 작은 일 하나 끝내도 괜히 뿌듯하더라고요.",
+  () => "저는 요즘 주말 아침이 제일 좋더라고요.",
+  () => "오늘은 괜히 평소 안 먹던 게 생각나네요.",
+  () => "요즘은 휴대폰 내려놓고 있는 시간이 생각보다 어렵네요.",
+  () => "저는 최근에 오래 안 쓰던 물건들 조금씩 버리는 중이에요.",
+  () => "오늘 할 일 하나만 딱 끝내고 쉬고 싶네요.",
+  () => "요즘은 날씨보다 실내 온도 맞추는 게 더 어렵네요.",
+  () => "저는 요즘 밤에 잠깐 창문 열어두는 게 좋더라고요.",
+  () => "오늘은 뭔가 맛있는 걸 먹어야 기분이 풀릴 것 같아요.",
+  () => "요즘은 예전 사진 보면 시간이 진짜 빨랐구나 싶어요.",
+  () => "저는 최근에 미뤄둔 연락 하나 했더니 마음이 편해졌어요.",
+  () => "오늘은 그냥 평범해서 오히려 좋은 날인 것 같아요.",
+  () => "요즘 작은 루틴 하나 만들어보려고 하는데 오래 갈지 모르겠어요.",
+  () => "저는 집에 오면 제일 먼저 편한 옷부터 갈아입어요ㅋㅋ",
+];
+
 const LOCAL_OPENERS = [
   (t) => `요즘 ${t} 어때요?`,
   (t) => `${t} 얘기 나오니까 갑자기 생각났네요ㅋㅋ`,
@@ -1205,7 +1258,7 @@ async function localAutonomousMessages(db, selected, topic, now = new Date()) {
   const title = String(topic?.title || topic?.category || "요즘 일상").replace(/\s+/g, " " ).slice(0, 28);
   const locks = await load72HourLocalLocks(db, now);
 
-  const availableOpeners = LOCAL_OPENERS
+  const availableOpeners = LOCAL_DAILY_OPENERS
     .map((fn, id) => ({ fn, id }))
     .filter((x) => !locks.openerIds.has(x.id));
   if (!availableOpeners.length) return { messages: [], meta: null };
@@ -1281,39 +1334,52 @@ function localWelcomeMessages(selected, nickname) {
   }));
 }
 
-function localEventMessages(selected, event, winner = null) {
+async function loadTodayCelebrationLocks(db, now = new Date()) {
+  const cutoff = new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString();
+  const { data } = await db.from("group_messages")
+    .select("content")
+    .eq("room_id", AI_ROOM_ID)
+    .eq("is_deleted", false)
+    .gte("created_at", cutoff)
+    .order("created_at", { ascending: false })
+    .limit(500);
+  return new Set((data || []).map((row) => String(row.content || "").trim()).filter(Boolean));
+}
+
+function localEventMessages(selected, event, winner = null, dailyLocks = new Set()) {
   if (winner) {
     const winnerCharacter = selected.find((c) => c.member_id === winner.id) || null;
     const others = selected.filter((c) => c.member_id !== winner.id);
-    // 당첨 발표 직후에는 먼저 1~2명이 축하하고, AI 당첨자는 곧바로 감사 인사를 하게 한다.
     const split = Math.min(others.length, randInt(1, 2));
     const ordered = winnerCharacter
       ? [...others.slice(0, split), winnerCharacter, ...others.slice(split)]
       : others;
     const prize = String(event?.prize || "").trim();
+    const winnerName = String(winner?.nickname || "당첨자").trim();
     const winnerThanks = [
-      "감사합니다~",
-      "헉 제가 당첨됐네요ㅎㅎ 감사합니다!",
-      "감사해요!!",
-      "와 진짜요? 감사합니다ㅋㅋ",
-      "감사합니당~!",
-      "헉 대박ㅋㅋ 감사해요",
-      prize && prize !== "VIP EVENT 당첨" ? `${prize} 잘 쓸게요ㅎㅎ 감사합니다` : "잘 쓸게요ㅎㅎ 감사합니다",
+      "감사합니다~!", "감사해요!!", "감사합니당~!", "정말 감사합니다!", "고마워요~!", "감사드려요!",
+      prize && prize !== "VIP EVENT 당첨" ? `${prize} 잘 받을게요 감사합니다!` : "잘 받을게요 감사합니다!",
+      "기분 좋네요 감사합니다~", "축하해주셔서 감사해요!", "감사합니다 잘 쓸게요~"
     ].filter(Boolean);
     const congrats = [
-      "와 축하해요!",
-      "오 대박 축하드려요ㅎㅎ",
-      "헉 축하해요ㅋㅋ",
-      "와 부럽네요 축하드려요!",
-      "오 당첨되셨네요 축하드려요~",
-      "대박ㅋㅋ 축하해요",
-      "축하드려요!!",
+      "축하드립니다!!", "축하드려요~~!", "축하해용!", `${winnerName}님 축하합니다`, `${winnerName}님 축하드려요~`,
+      `축하드립니당 ${winnerName}님`, "당첨 축하드려요!", "당첨 축하해요", "추카추카~~~~", "축하해요~",
+      "진심으로 축하드립니다!", "좋은 결과 축하드려요!", `${winnerName}님 당첨 축하해요!`, `${winnerName}님 축하드립니다~`,
+      "당첨 정말 축하드려요!", "축하합니당~~", "축하축하!!", "당첨 축하드립니다!", "축하드려용~", "축하해요!!",
+      `축하합니다 ${winnerName}님!`, `${winnerName}님 축하해요~`, "축하드려요!", "당첨 축하해용!", "축하합니다~!",
+      "축하드립니당!", `${winnerName}님 당첨 축하드립니다`, "당첨되신 거 축하해요~", "축하 많이 드려요!", "오늘 좋은 소식 축하드려요!",
+      "기분 좋은 당첨 축하합니다!", "축하드려요 좋은 결과네요!", `${winnerName}님 좋은 결과 축하해요`, "당첨 축하합니다~", "축하해용~~",
+      "축하드려요 :) ", "좋은 소식 축하드립니당!", "당첨 정말 축하해요!", `${winnerName}님 축하축하!`, "축하드립니다~!"
     ];
-    return ordered.map((c) => ({
-      member_id: c.member_id,
-      message: styleLocalText(c, c.member_id === winner.id ? pickOne(winnerThanks) : pickOne(congrats)),
-      act: "celebration",
-    }));
+    const used = new Set(dailyLocks);
+    return ordered.map((c) => {
+      const pool = c.member_id === winner.id ? winnerThanks : congrats;
+      let candidates = pool.filter((text) => !used.has(String(text).trim()));
+      if (!candidates.length) candidates = pool;
+      const message = String(pickOne(candidates)).trim();
+      used.add(message);
+      return { member_id: c.member_id, message: trimChatMessage(message, 110), act: "celebration" };
+    });
   }
   const eventType = String(event?.event_type || "").toLowerCase();
   const title = String(event?.title || "");
@@ -1803,7 +1869,7 @@ async function publishGeneratedTurn(db, thread, speaker, generated, settings, no
   } else if (thread.thread_type === "autonomous") {
     // 한 주제가 끝났으면 다음 자율 대화 판단을 1분 뒤 확실하게 열어둡니다.
     await db.from("ai_community_state").update({
-      next_autonomous_at: new Date(now.getTime() + randInt(5, 10) * 60 * 1000).toISOString(),
+      next_autonomous_at: new Date(now.getTime() + randInt(3, 6) * 60 * 1000).toISOString(),
       updated_at: now.toISOString(),
     }).eq("id", 1);
   }
@@ -1853,7 +1919,7 @@ async function processTurn(db, turn, characters, settings, now = new Date()) {
       }).eq("id", thread.id);
       if (thread.thread_type === "autonomous") {
         await db.from("ai_community_state").update({
-          next_autonomous_at: new Date(now.getTime() + randInt(5, 10) * 60 * 1000).toISOString(),
+          next_autonomous_at: new Date(now.getTime() + randInt(3, 6) * 60 * 1000).toISOString(),
           updated_at: now.toISOString(),
         }).eq("id", 1);
       }
@@ -2137,7 +2203,8 @@ async function startEventCommunityThread(db, communityEvent, characters, setting
       open_question: false, priority: 100, title: `${event.title || "이벤트"} 당첨 축하`,
     });
     await addParticipants(db, thread.id, selected);
-    await publishPreparedNow(db, thread, characters, settings, localEventMessages(selected, event, winner), now, "local");
+    const dailyCelebrationLocks = await loadTodayCelebrationLocks(db, now);
+    await publishPreparedNow(db, thread, characters, settings, localEventMessages(selected, event, winner, dailyCelebrationLocks), now, "local");
     await db.from("ai_community_events").update({ status: "done", processed_at: now.toISOString() }).eq("id", communityEvent.id);
     return { started: selected.length, type: "event_winner", apiCalls: 0 };
   }
@@ -2163,7 +2230,7 @@ async function startAutonomousThread(db, characters, settings, now = new Date())
 
   if (activeCount > 0 && Math.random() * 100 >= Number(settings.new_parallel_topic_chance || 32)) {
     await db.from("ai_community_state").update({
-      next_autonomous_at: new Date(now.getTime() + randInt(5, 10) * 60 * 1000).toISOString(),
+      next_autonomous_at: new Date(now.getTime() + randInt(3, 6) * 60 * 1000).toISOString(),
       updated_at: now.toISOString(),
     }).eq("id", 1);
     return 0;
@@ -2206,7 +2273,7 @@ async function startAutonomousThread(db, characters, settings, now = new Date())
   const prepared = localScene.messages;
   if (!prepared.length) {
     await db.from("ai_community_state").update({
-      next_autonomous_at: new Date(now.getTime() + randInt(5, 10) * 60 * 1000).toISOString(),
+      next_autonomous_at: new Date(now.getTime() + randInt(3, 6) * 60 * 1000).toISOString(),
       updated_at: now.toISOString(),
     }).eq("id", 1);
     return 0;
@@ -2223,7 +2290,7 @@ async function startAutonomousThread(db, characters, settings, now = new Date())
 
   await publishPreparedNow(db, thread, characters, settings, prepared, now, "local");
   await db.from("ai_community_state").update({
-    next_autonomous_at: new Date(now.getTime() + randInt(5, 10) * 60 * 1000).toISOString(),
+    next_autonomous_at: new Date(now.getTime() + randInt(3, 6) * 60 * 1000).toISOString(),
     updated_at: now.toISOString(),
   }).eq("id", 1);
   return 1;
@@ -2267,7 +2334,7 @@ async function closeStaleThreads(db, now = new Date()) {
         status: "completed", completed_at: now.toISOString(), last_activity_at: now.toISOString(),
       }).in("id", orphanIds);
       await db.from("ai_community_state").update({
-        next_autonomous_at: new Date(now.getTime() + randInt(5, 10) * 60 * 1000).toISOString(), updated_at: now.toISOString(),
+        next_autonomous_at: new Date(now.getTime() + randInt(3, 6) * 60 * 1000).toISOString(), updated_at: now.toISOString(),
       }).eq("id", 1);
       await logEngineEvent(db, { level: "warning", category: "AUTONOMOUS_ORPHAN_RECOVERED", message: `다음 턴이 사라진 자율대화 ${orphanIds.length}건을 복구했습니다.`, meta: { thread_ids: orphanIds } });
     }

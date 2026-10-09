@@ -946,3 +946,29 @@
 .vip-home-v20-process{border-color:#dde5e2!important;box-shadow:0 8px 24px rgba(31,54,47,.06)!important}
 .vip-home-v20-event{border-color:#dde5e2!important;box-shadow:0 8px 24px rgba(31,54,47,.05)!important}
 @media(max-width:620px){.vip-v47-info-modal,.vip-v47-install-card{padding:22px 18px;border-radius:22px}.vip-v47-info-modal h3,.vip-v47-install-card h3{font-size:20px}.vip-v47-info-list>div,.vip-v47-install-steps>div{grid-template-columns:38px 1fr;padding:10px}.vip-v47-info-list>div>b,.vip-v47-install-steps>div>b{width:30px;height:30px}.vip-home-v20{padding-bottom:84px!important}}
+
+
+/* V48 scroll + home visual continuity */
+.vip-home-v20{
+  height:100%!important;
+  min-height:0!important;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+  overscroll-behavior-y:contain;
+  -webkit-overflow-scrolling:touch;
+  background:#f4f6f5!important;
+  color:#24332e!important;
+  padding-bottom:96px!important;
+}
+.vip-home-v20-welcome{
+  background:#fff!important;
+  border-color:#dfe6e3!important;
+  box-shadow:0 8px 24px rgba(31,54,47,.055)!important;
+}
+.vip-home-v20-welcome span,.vip-home-v20-section-head span,.vip-home-v20-process-top span,.vip-home-v20-event span{color:#4f7569!important}
+.vip-home-v20-event{background:#fff!important;border-color:#dfe6e3!important}
+.vip-home-v20-process{background:linear-gradient(135deg,#203b34,#29483f)!important}
+@media(max-width:999px){
+  .vip-app-body{overflow:hidden!important;min-height:0!important}
+  .vip-home-v20{height:100%!important;max-height:100%!important;padding-bottom:118px!important}
+}
