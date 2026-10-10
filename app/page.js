@@ -2927,6 +2927,15 @@ export default function Home() {
     const aiLastResult = aiRecentResults[0] || null;
     const aiPositiveMarkets = aiMarketRows.filter((item) => Number(item.changePct) > 0).length;
     const aiNegativeMarkets = aiMarketRows.filter((item) => Number(item.changePct) < 0).length;
+    const aiStockRows = aiMarketRows.filter((item) => item.type !== "crypto");
+    const aiCryptoRows = aiMarketRows.filter((item) => item.type === "crypto");
+    const aiAvgPct = (rows) => rows.length ? rows.reduce((sum, item) => sum + Number(item.changePct || 0), 0) / rows.length : 0;
+    const aiStockAvgPct = aiAvgPct(aiStockRows);
+    const aiCryptoAvgPct = aiAvgPct(aiCryptoRows);
+    const aiTopGainers = [...aiMarketRows].filter((item) => Number(item.changePct || 0) > 0).sort((a,b)=>Number(b.changePct||0)-Number(a.changePct||0)).slice(0,3);
+    const aiTopLosers = [...aiMarketRows].filter((item) => Number(item.changePct || 0) < 0).sort((a,b)=>Number(a.changePct||0)-Number(b.changePct||0)).slice(0,3);
+    const aiMarketMood = aiPositiveMarkets > aiNegativeMarkets ? "상승 우위" : aiNegativeMarkets > aiPositiveMarkets ? "하락 우위" : "혼조";
+    const aiLastMarketTime = aiLastResult?.at ? aiTime(aiLastResult.at) : "대기 중";
     const aiCompletedCount = ["completed", "stopped"].includes(aiSession?.status) ? 1 : 0;
     const aiTodayLabel = new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
     const aiTodayProfit = (Array.isArray(aiSim?.resultHistory) ? aiSim.resultHistory : []).reduce((sum, item) => {
@@ -3885,6 +3894,31 @@ export default function Home() {
                 </section>
 
                 {aiSimError && <div className="ai-v2-error">{aiSimError}</div>}
+
+                <section className="ai-v57-market-overview" style={profile?.role === "admin" ? {display:"none"} : undefined}>
+                  <div className="ai-v57-market-head">
+                    <div><span>MARKET OVERVIEW</span><strong>시장 자동 반영 현황</strong><small>현재 연결된 주식·코인 데이터를 3분 주기로 요약합니다.</small></div>
+                    <div className="ai-v57-market-status"><i></i><span>{aiMarketMood}</span><b>다음 반영 {aiCountdown}</b></div>
+                  </div>
+                  <div className="ai-v57-market-kpis">
+                    <div><span>주식 평균</span><strong className={aiStockAvgPct > 0 ? "is-profit" : aiStockAvgPct < 0 ? "is-loss" : ""}>{aiSignedPct(aiStockAvgPct)}</strong><small>{aiStockRows.length}개 종목</small></div>
+                    <div><span>코인 평균</span><strong className={aiCryptoAvgPct > 0 ? "is-profit" : aiCryptoAvgPct < 0 ? "is-loss" : ""}>{aiSignedPct(aiCryptoAvgPct)}</strong><small>{aiCryptoRows.length}개 자산</small></div>
+                    <div><span>상승 / 하락</span><strong>{aiPositiveMarkets} / {aiNegativeMarkets}</strong><small>전체 {aiMarketRows.length}개</small></div>
+                    <div><span>최근 시장 반영</span><strong>{aiLastMarketTime}</strong><small>다음 {aiCountdown}</small></div>
+                  </div>
+                  <div className="ai-v57-market-detail">
+                    <div className="ai-v57-selected">
+                      <span>AI CURRENT ASSET</span>
+                      <strong>{aiLastResult?.name || "분석 중"}</strong>
+                      <div><b>{aiLastResult?.symbol || "—"}</b>{aiLastResult && <em className={Number(aiLastResult.intervalPct) >= 0 ? "is-profit" : "is-loss"}>{aiSignedPct(aiLastResult.intervalPct)}</em>}</div>
+                      <small>{aiLastResult ? "현재 PROCESS 반영 자산" : "첫 시장 반영을 기다리고 있습니다."}</small>
+                    </div>
+                    <div className="ai-v57-movers">
+                      <div><span>상승 TOP 3</span>{aiTopGainers.length ? aiTopGainers.map((item)=><p key={item.symbol}><b>{item.name}</b><em className="is-profit">{aiSignedPct(item.changePct)}</em></p>) : <small>상승 종목 없음</small>}</div>
+                      <div><span>하락 TOP 3</span>{aiTopLosers.length ? aiTopLosers.map((item)=><p key={item.symbol}><b>{item.name}</b><em className="is-loss">{aiSignedPct(item.changePct)}</em></p>) : <small>하락 종목 없음</small>}</div>
+                    </div>
+                  </div>
+                </section>
 
                 <div className="ai-v2-workspace" style={profile?.role === "admin" ? {display:"none"} : undefined}>
                   <section className="ai-v2-panel ai-v2-chart-panel">
