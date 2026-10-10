@@ -2936,6 +2936,25 @@ export default function Home() {
     const aiTopLosers = [...aiMarketRows].filter((item) => Number(item.changePct || 0) < 0).sort((a,b)=>Number(a.changePct||0)-Number(b.changePct||0)).slice(0,3);
     const aiMarketMood = aiPositiveMarkets > aiNegativeMarkets ? "상승 우위" : aiNegativeMarkets > aiPositiveMarkets ? "하락 우위" : "혼조";
     const aiLastMarketTime = aiLastResult?.at ? aiTime(aiLastResult.at) : "대기 중";
+    const aiImpactHistory = Array.isArray(aiSim?.resultHistory) ? aiSim.resultHistory : [];
+    const aiImpactByAsset = Object.values(aiImpactHistory.reduce((acc, item) => {
+      const key = String(item?.symbol || item?.name || "UNKNOWN");
+      if (!acc[key]) acc[key] = { symbol:key, name:item?.name || key, type:item?.type || "stock", totalProfit:0, count:0, latestPct:0, latestAt:null };
+      acc[key].totalProfit += Number(item?.intervalProfit || 0);
+      acc[key].count += 1;
+      if (!acc[key].latestAt || new Date(item?.at || 0).getTime() > new Date(acc[key].latestAt || 0).getTime()) {
+        acc[key].latestAt = item?.at || null;
+        acc[key].latestPct = Number(item?.intervalPct || 0);
+      }
+      return acc;
+    }, {}));
+    const aiProfitContributors = [...aiImpactByAsset].filter((item)=>item.totalProfit>0).sort((a,b)=>b.totalProfit-a.totalProfit).slice(0,3);
+    const aiLossContributors = [...aiImpactByAsset].filter((item)=>item.totalProfit<0).sort((a,b)=>a.totalProfit-b.totalProfit).slice(0,3);
+    const aiImpactProfitTotal = aiImpactHistory.reduce((sum,item)=>sum + Math.max(0, Number(item?.intervalProfit || 0)), 0);
+    const aiImpactLossTotal = aiImpactHistory.reduce((sum,item)=>sum + Math.min(0, Number(item?.intervalProfit || 0)), 0);
+    const aiImpactNet = aiImpactHistory.reduce((sum,item)=>sum + Number(item?.intervalProfit || 0), 0);
+    const aiLatestImpact = aiImpactHistory[0] || null;
+    const aiRecentImpactRows = aiImpactHistory.slice(0,5);
     const aiCompletedCount = ["completed", "stopped"].includes(aiSession?.status) ? 1 : 0;
     const aiTodayLabel = new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
     const aiTodayProfit = (Array.isArray(aiSim?.resultHistory) ? aiSim.resultHistory : []).reduce((sum, item) => {
@@ -3895,29 +3914,36 @@ export default function Home() {
 
                 {aiSimError && <div className="ai-v2-error">{aiSimError}</div>}
 
-                <section className="ai-v57-market-overview" style={profile?.role === "admin" ? {display:"none"} : undefined}>
-                  <div className="ai-v57-market-head">
-                    <div><span>MARKET OVERVIEW</span><strong>시장 자동 반영 현황</strong><small>현재 연결된 주식·코인 데이터를 3분 주기로 요약합니다.</small></div>
-                    <div className="ai-v57-market-status"><i></i><span>{aiMarketMood}</span><b>다음 반영 {aiCountdown}</b></div>
+                <section className="ai-v57b-impact-overview" style={profile?.role === "admin" ? {display:"none"} : undefined}>
+                  <div className="ai-v57b-impact-head">
+                    <div><span>PROCESS IMPACT</span><strong>내 수익·손실에 반영된 자산</strong><small>시장 전체가 아니라 실제 AI PROCESS 금액에 반영된 기록만 보여줍니다.</small></div>
+                    <div className="ai-v57b-impact-status"><i></i><span>자동 반영 중</span><b>다음 반영 {aiCountdown}</b></div>
                   </div>
-                  <div className="ai-v57-market-kpis">
-                    <div><span>주식 평균</span><strong className={aiStockAvgPct > 0 ? "is-profit" : aiStockAvgPct < 0 ? "is-loss" : ""}>{aiSignedPct(aiStockAvgPct)}</strong><small>{aiStockRows.length}개 종목</small></div>
-                    <div><span>코인 평균</span><strong className={aiCryptoAvgPct > 0 ? "is-profit" : aiCryptoAvgPct < 0 ? "is-loss" : ""}>{aiSignedPct(aiCryptoAvgPct)}</strong><small>{aiCryptoRows.length}개 자산</small></div>
-                    <div><span>상승 / 하락</span><strong>{aiPositiveMarkets} / {aiNegativeMarkets}</strong><small>전체 {aiMarketRows.length}개</small></div>
-                    <div><span>최근 시장 반영</span><strong>{aiLastMarketTime}</strong><small>다음 {aiCountdown}</small></div>
+                  <div className="ai-v57b-impact-kpis">
+                    <div><span>누적 수익 기여</span><strong className="is-profit">{aiSignedKrw(aiImpactProfitTotal)}</strong><small>수익으로 반영된 금액 합계</small></div>
+                    <div><span>누적 손실 기여</span><strong className="is-loss">{aiSignedKrw(aiImpactLossTotal)}</strong><small>손실로 반영된 금액 합계</small></div>
+                    <div><span>PROCESS 순손익</span><strong className={aiImpactNet >= 0 ? "is-profit" : "is-loss"}>{aiSignedKrw(aiImpactNet)}</strong><small>현재 기록 기준</small></div>
+                    <div><span>시장 반영 횟수</span><strong>{aiImpactHistory.length}회</strong><small>다음 {aiCountdown}</small></div>
                   </div>
-                  <div className="ai-v57-market-detail">
-                    <div className="ai-v57-selected">
-                      <span>AI CURRENT ASSET</span>
-                      <strong>{aiLastResult?.name || "분석 중"}</strong>
-                      <div><b>{aiLastResult?.symbol || "—"}</b>{aiLastResult && <em className={Number(aiLastResult.intervalPct) >= 0 ? "is-profit" : "is-loss"}>{aiSignedPct(aiLastResult.intervalPct)}</em>}</div>
-                      <small>{aiLastResult ? "현재 PROCESS 반영 자산" : "첫 시장 반영을 기다리고 있습니다."}</small>
+                  <details className="ai-v57b-impact-details">
+                    <summary><span>상세 영향 보기</span><small>수익·손실 기여 자산과 최근 반영 내역</small><b className="ai-v57b-open-label">펼치기</b><b className="ai-v57b-close-label">접기</b></summary>
+                    <div className="ai-v57b-impact-main">
+                      <div className="ai-v57b-latest">
+                        <span>최근 PROCESS 반영</span>
+                        <strong>{aiLatestImpact?.name || "반영 대기 중"}</strong>
+                        {aiLatestImpact ? <div className="ai-v57b-latest-row"><b>{aiLatestImpact.symbol}</b><em className={Number(aiLatestImpact.intervalPct)>=0 ? "is-profit" : "is-loss"}>{aiSignedPct(aiLatestImpact.intervalPct)}</em><strong className={Number(aiLatestImpact.intervalProfit)>=0 ? "is-profit" : "is-loss"}>{aiSignedKrw(aiLatestImpact.intervalProfit)}</strong></div> : null}
+                        <small>{aiLatestImpact?.at ? aiTime(aiLatestImpact.at) + " · 반영 후 " + aiKrw(aiLatestImpact.portfolioValue) : "첫 시장 반영을 기다리고 있습니다."}</small>
+                      </div>
+                      <div className="ai-v57b-contributors">
+                        <div className="is-gain"><span>수익 기여 TOP 3</span>{aiProfitContributors.length ? aiProfitContributors.map((item)=><p key={'gain-' + item.symbol}><b>{item.name}</b><small>{item.count}회 반영</small><em className="is-profit">{aiSignedKrw(item.totalProfit)}</em></p>) : <small className="ai-v57b-empty">아직 수익 반영 기록이 없습니다.</small>}</div>
+                        <div className="is-loss"><span>손실 기여 TOP 3</span>{aiLossContributors.length ? aiLossContributors.map((item)=><p key={'loss-' + item.symbol}><b>{item.name}</b><small>{item.count}회 반영</small><em className="is-loss">{aiSignedKrw(item.totalProfit)}</em></p>) : <small className="ai-v57b-empty">아직 손실 반영 기록이 없습니다.</small>}</div>
+                      </div>
                     </div>
-                    <div className="ai-v57-movers">
-                      <div><span>상승 TOP 3</span>{aiTopGainers.length ? aiTopGainers.map((item)=><p key={item.symbol}><b>{item.name}</b><em className="is-profit">{aiSignedPct(item.changePct)}</em></p>) : <small>상승 종목 없음</small>}</div>
-                      <div><span>하락 TOP 3</span>{aiTopLosers.length ? aiTopLosers.map((item)=><p key={item.symbol}><b>{item.name}</b><em className="is-loss">{aiSignedPct(item.changePct)}</em></p>) : <small>하락 종목 없음</small>}</div>
+                    <div className="ai-v57b-recent">
+                      <div className="ai-v57b-recent-title"><span>최근 반영 내역</span><small>내 평가금액에 실제 반영된 최근 5건</small></div>
+                      {aiRecentImpactRows.length ? aiRecentImpactRows.map((item,index)=><div className="ai-v57b-recent-row" key={'impact-' + item.at + '-' + item.symbol + '-' + index}><div><strong>{item.name}</strong><span>{item.symbol} · {item.type === "crypto" ? "CRYPTO" : "STOCK"}</span></div><div><span>시장 변동</span><b className={Number(item.intervalPct)>=0 ? "is-profit" : "is-loss"}>{aiSignedPct(item.intervalPct)}</b></div><div><span>내 PROCESS 반영</span><b className={Number(item.intervalProfit)>=0 ? "is-profit" : "is-loss"}>{aiSignedKrw(item.intervalProfit)}</b></div><time>{aiTime(item.at)}</time></div>) : <div className="ai-v57b-recent-empty">아직 PROCESS 반영 기록이 없습니다.</div>}
                     </div>
-                  </div>
+                  </details>
                 </section>
 
                 <div className="ai-v2-workspace" style={profile?.role === "admin" ? {display:"none"} : undefined}>
