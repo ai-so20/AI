@@ -3950,10 +3950,10 @@ export default function Home() {
                   <section className="ai-v2-panel ai-v2-chart-panel">
                     <div className="ai-v2-panel-head">
                       <div>
-                        <span>평가금액 변화</span>
-                        <strong>AI PROCESS 자산 변화</strong>
+                        <span>내 PROCESS 변화</span>
+                        <strong>평가금액 변화</strong>
                       </div>
-                      <span className="ai-v50-auto-badge">시장 자동 반영</span>
+                      <span className="ai-v50-auto-badge">PROCESS 자동 반영</span>
                     </div>
 
                     <div className="ai-v2-chart-kpis">
@@ -4025,24 +4025,6 @@ export default function Home() {
                     </div>
                   </section>
 
-                  <section className="ai-v2-panel ai-v2-market-panel" style={{alignSelf:"start"}}>
-                    <div className="ai-v2-panel-head">
-                      <div><span>시장 연동</span><strong>실시간 시장 연동</strong></div>
-                      <button type="button" onClick={()=>setAiMarketExpanded((value)=>!value)}>{aiMarketExpanded ? "접기" : `펼쳐보기 · ${aiMarketRows.length}개`}</button>
-                    </div>
-                    {!aiMarketExpanded ? <div style={{padding:"12px 2px 3px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"10px",fontSize:"10px",color:"#78838c"}}><span>최근 선택 · <b style={{color:"#44515b"}}>{aiLastResult?.name || "분석 중"}</b>{aiLastResult ? " " + aiSignedPct(aiLastResult.intervalPct) : ""}</span><small>전체 시장 {aiMarketRows.length}개 · 펼치기에서 확인</small></div> : <div className="ai-v2-market-grid">
-                      {aiMarketRows.length ? aiMarketRows.map((item) => {
-                        const pct = Number(item.changePct || 0);
-                        return (
-                          <div className="ai-v2-market-row" key={item.symbol}>
-                            <div className={`ai-v2-asset-icon ${item.type === "crypto" ? "crypto" : "stock"}`}>{item.type === "crypto" ? "◆" : "●"}</div>
-                            <div className="ai-v2-market-name"><strong>{item.name}</strong><span>{item.symbol}</span></div>
-                            <div className="ai-v2-market-price"><strong>{aiFormatMarketPrice(item)}</strong><span className={pct > 0 ? "is-profit" : pct < 0 ? "is-loss" : ""}>{pct > 0 ? "▲ " : pct < 0 ? "▼ " : ""}{aiSignedPct(pct)}</span></div>
-                          </div>
-                        );
-                      }) : <div className="ai-v2-market-empty">시장 데이터를 불러오는 중입니다.</div>}
-                    </div>}
-                  </section>
                 </div>
 
                 <section className="ai-v2-panel ai-v2-log-panel" style={profile?.role === "admin" ? {display:"none"} : undefined}>
