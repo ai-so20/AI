@@ -4,6 +4,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import { AVATAR_CATALOG, avatarSrc, normalizePasswordInput } from "./lib/ui-helpers";
 import { aiKrw, aiTime, aiSignedKrw, aiSignedPct, aiFormatMarketPrice, aiRemainingText, buildAiChartModel } from "./lib/ai-process-utils";
+import { buildAiImpactSummary } from "./lib/ai-process-impact";
 
 const ROOM_ID = "0a495a02-bcb8-4e38-b3ef-4e7059c2a883";
 
@@ -2809,25 +2810,20 @@ export default function Home() {
     const aiTopLosers = [...aiMarketRows].filter((item) => Number(item.changePct || 0) < 0).sort((a,b)=>Number(a.changePct||0)-Number(b.changePct||0)).slice(0,3);
     const aiMarketMood = aiPositiveMarkets > aiNegativeMarkets ? "상승 우위" : aiNegativeMarkets > aiPositiveMarkets ? "하락 우위" : "혼조";
     const aiLastMarketTime = aiLastResult?.at ? aiTime(aiLastResult.at) : "대기 중";
-    const aiImpactHistory = Array.isArray(aiSim?.resultHistory) ? aiSim.resultHistory : [];
-    const aiImpactByAsset = Object.values(aiImpactHistory.reduce((acc, item) => {
-      const key = String(item?.symbol || item?.name || "UNKNOWN");
-      if (!acc[key]) acc[key] = { symbol:key, name:item?.name || key, type:item?.type || "stock", totalProfit:0, count:0, latestPct:0, latestAt:null };
-      acc[key].totalProfit += Number(item?.intervalProfit || 0);
-      acc[key].count += 1;
-      if (!acc[key].latestAt || new Date(item?.at || 0).getTime() > new Date(acc[key].latestAt || 0).getTime()) {
-        acc[key].latestAt = item?.at || null;
-        acc[key].latestPct = Number(item?.intervalPct || 0);
-      }
-      return acc;
-    }, {}));
-    const aiProfitContributors = [...aiImpactByAsset].filter((item)=>item.totalProfit>0).sort((a,b)=>b.totalProfit-a.totalProfit).slice(0,3);
-    const aiLossContributors = [...aiImpactByAsset].filter((item)=>item.totalProfit<0).sort((a,b)=>a.totalProfit-b.totalProfit).slice(0,3);
-    const aiImpactProfitTotal = aiImpactHistory.reduce((sum,item)=>sum + Math.max(0, Number(item?.intervalProfit || 0)), 0);
-    const aiImpactLossTotal = aiImpactHistory.reduce((sum,item)=>sum + Math.min(0, Number(item?.intervalProfit || 0)), 0);
-    const aiImpactNet = aiImpactHistory.reduce((sum,item)=>sum + Number(item?.intervalProfit || 0), 0);
-    const aiLatestImpact = aiImpactHistory[0] || null;
-    const aiRecentImpactRows = aiImpactHistory.slice(0,5);
+    const {
+      history: aiImpactHistory,
+      byAsset: aiImpactByAsset,
+      profitContributors: aiProfitContributors,
+      lossContributors: aiLossContributors,
+      profitTotal: aiImpactProfitTotal,
+      lossTotal: aiImpactLossTotal,
+      net: aiImpactNet,
+      latest: aiLatestImpact,
+      recentRows: aiRecentImpactRows,
+    } = buildAiImpactSummary(aiSim?.resultHistory, {
+      contributorLimit: 3,
+      recentLimit: 5,
+    });
     const aiCompletedCount = ["completed", "stopped"].includes(aiSession?.status) ? 1 : 0;
     const aiTodayLabel = new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
     const aiTodayProfit = (Array.isArray(aiSim?.resultHistory) ? aiSim.resultHistory : []).reduce((sum, item) => {
