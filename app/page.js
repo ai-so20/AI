@@ -10,6 +10,7 @@ import AiProcessChartPanel from "./components/ai-process/AiProcessChartPanel";
 import AiProcessHistoryPanel from "./components/ai-process/AiProcessHistoryPanel";
 import AiProcessMembersPanel from "./components/ai-process/AiProcessMembersPanel";
 import AiProcessStartPanel from "./components/ai-process/AiProcessStartPanel";
+import AiProcessSummaryPanel from "./components/ai-process/AiProcessSummaryPanel";
 
 const ROOM_ID = "0a495a02-bcb8-4e38-b3ef-4e7059c2a883";
 
@@ -3716,20 +3717,16 @@ export default function Home() {
                   />
                 )}
 
-                <div className="ai-v2-summary-grid" style={profile?.role === "admin" ? {display:"none"} : undefined}>
-                  <div className="ai-v2-summary-card"><span>시작 운용금액</span><strong>{aiSession ? aiKrw(aiCurrentStartMoney) : "대기"}</strong><small>프로세스 시작 기준</small></div>
-                  <div className="ai-v2-summary-card"><span>{aiSession?.status === "stopped" ? "최종 평가금액" : "현재 평가금액"}</span><strong>{aiSession ? aiKrw(aiDisplayAmount) : "-"}</strong><small>{aiSession?.status === "stopped" ? "종료 시점 최종 금액" : "시장 상황 자동 반영"}</small></div>
-                  <div className="ai-v2-summary-card"><span>누적 손익</span><strong className={aiDisplayProfit >= 0 ? "is-profit" : "is-loss"}>{aiSession ? aiSignedKrw(aiDisplayProfit) : "-"}</strong><small>{aiSession ? aiSignedPct(aiDisplayReturn) : "PROCESS WAIT"}</small></div>
-                  <div className="ai-v2-summary-card"><span>진행 상태</span><strong>{aiSession?.status === "running" ? (aiSession?.ends_at ? aiRemainingText({startedAt:aiSession.started_at,durationHours:aiSession.duration_hours}) : "기간 미정") : aiSession?.status === "stopped" ? "PROCESS 종료" : "대기"}</strong><small>{aiSession?.status === "stopped" ? "최종 결과가 확정되었습니다" : aiSession?.status === "running" && !aiSession?.ends_at ? "관리자 종료 시까지 진행" : "최대 30일 진행"}</small></div>
-                </div>
-
-                <section className="ai-v2-panel" style={profile?.role === "admin" ? {display:"none"} : {marginBottom:"14px",padding:"15px 16px"}}>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}>
-                    <div><span style={{display:"block",fontSize:"9px",fontWeight:900,color:"#6b7c76"}}>현재 단계</span><strong style={{display:"block",marginTop:"4px",fontSize:"15px",color:"#263833"}}>{aiSession?.status === "stopped" ? "PROCESS 종료" : aiSimLoading ? "AI 분석 중" : aiSession?.status === "running" ? "결과 반영 · 재분석" : "대기"}</strong></div>
-                    <span style={{padding:"6px 9px",borderRadius:"999px",background:aiSession?.status === "running"?"#e7f5f0":"#f0f2f1",color:aiSession?.status === "running"?"#32705e":"#7a8581",fontSize:"9px",fontWeight:900}}>{aiSession?.status === "running" ? "자동 진행 중" : aiSession?.status === "stopped" ? "종료됨" : "대기"}</span>
-                  </div>
-                  <p style={{margin:"8px 0 0",fontSize:"10px",lineHeight:1.55,color:"#788680"}}>{aiLastResult ? aiLastResult.name + " 시장 움직임이 최근 결과에 반영되었습니다." : "시장 데이터를 분석하고 조건에 맞는 대상을 선별합니다."}</p>
-                </section>
+                <AiProcessSummaryPanel
+                  hidden={profile?.role === "admin"}
+                  session={aiSession}
+                  currentStartMoney={aiCurrentStartMoney}
+                  displayAmount={aiDisplayAmount}
+                  displayProfit={aiDisplayProfit}
+                  displayReturn={aiDisplayReturn}
+                  simLoading={aiSimLoading}
+                  lastResult={aiLastResult}
+                />
 
                 <AiProcessMembersPanel
                   isAdmin={profile?.role === "admin"}
