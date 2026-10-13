@@ -71,10 +71,10 @@ export default function AiProcessMembersPanel({
                     <span>원</span>
                   </div>
                   <div className="ai-v50-control-actions">
-                    <button type="button" disabled={adminWorking} onClick={()=>onAdjust(item.user_id,"profit",item.nickname)}>+ 수익금</button>
-                    <button type="button" disabled={adminWorking} onClick={()=>onAdjust(item.user_id,"deposit",item.nickname)}>투자금 추가</button>
-                    <button type="button" disabled={adminWorking} onClick={()=>onAdjust(item.user_id,"loss",item.nickname)}>- 손실</button>
-                    <button type="button" className="is-danger" disabled={adminWorking} onClick={()=>onStop(item.user_id,item.nickname,item.current_amount)}>{adminWorking ? "처리 중..." : "PROCESS 종료"}</button>
+                    <button type="button" className="ai-control-profit" disabled={adminWorking} onClick={()=>onAdjust(item.user_id,"profit",item.nickname)}>+ 수익금</button>
+                    <button type="button" className="ai-control-deposit" disabled={adminWorking} onClick={()=>onAdjust(item.user_id,"deposit",item.nickname)}>투자금 추가</button>
+                    <button type="button" className="ai-control-loss" disabled={adminWorking} onClick={()=>onAdjust(item.user_id,"loss",item.nickname)}>- 손실</button>
+                    <button type="button" className="ai-control-stop is-danger" disabled={adminWorking} onClick={()=>onStop(item.user_id,item.nickname,item.current_amount)}>{adminWorking ? "처리 중..." : "PROCESS 종료"}</button>
                   </div>
                 </> : (
                   <button type="button" className="ai-v50-restart" disabled={adminWorking} onClick={()=>onRestart(item.user_id,item.nickname)}>{adminWorking ? "처리 중..." : "PROCESS 재시작"}</button>
