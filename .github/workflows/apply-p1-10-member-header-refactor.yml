@@ -1,0 +1,32 @@
+name: Apply P1-10 member header refactor
+
+on:
+  push:
+    paths:
+      - '.github/workflows/apply-p1-10-member-header-refactor.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply refactor
+        run: node scripts/apply-p1-10-member-header-refactor.mjs
+      - name: Install dependencies
+        run: npm install
+      - name: Build validation
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: dummy-key
+        run: npm run build
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/page.js
+          git diff --cached --quiet && exit 0
+          git commit -m "refactor: P1-10 extract AI PROCESS member header"
+          git push
