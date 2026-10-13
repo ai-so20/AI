@@ -12,6 +12,7 @@ import AiProcessMembersPanel from "./components/ai-process/AiProcessMembersPanel
 import AiProcessStartPanel from "./components/ai-process/AiProcessStartPanel";
 import AiProcessSummaryPanel from "./components/ai-process/AiProcessSummaryPanel";
 import AiProcessMemberHeader from "./components/ai-process/AiProcessMemberHeader";
+import AiProcessAdminHeader from "./components/ai-process/AiProcessAdminHeader";
 
 const ROOM_ID = "0a495a02-bcb8-4e38-b3ef-4e7059c2a883";
 
@@ -3633,18 +3634,7 @@ export default function Home() {
                 {profile?.role !== "admin" && aiDemo?.status !== "running" && myEventRewards.find((reward)=>reward.reward_type === "ai_process" && reward.status !== "delivered") && (()=>{ const offer=myEventRewards.find((reward)=>reward.reward_type === "ai_process" && reward.status !== "delivered"); return <section style={{marginBottom:"14px",padding:"16px",borderRadius:"18px",background:"linear-gradient(145deg,#eef5f3,#ffffff)",border:"1px solid #cbdcd7",boxShadow:"0 8px 22px rgba(30,65,55,.07)"}}><span style={{fontSize:"9px",fontWeight:900,color:"#3f7768"}}>AI PROCESS 체험 혜택</span><div style={{display:"flex",justifyContent:"space-between",gap:"14px",alignItems:"center",marginTop:"5px"}}><div><strong style={{display:"block",fontSize:"17px",color:"#243b35"}}>{offer.reward_name}</strong><p style={{margin:"5px 0 0",fontSize:"10px",lineHeight:1.55,color:"#667b75"}}>실제 잔액과 분리된 모의체험입니다. 시작하면 이 체험권은 사용 완료되어 다시 표시되지 않습니다.</p></div><button type="button" disabled={eventRewardWorking} onClick={()=>claimAiDemoReward(offer.id)} style={{border:0,borderRadius:"12px",padding:"11px 14px",background:"#25483e",color:"#fff",fontSize:"11px",fontWeight:900,cursor:"pointer",whiteSpace:"nowrap"}}>체험 시작</button></div></section>; })()}
                 {profile?.role !== "admin" && aiDemo?.status === "running" && <section style={{marginBottom:"12px",padding:"10px 12px",borderRadius:"12px",background:"#edf5f3",border:"1px solid #ccddd8",fontSize:"10px",color:"#41645b"}}><b>모의체험 진행 중</b> · 실제 자산 및 정산에 반영되지 않습니다. 목표 수익률 도달 시 자동 종료됩니다.</section>}
                 {profile?.role === "admin" ? (
-                  <section className="ai-v51-admin-hero">
-                    <div className="ai-v51-admin-hero-copy">
-                      <span className="ai-v51-kicker">AI PROCESS ADMIN</span>
-                      <h2>AI PROCESS 운영</h2>
-                      <p>회원별 운용 상태와 금액을 한 화면에서 관리합니다.</p>
-                    </div>
-                    <div className="ai-v51-admin-overview">
-                      <div><span>진행 중</span><strong>{aiPublicSessions.filter((x)=>x.status === "running").length}</strong><small>명</small></div>
-                      <div><span>총 운용금액</span><strong>{aiKrw(aiPublicSessions.filter((x)=>x.status === "running").reduce((sum,x)=>sum+Number(x.current_amount||0),0))}</strong></div>
-                      <div><span>누적 손익</span><strong className={aiPublicSessions.reduce((sum,x)=>sum+Number(x.total_profit||0),0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedKrw(aiPublicSessions.reduce((sum,x)=>sum+Number(x.total_profit||0),0))}</strong></div>
-                    </div>
-                  </section>
+                  <AiProcessAdminHeader sessions={aiPublicSessions} />
                 ) : (
                   <AiProcessMemberHeader
                     session={aiSession}
