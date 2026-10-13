@@ -7,6 +7,7 @@ import { aiKrw, aiTime, aiSignedKrw, aiSignedPct, aiFormatMarketPrice, aiRemaini
 import { buildAiImpactSummary } from "./lib/ai-process-impact";
 import { fetchAiProcessStateData } from "./lib/ai-process-data";
 import { parseAiMarketPayload, buildAiSimulationSnapshot } from "./lib/ai-process-simulation";
+import { startAiProcess, stopAiProcess, adjustAiProcess, restartAiProcess, fetchAiSimulationSources } from "./lib/ai-process-service";
 import AiProcessImpactCard from "./components/ai-process/AiProcessImpactCard";
 import AiProcessChartPanel from "./components/ai-process/AiProcessChartPanel";
 import AiProcessHistoryPanel from "./components/ai-process/AiProcessHistoryPanel";
@@ -458,10 +459,10 @@ export default function Home() {
     if (!aiAdminIndefinite && (!Number.isFinite(duration) || duration < 1 || duration > 720)) { setNotice("진행시간은 1시간~720시간(30일)으로 설정해주세요."); return; }
     setAiAdminWorking(true);
     try {
-      const { error } = await supabase.rpc("admin_start_ai_process", {
-        target_user_id: aiAdminMemberId,
-        starting_amount: amount,
-        process_duration_hours: Math.floor(duration)
+      const { error } = await startAiProcess(supabase, {
+        targetUserId: aiAdminMemberId,
+        amount,
+        durationHours: Math.floor(duration),
       });
       if (error) throw error;
       setNotice("AI PROCESS를 시작했습니다.");
@@ -481,7 +482,7 @@ export default function Home() {
     if (typeof window !== "undefined" && !window.confirm(label + "님의 AI PROCESS를 종료하시겠습니까?\n최종 평가금액: " + amountText)) return;
     setAiAdminWorking(true);
     try {
-      const { error } = await supabase.rpc("admin_stop_ai_process", { target_user_id: targetUserId });
+      const { error } = await stopAiProcess(supabase, targetUserId);
       if (error) throw error;
       setNotice(label + "님의 AI PROCESS를 종료했습니다.");
       await loadAiProcessState();
@@ -498,10 +499,10 @@ export default function Home() {
     if (!Number.isFinite(amount) || amount <= 0) { setNotice("조정할 금액을 입력해주세요."); return; }
     setAiAdminWorking(true);
     try {
-      const { error } = await supabase.rpc("admin_adjust_ai_process", {
-        target_user_id: targetUserId,
-        adjustment_type: adjustmentType,
-        adjustment_amount: amount,
+      const { error } = await adjustAiProcess(supabase, {
+        targetUserId,
+        adjustmentType,
+        amount,
       });
       if (error) throw error;
       const actionLabel = adjustmentType === "deposit" ? "투자금을 추가" : adjustmentType === "profit" ? "수익금을 추가" : "손실을 반영";
@@ -520,7 +521,7 @@ export default function Home() {
     if (typeof window !== "undefined" && !window.confirm(label + "님의 AI PROCESS를 현재 평가금액 기준으로 재시작하시겠습니까?")) return;
     setAiAdminWorking(true);
     try {
-      const { error } = await supabase.rpc("admin_restart_ai_process", { target_user_id: targetUserId });
+      const { error } = await restartAiProcess(supabase, targetUserId);
       if (error) throw error;
       setNotice(label + "님의 AI PROCESS를 재시작했습니다.");
       await loadAiProcessState();
@@ -538,19 +539,11 @@ export default function Home() {
     setAiSimError("");
 
     try {
-      const marketPromise = fetch("/api/market-sim", { cache: "no-store" });
-      const logsPromise = aiSession?.id
-        ? supabase
-            .from("ai_process_logs")
-            .select("process_id,market_at,asset_symbol,asset_name,asset_type,market_pct,amount_before,delta,amount_after,result_type")
-            .eq("process_id", aiSession.id)
-            .order("market_at", { ascending: false })
-            .limit(120)
-        : Promise.resolve({ data: [], error: null });
-
-      const [marketResponse, logsResult] = await Promise.all([marketPromise, logsPromise]);
-      const raw = await marketResponse.text();
-      const marketResult = parseAiMarketPayload(raw);
+      const { marketResponse, rawMarketPayload, logsResult } = await fetchAiSimulationSources({
+        supabase,
+        processId: aiSession?.id,
+      });
+      const marketResult = parseAiMarketPayload(rawMarketPayload);
 
       if (!marketResponse.ok || !marketResult?.success || !marketResult?.quotes?.length) {
         throw new Error(marketResult?.error || "시장 데이터를 불러오지 못했습니다.");
