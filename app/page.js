@@ -5,6 +5,7 @@ import { supabase } from "./supabase";
 import { AVATAR_CATALOG, avatarSrc, normalizePasswordInput } from "./lib/ui-helpers";
 import { aiKrw, aiTime, aiSignedKrw, aiSignedPct, aiFormatMarketPrice, aiRemainingText, buildAiChartModel } from "./lib/ai-process-utils";
 import { buildAiImpactSummary } from "./lib/ai-process-impact";
+import { fetchAiProcessStateData } from "./lib/ai-process-data";
 import AiProcessImpactCard from "./components/ai-process/AiProcessImpactCard";
 import AiProcessChartPanel from "./components/ai-process/AiProcessChartPanel";
 import AiProcessHistoryPanel from "./components/ai-process/AiProcessHistoryPanel";
@@ -423,33 +424,25 @@ export default function Home() {
     const needPublicSessions = profile?.role === "admin" || chatTab === "ai";
     if (needPublicSessions) setAiPublicLoading(true);
     try {
-      const minePromise = supabase
-        .from("ai_process_sessions")
-        .select("id,user_id,status,start_amount,current_amount,total_profit,total_return,duration_hours,started_at,ends_at,completed_at,last_market_at,last_asset_symbol,last_asset_name,last_asset_type,last_market_pct,last_delta,last_tick_at,updated_at")
-        .eq("user_id", user.id)
-        .order("started_at", { ascending: false })
-        .limit(50);
-      const publicPromise = needPublicSessions
-        ? supabase.rpc("get_ai_process_public_sessions")
-        : Promise.resolve({ data: null, error: null });
-      const [{ data: mineRows, error: mineError }, { data: publicRows, error: publicError }] = await Promise.all([minePromise, publicPromise]);
+      const {
+        mineError,
+        publicError,
+        rows,
+        publicList,
+        preferredId,
+        selected,
+      } = await fetchAiProcessStateData({
+        supabase,
+        userId: user.id,
+        needPublicSessions,
+        selectedProcessId: aiSelectedProcessId,
+      });
+
       if (mineError) console.error("AI PROCESS 내 세션 조회 오류:", mineError);
       if (publicError) console.error("AI PROCESS 공개 현황 조회 오류:", publicError);
 
-      const directRows = Array.isArray(mineRows) ? mineRows : [];
-      const publicList = Array.isArray(publicRows) ? publicRows : [];
-      const publicMine = publicList
-        .filter((row) => row.user_id === user.id)
-        .map((row) => ({ ...row, id: row.id || row.process_id }));
-      const rows = directRows.length ? directRows : publicMine;
       setAiSessions(rows);
-      const preferredId = aiSelectedProcessId && rows.some((row) => row.id === aiSelectedProcessId)
-        ? aiSelectedProcessId
-        : (rows.find((row) => row.status === "running")?.id || rows[0]?.id || "");
       if (preferredId !== aiSelectedProcessId) setAiSelectedProcessId(preferredId);
-      const selected = rows.find((row) => row.id === preferredId)
-        || publicMine.find((row) => row.status === "running")
-        || null;
       setAiSession(selected);
       if (needPublicSessions) setAiPublicSessions(publicList);
     } finally {
