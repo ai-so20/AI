@@ -35,7 +35,7 @@ if (!source.includes(newBlock)) {
   source = source.replace(oldBlock, newBlock);
 }
 
-if ((source.match(/AiProcessAdminHeader/g) || []).length !== 2) {
+if (!source.includes(importLine) || !source.includes('<AiProcessAdminHeader sessions={aiPublicSessions} />')) {
   throw new Error("P1-11 admin header import/usage validation failed");
 }
 
