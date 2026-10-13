@@ -20,7 +20,7 @@ jobs:
       - name: Build validation
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-key
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: dummy-key
         run: npm run build
       - name: Commit changes
         run: |
