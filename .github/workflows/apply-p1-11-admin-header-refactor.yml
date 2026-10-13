@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - '.github/workflows/apply-p1-11-admin-header-refactor.yml'
+      - 'scripts/apply-p1-11-admin-header-refactor.mjs'
 
 permissions:
   contents: write
