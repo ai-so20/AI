@@ -8,6 +8,7 @@ import { buildAiImpactSummary } from "./lib/ai-process-impact";
 import AiProcessImpactCard from "./components/ai-process/AiProcessImpactCard";
 import AiProcessChartPanel from "./components/ai-process/AiProcessChartPanel";
 import AiProcessHistoryPanel from "./components/ai-process/AiProcessHistoryPanel";
+import AiProcessMembersPanel from "./components/ai-process/AiProcessMembersPanel";
 
 const ROOM_ID = "0a495a02-bcb8-4e38-b3ef-4e7059c2a883";
 
@@ -3738,51 +3739,18 @@ export default function Home() {
                   <p style={{margin:"8px 0 0",fontSize:"10px",lineHeight:1.55,color:"#788680"}}>{aiLastResult ? aiLastResult.name + " 시장 움직임이 최근 결과에 반영되었습니다." : "시장 데이터를 분석하고 조건에 맞는 대상을 선별합니다."}</p>
                 </section>
 
-                <section className={profile?.role === "admin" ? "ai-v2-live-members ai-v51-member-section" : "ai-v2-live-members"}>
-                  <div className="ai-v2-live-members-head">
-                    <div><span>{profile?.role === "admin" ? "PROCESS CONTROL" : "진행 중 회원"}</span><strong>{profile?.role === "admin" ? "회원 AI PROCESS 관리" : "지금 함께 진행 중인 회원"}</strong><small>{profile?.role === "admin" ? "투자금·손익·종료·재시작을 회원별 카드에서 관리합니다." : "다른 회원은 요약 수익만 표시됩니다."}</small></div>
-                    <div className="ai-v2-live-count"><i></i>{profile?.role === "admin" ? `진행 ${aiPublicSessions.filter((x)=>x.status === "running").length} · 종료 ${aiPublicSessions.filter((x)=>x.status === "stopped").length}` : `${aiPublicSessions.length}건 진행 중`}</div>
-                  </div>
-                  {aiPublicLoading && !aiPublicSessions.length ? <div className="ai-v2-live-empty">진행 현황을 불러오는 중입니다.</div> : aiPublicSessions.length ? (
-                    <div className={profile?.role === "admin" ? "ai-v2-live-member-grid ai-v51-member-list" : "ai-v2-live-member-grid"}>
-                      {aiPublicSessions.map((item) => (
-                        profile?.role === "admin" ? (
-                          <article className={`ai-v50-control-card ai-v51-control-row ${item.status === "stopped" ? "is-stopped" : ""}`} key={item.user_id}>
-                            <div className="ai-v50-control-head">
-                              <div className="ai-v50-control-member"><img src={avatarSrc(item.avatar)} alt=""/><div><strong>{item.nickname}</strong><small>{item.status === "running" ? "AI PROCESS 진행 중" : "AI PROCESS 종료"}</small></div></div>
-                              <span className={item.status === "running" ? "is-running" : "is-stopped"}>{item.status === "running" ? "● 진행 중" : "종료됨"}</span>
-                            </div>
-                            <div className="ai-v50-control-stats">
-                              <div><span>투자금</span><b>{aiKrw(item.start_amount || 0)}</b></div>
-                              <div><span>현재 평가금액</span><b>{aiKrw(item.current_amount || 0)}</b></div>
-                              <div><span>누적 손익</span><b className={Number(item.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedKrw(item.total_profit || 0)}</b></div>
-                              <div><span>수익률</span><b className={Number(item.total_return || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedPct(item.total_return || 0)}</b></div>
-                            </div>
-                            <div className="ai-v50-control-meta"><span>{item.ends_at ? aiRemainingText({startedAt:item.started_at,durationHours:item.duration_hours}) : "기간 미정"}</span><span>{item.last_asset_name || (item.status === "running" ? "시장 자동 반영 중" : "최종 결과 확정")}</span></div>
-                            {item.status === "running" ? <>
-                              <div className="ai-v50-control-input"><input value={aiAdminControlAmounts[item.user_id] || ""} onChange={(e)=>setAiAdminControlAmounts((prev)=>({...prev,[item.user_id]:e.target.value.replace(/[^0-9]/g,"")}))} inputMode="numeric" placeholder="조정 금액 입력"/><span>원</span></div>
-                              <div className="ai-v50-control-actions">
-                                <button type="button" disabled={aiAdminWorking} onClick={()=>adminAdjustAiProcess(item.user_id,"deposit",item.nickname)}>투자금 추가</button>
-                                <button type="button" disabled={aiAdminWorking} onClick={()=>adminAdjustAiProcess(item.user_id,"profit",item.nickname)}>+ 수익금</button>
-                                <button type="button" disabled={aiAdminWorking} onClick={()=>adminAdjustAiProcess(item.user_id,"loss",item.nickname)}>- 손실</button>
-                                <button type="button" className="is-danger" disabled={aiAdminWorking} onClick={()=>adminStopAiProcess(item.user_id,item.nickname,item.current_amount)}>{aiAdminWorking ? "처리 중..." : "PROCESS 종료"}</button>
-                              </div>
-                            </> : <button type="button" className="ai-v50-restart" disabled={aiAdminWorking} onClick={()=>adminRestartAiProcess(item.user_id,item.nickname)}>{aiAdminWorking ? "처리 중..." : "PROCESS 재시작"}</button>}
-                          </article>
-                        ) : (
-                          <article className={`ai-v2-live-member-card ${item.user_id === user.id ? "is-me" : ""}`} key={item.user_id}>
-                            <img src={avatarSrc(item.avatar)} alt=""/>
-                            <div className="ai-v2-live-member-main">
-                              <div className="ai-v2-live-member-name"><strong>{item.nickname}</strong>{item.user_id === user.id && <em>ME</em>}<span>● 진행 중</span></div>
-                              <div className="ai-v2-live-member-profit"><b className={Number(item.total_profit || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedKrw(item.total_profit || 0)}</b><small className={Number(item.total_return || 0) >= 0 ? "is-profit" : "is-loss"}>{aiSignedPct(item.total_return || 0)}</small></div>
-                              <div className="ai-v2-live-member-meta"><span>{item.last_asset_name || "시장 분석 중"}{item.last_market_pct != null ? ` ${aiSignedPct(item.last_market_pct)}` : ""}</span><time>{aiTime(item.updated_at)}</time></div>
-                            </div>
-                          </article>
-                        )
-                      ))}
-                    </div>
-                  ) : <div className="ai-v2-live-empty">현재 진행 중인 AI PROCESS 회원이 없습니다.</div>}
-                </section>
+                <AiProcessMembersPanel
+                  isAdmin={profile?.role === "admin"}
+                  sessions={aiPublicSessions}
+                  loading={aiPublicLoading}
+                  currentUserId={user?.id}
+                  adminControlAmounts={aiAdminControlAmounts}
+                  setAdminControlAmounts={setAiAdminControlAmounts}
+                  adminWorking={aiAdminWorking}
+                  onAdjust={adminAdjustAiProcess}
+                  onStop={adminStopAiProcess}
+                  onRestart={adminRestartAiProcess}
+                />
 
                 {aiSimError && <div className="ai-v2-error">{aiSimError}</div>}
 
