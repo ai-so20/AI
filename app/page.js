@@ -6,6 +6,7 @@ import { AVATAR_CATALOG, avatarSrc, normalizePasswordInput } from "./lib/ui-help
 import { aiKrw, aiTime, aiSignedKrw, aiSignedPct, aiFormatMarketPrice, aiRemainingText, buildAiChartModel } from "./lib/ai-process-utils";
 import { buildAiImpactSummary } from "./lib/ai-process-impact";
 import { fetchAiProcessStateData } from "./lib/ai-process-data";
+import { parseAiMarketPayload, buildAiSimulationSnapshot } from "./lib/ai-process-simulation";
 import AiProcessImpactCard from "./components/ai-process/AiProcessImpactCard";
 import AiProcessChartPanel from "./components/ai-process/AiProcessChartPanel";
 import AiProcessHistoryPanel from "./components/ai-process/AiProcessHistoryPanel";
@@ -130,7 +131,6 @@ export default function Home() {
 
   const AI_START_MONEY = 5000000;
   const AI_REFRESH_MS = 3 * 60 * 1000;
-  const AI_PROFIT_CHANCE = 0.85;
 
   async function refreshPushStatus() {
     if (typeof window === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -550,75 +550,23 @@ export default function Home() {
 
       const [marketResponse, logsResult] = await Promise.all([marketPromise, logsPromise]);
       const raw = await marketResponse.text();
-      let marketResult = null;
-      try {
-        marketResult = JSON.parse(raw);
-      } catch {
-        throw new Error("시장 데이터 응답 형식을 확인해주세요.");
-      }
+      const marketResult = parseAiMarketPayload(raw);
 
       if (!marketResponse.ok || !marketResult?.success || !marketResult?.quotes?.length) {
         throw new Error(marketResult?.error || "시장 데이터를 불러오지 못했습니다.");
       }
       if (logsResult?.error) console.error("AI PROCESS 연동기록 조회 오류:", logsResult.error);
 
-      const quotes = marketResult.quotes.map((item) => ({
-        ...item,
-        price: Number(item.price),
-        beforePrice: Number(item.beforePrice ?? item.price),
-        changePct: Number(item.changePct || 0),
-      }));
-      const logRows = Array.isArray(logsResult?.data) ? logsResult.data : [];
-      const results = logRows.map((row) => ({
-        at: row.market_at,
-        symbol: row.asset_symbol,
-        name: row.asset_name,
-        type: row.asset_type,
-        intervalPct: Number(row.market_pct || 0),
-        intervalProfit: Number(row.delta || 0),
-        allocatedKrw: Number(row.amount_before || 0),
-        portfolioValue: Number(row.amount_after || 0),
-        resultType: row.result_type || "wait",
-      }));
-      const history = [...results].reverse().map((row) => ({
-        at: row.at,
-        value: row.portfolioValue,
-        delta: row.intervalProfit,
-        resultType: row.resultType,
-        symbol: row.symbol,
-        name: row.name,
-        marketPct: row.intervalPct,
-      }));
-
-      if (aiSession?.started_at && (!history.length || history[0]?.at !== aiSession.started_at)) {
-        history.unshift({
-          at: aiSession.started_at,
-          value: Number(aiSession.start_amount || AI_START_MONEY),
-          delta: 0,
-          resultType: "start",
-          name: "AI PROCESS 시작",
-        });
-      }
-
-      const startMoney = Number(aiSession?.start_amount || AI_START_MONEY);
-      const portfolioValue = Number(aiSession?.current_amount || startMoney);
-      const totalProfit = portfolioValue - startMoney;
-      const totalReturn = startMoney > 0 ? (totalProfit / startMoney) * 100 : 0;
+      const nextSimulation = buildAiSimulationSnapshot({
+        marketResult,
+        logRows: logsResult?.data,
+        session: aiSession,
+        defaultStartMoney: AI_START_MONEY,
+      });
 
       if (requestId !== aiSimRequestSeq.current) return;
 
-      setAiSim({
-        startedAt: aiSession?.started_at || marketResult.updatedAt,
-        durationHours: Number(aiSession?.duration_hours || 24),
-        portfolioValue,
-        totalProfit,
-        totalReturn,
-        marketRows: quotes,
-        resultHistory: results,
-        history,
-        lastMarketAt: aiSession?.last_market_at || marketResult.updatedAt,
-        updatedAt: aiSession?.updated_at || marketResult.updatedAt,
-      });
+      setAiSim(nextSimulation);
       setAiNextUpdate(new Date(Date.now() + AI_REFRESH_MS).toISOString());
 
       // market route가 서버 엔진을 실행했을 수 있으므로 최신 세션 값을 다시 읽습니다.
