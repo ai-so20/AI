@@ -1,0 +1,25 @@
+/* Admin AI PROCESS control color semantics.
+   Strong semantic colors are reserved for profit/loss only. */
+
+.ai-v50-control-actions .ai-control-profit{
+  background:#edf8f3!important;
+  border-color:#b9dfcf!important;
+  color:#16835f!important;
+}
+
+.ai-v50-control-actions .ai-control-loss{
+  background:#fff3f3!important;
+  border-color:#efc6c6!important;
+  color:#c04444!important;
+}
+
+.ai-v50-control-actions .ai-control-deposit,
+.ai-v50-control-actions .ai-control-stop{
+  background:#ffffff!important;
+  border-color:#cfd7e3!important;
+  color:#475467!important;
+}
+
+.ai-v50-control-actions .ai-control-stop{
+  font-weight:800!important;
+}
