@@ -12,46 +12,51 @@ export default function AiProcessSummaryPanel({
 }) {
   if (hidden) return null;
 
+  const statusText = session?.status === "running"
+    ? (session?.ends_at
+      ? aiRemainingText({ startedAt: session.started_at, durationHours: session.duration_hours })
+      : "기간 미정")
+    : session?.status === "stopped"
+      ? "PROCESS 종료"
+      : "대기";
+
+  const stageText = session?.status === "stopped"
+    ? "PROCESS 종료"
+    : simLoading
+      ? "AI 분석 중"
+      : session?.status === "running"
+        ? "결과 반영 · 재분석"
+        : "대기";
+
   return (
     <>
       <div className="ai-v2-summary-grid">
         <div className="ai-v2-summary-card">
           <span>시작 운용금액</span>
           <strong>{session ? aiKrw(currentStartMoney) : "대기"}</strong>
-          <small>프로세스 시작 기준</small>
+          <small>PROCESS 시작 기준</small>
         </div>
         <div className="ai-v2-summary-card">
           <span>{session?.status === "stopped" ? "최종 평가금액" : "현재 평가금액"}</span>
           <strong>{session ? aiKrw(displayAmount) : "-"}</strong>
-          <small>{session?.status === "stopped" ? "종료 시점 최종 금액" : "시장 상황 자동 반영"}</small>
+          <small>{session?.status === "stopped" ? "종료 시점 최종 금액" : "시장 자동 반영"}</small>
         </div>
         <div className="ai-v2-summary-card">
           <span>누적 손익</span>
           <strong className={displayProfit >= 0 ? "is-profit" : "is-loss"}>{session ? aiSignedKrw(displayProfit) : "-"}</strong>
           <small>{session ? aiSignedPct(displayReturn) : "PROCESS WAIT"}</small>
         </div>
-        <div className="ai-v2-summary-card">
-          <span>진행 상태</span>
-          <strong>{session?.status === "running" ? (session?.ends_at ? aiRemainingText({ startedAt: session.started_at, durationHours: session.duration_hours }) : "기간 미정") : session?.status === "stopped" ? "PROCESS 종료" : "대기"}</strong>
-          <small>{session?.status === "stopped" ? "최종 결과가 확정되었습니다" : session?.status === "running" && !session?.ends_at ? "관리자 종료 시까지 진행" : "최대 30일 진행"}</small>
-        </div>
       </div>
 
-      <section className="ai-v2-panel" style={{ marginBottom: "14px", padding: "15px 16px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
-          <div>
-            <span style={{ display: "block", fontSize: "9px", fontWeight: 900, color: "#6b7c76" }}>현재 단계</span>
-            <strong style={{ display: "block", marginTop: "4px", fontSize: "15px", color: "#263833" }}>
-              {session?.status === "stopped" ? "PROCESS 종료" : simLoading ? "AI 분석 중" : session?.status === "running" ? "결과 반영 · 재분석" : "대기"}
-            </strong>
-          </div>
-          <span style={{ padding: "6px 9px", borderRadius: "999px", background: session?.status === "running" ? "#e7f5f0" : "#f0f2f1", color: session?.status === "running" ? "#32705e" : "#7a8581", fontSize: "9px", fontWeight: 900 }}>
-            {session?.status === "running" ? "자동 진행 중" : session?.status === "stopped" ? "종료됨" : "대기"}
-          </span>
+      <section className="ai-p3-stage-bar">
+        <div className="ai-p3-stage-copy">
+          <span>현재 단계</span>
+          <strong>{stageText}</strong>
+          <p>{lastResult ? lastResult.name + " 시장 움직임이 최근 결과에 반영되었습니다." : "시장 데이터를 분석하고 조건에 맞는 대상을 선별합니다."}</p>
         </div>
-        <p style={{ margin: "8px 0 0", fontSize: "10px", lineHeight: 1.55, color: "#788680" }}>
-          {lastResult ? lastResult.name + " 시장 움직임이 최근 결과에 반영되었습니다." : "시장 데이터를 분석하고 조건에 맞는 대상을 선별합니다."}
-        </p>
+        <span className={`ai-p3-stage-status ${session?.status === "running" ? "is-running" : ""}`}>
+          {session?.status === "running" ? statusText : session?.status === "stopped" ? "종료됨" : "대기"}
+        </span>
       </section>
     </>
   );
