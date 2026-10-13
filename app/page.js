@@ -2780,7 +2780,6 @@ export default function Home() {
         })
       : [];
 
-    const aiMarketRows = Array.isArray(aiSim?.marketRows) ? aiSim.marketRows : [];
     const aiRecentResults = Array.isArray(aiSim?.resultHistory) ? aiSim.resultHistory.slice(0, 14) : [];
     const aiCurrentStartMoney = aiStartMoney();
     const aiDisplayAmount = aiSession?.status === "running"
@@ -2807,20 +2806,8 @@ export default function Home() {
     }
     const aiChart = buildAiChartModel(aiChartHistory, aiCurrentStartMoney);
     const aiLastResult = aiRecentResults[0] || null;
-    const aiPositiveMarkets = aiMarketRows.filter((item) => Number(item.changePct) > 0).length;
-    const aiNegativeMarkets = aiMarketRows.filter((item) => Number(item.changePct) < 0).length;
-    const aiStockRows = aiMarketRows.filter((item) => item.type !== "crypto");
-    const aiCryptoRows = aiMarketRows.filter((item) => item.type === "crypto");
-    const aiAvgPct = (rows) => rows.length ? rows.reduce((sum, item) => sum + Number(item.changePct || 0), 0) / rows.length : 0;
-    const aiStockAvgPct = aiAvgPct(aiStockRows);
-    const aiCryptoAvgPct = aiAvgPct(aiCryptoRows);
-    const aiTopGainers = [...aiMarketRows].filter((item) => Number(item.changePct || 0) > 0).sort((a,b)=>Number(b.changePct||0)-Number(a.changePct||0)).slice(0,3);
-    const aiTopLosers = [...aiMarketRows].filter((item) => Number(item.changePct || 0) < 0).sort((a,b)=>Number(a.changePct||0)-Number(b.changePct||0)).slice(0,3);
-    const aiMarketMood = aiPositiveMarkets > aiNegativeMarkets ? "상승 우위" : aiNegativeMarkets > aiPositiveMarkets ? "하락 우위" : "혼조";
-    const aiLastMarketTime = aiLastResult?.at ? aiTime(aiLastResult.at) : "대기 중";
     const {
       history: aiImpactHistory,
-      byAsset: aiImpactByAsset,
       profitContributors: aiProfitContributors,
       lossContributors: aiLossContributors,
       profitTotal: aiImpactProfitTotal,
@@ -2832,16 +2819,6 @@ export default function Home() {
       contributorLimit: 3,
       recentLimit: 5,
     });
-    const aiCompletedCount = ["completed", "stopped"].includes(aiSession?.status) ? 1 : 0;
-    const aiTodayLabel = new Date().toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
-    const aiTodayProfit = (Array.isArray(aiSim?.resultHistory) ? aiSim.resultHistory : []).reduce((sum, item) => {
-      if (!item?.at) return sum;
-      const itemLabel = new Date(item.at).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul" });
-      return itemLabel === aiTodayLabel ? sum + Number(item.intervalProfit || 0) : sum;
-    }, 0);
-    const aiProgressPct = aiSession?.status === "running" && aiSession?.ends_at
-      ? Math.max(4, Math.min(100, ((Date.now() - new Date(aiSession.started_at).getTime()) / (Math.max(1, Number(aiSession.duration_hours)) * 3600000)) * 100))
-      : 0;
 
     const navItems = profile?.role === "admin"
       ? [
