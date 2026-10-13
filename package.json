@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "node --experimental-default-type=module --test tests/ai-process-core.test.mjs",
+    "check": "npm test && npm run build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",
