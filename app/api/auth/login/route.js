@@ -35,15 +35,41 @@ function createLoginClient() {
   });
 }
 
+async function findExistingProfile(admin, loginValue) {
+  const { data: nicknameProfile, error: nicknameError } = await admin
+    .from("profiles")
+    .select("id,nickname,real_name,approval_status")
+    .eq("nickname", loginValue)
+    .maybeSingle();
+
+  if (nicknameError) throw nicknameError;
+  if (nicknameProfile?.id) return nicknameProfile;
+
+  const { data: nameProfiles, error: nameError } = await admin
+    .from("profiles")
+    .select("id,nickname,real_name,approval_status")
+    .eq("real_name", loginValue)
+    .limit(2);
+
+  if (nameError) throw nameError;
+
+  // 이름은 중복될 수 있으므로 정확히 한 계정만 일치할 때만 로그인 대상으로 사용합니다.
+  if (Array.isArray(nameProfiles) && nameProfiles.length === 1) {
+    return nameProfiles[0];
+  }
+
+  return null;
+}
+
 export async function POST(request) {
   try {
     const body = await request.json();
-    const nickname = String(body?.nickname || "").trim();
+    const loginValue = String(body?.nickname || "").trim();
     const candidates = Array.isArray(body?.passwordCandidates)
       ? body.passwordCandidates.map((value) => String(value || "")).filter(Boolean)
       : [];
 
-    if (!nickname || candidates.length === 0) {
+    if (!loginValue || candidates.length === 0) {
       return NextResponse.json(
         { message: "닉네임 또는 비밀번호를 확인해주세요." },
         { status: 400 }
@@ -51,14 +77,9 @@ export async function POST(request) {
     }
 
     const admin = createAdminClient();
+    const profile = await findExistingProfile(admin, loginValue);
 
-    const { data: profile, error: profileError } = await admin
-      .from("profiles")
-      .select("id")
-      .eq("nickname", nickname)
-      .maybeSingle();
-
-    if (profileError || !profile?.id) {
+    if (!profile?.id) {
       return NextResponse.json(
         { message: "닉네임 또는 비밀번호를 확인해주세요." },
         { status: 401 }
