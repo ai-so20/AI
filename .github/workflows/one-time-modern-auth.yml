@@ -1,0 +1,600 @@
+name: One-time nickname-name auth rebuild
+
+on:
+  push:
+    branches:
+      - design-rebuild-20261019
+    paths:
+      - '.github/workflows/one-time-modern-auth.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild-auth:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: design-rebuild-20261019
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Rebuild auth and login screen
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          page_path = Path('app/page.js')
+          page = page_path.read_text()
+
+          page = page.replace(
+              'import { AVATAR_CATALOG, avatarSrc, normalizePasswordInput } from "./lib/ui-helpers";',
+              'import { AVATAR_CATALOG, avatarSrc } from "./lib/ui-helpers";'
+          )
+          page = page.replace('  const [password, setPassword] = useState("");\n', '')
+
+          signup_start = page.index('  async function handleSignup(e) {')
+          login_start = page.index('  async function handleLogin(e) {', signup_start)
+          send_start = page.index('  async function sendMessage(e) {', login_start)
+
+          new_signup = '''  async function handleSignup(e) {
+    e.preventDefault();
+
+    const cleanNickname = nickname.trim();
+    const cleanRealName = realName.trim();
+
+    if (!cleanNickname || !cleanRealName) {
+      setNotice("닉네임과 이름을 모두 입력해주세요.");
+      return;
+    }
+
+    setWorking(true);
+    setNotice("");
+
+    try {
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nickname: cleanNickname,
+          realName: cleanRealName,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setNotice(result?.message || "가입 신청 중 오류가 발생했습니다.");
+        return;
+      }
+
+      setNickname("");
+      setRealName("");
+      setMode("login");
+      setNotice("가입 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.");
+    } catch {
+      setNotice("가입 신청 중 오류가 발생했습니다.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+'''
+
+          new_login = '''  async function handleLogin(e) {
+    e.preventDefault();
+
+    const cleanNickname = nickname.trim();
+    const cleanRealName = realName.trim();
+
+    if (!cleanNickname || !cleanRealName) {
+      setNotice("닉네임과 이름을 모두 입력해주세요.");
+      return;
+    }
+
+    setWorking(true);
+    setNotice("");
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nickname: cleanNickname,
+          realName: cleanRealName,
+        }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result?.accessToken || !result?.refreshToken) {
+        setNotice(result?.message || "닉네임 또는 이름을 확인해주세요.");
+        return;
+      }
+
+      const { data, error } = await supabase.auth.setSession({
+        access_token: result.accessToken,
+        refresh_token: result.refreshToken,
+      });
+
+      if (error || !data?.user) {
+        setNotice("닉네임 또는 이름을 확인해주세요.");
+        return;
+      }
+
+      const { data: memberProfile, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", data.user.id)
+        .single();
+
+      if (profileError || !memberProfile) {
+        await supabase.auth.signOut();
+        setNotice("회원 정보를 확인할 수 없습니다.");
+        return;
+      }
+
+      if (memberProfile.approval_status !== "approved") {
+        await supabase.auth.signOut();
+        setNotice("가입 승인이 완료된 후 로그인할 수 있습니다.");
+        return;
+      }
+
+      const landingTab = memberProfile.role === "admin" ? "admin" : "private";
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("vip-active-tab", landingTab);
+      }
+      setChatTab(landingTab);
+      setUser(data.user);
+      setProfile(memberProfile);
+      setVipLocked(false);
+      if (typeof window !== "undefined") {
+        const welcomeKey = `vip-welcome-seen-${data.user.id}`;
+        setShowWelcomeModal(memberProfile.role !== "admin" && !window.localStorage.getItem(welcomeKey));
+        window.localStorage.removeItem("vip-ui-locked");
+        window.localStorage.setItem("vip-last-nickname", memberProfile.nickname || cleanNickname);
+        window.localStorage.setItem("vip-last-avatar", memberProfile.avatar || "profile-01");
+      } else {
+        setShowWelcomeModal(memberProfile.role !== "admin");
+      }
+    } catch {
+      setNotice("로그인 중 오류가 발생했습니다.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+'''
+
+          page = page[:signup_start] + new_signup + new_login + page[send_start:]
+
+          page = page.replace(
+              '<p style={styles.refProfileNote}>비밀번호는 보안상 화면에 표시되지 않습니다.</p>',
+              '<p style={styles.refProfileNote}>회원 정보는 관리자 승인 기준으로 안전하게 관리됩니다.</p>'
+          )
+          page = page.replace(
+              '// "로그아웃"은 VIP 화면만 잠그고 Supabase 인증 세션은 안전하게 유지합니다.\n    // 비밀번호를 localStorage에 저장하지 않으면서 빠른 재접속과 푸시 딥링크를 지원합니다.',
+              '// "로그아웃"은 VIP 화면만 잠그고 Supabase 인증 세션은 안전하게 유지합니다.\n    // 민감한 인증 정보를 브라우저 저장소에 남기지 않으면서 빠른 재접속과 푸시 딥링크를 지원합니다.'
+          )
+
+          auth_return = page.rfind('\n  return (\n    <main style={styles.page}>')
+          styles_start = page.index('\nconst styles = {', auth_return)
+          if auth_return < 0:
+              raise SystemExit('auth return block not found')
+
+          new_return = '''
+  return (
+    <main style={styles.page}>
+      <section style={styles.card}>
+        <header style={styles.luxLoginHero}>
+          <div style={styles.goldLabel}>AI PROCESS · PRIVATE ACCESS</div>
+          <h1 style={styles.title}>VIP MEMBER</h1>
+          <p style={styles.description}>승인된 회원을 위한 전용 서비스입니다.</p>
+          <div style={styles.luxHeroCaption}>MEMBER ACCESS · AI PROCESS</div>
+        </header>
+
+        <div style={styles.tabs}>
+          <button
+            type="button"
+            onClick={() => { setMode("login"); setNotice(""); }}
+            style={{ ...styles.tab, ...(mode === "login" ? styles.activeTab : {}) }}
+          >
+            로그인
+          </button>
+          <button
+            type="button"
+            onClick={() => { setMode("signup"); setNotice(""); }}
+            style={{ ...styles.tab, ...(mode === "signup" ? styles.activeTab : {}) }}
+          >
+            가입 신청
+          </button>
+        </div>
+
+        <form onSubmit={mode === "login" ? handleLogin : handleSignup} style={styles.form}>
+          <label style={styles.label}>닉네임</label>
+          <input
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            style={styles.input}
+            autoComplete="username"
+            placeholder={mode === "login" ? "가입한 닉네임" : "사용할 닉네임"}
+          />
+
+          <label style={styles.label}>이름</label>
+          <input
+            value={realName}
+            onChange={(e) => setRealName(e.target.value)}
+            style={styles.input}
+            autoComplete="name"
+            placeholder="가입한 이름"
+          />
+
+          <button type="submit" disabled={working} style={styles.primary}>
+            {working ? "처리 중..." : mode === "login" ? "로그인" : "가입 신청하기"}
+          </button>
+        </form>
+
+        {notice && <div style={styles.notice}>{notice}</div>}
+
+        <div style={styles.footer}>
+          PRIVATE MEMBER SERVICE · AI PROCESS
+        </div>
+      </section>
+    </main>
+  );
+}
+'''
+          page = page[:auth_return] + new_return + page[styles_start:]
+
+          replacements = {
+            'page': '''  page: {
+    minHeight: "100vh",
+    background: "#f5f7fa",
+    color: "#151b26",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "24px 18px",
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  },''',
+            'card': '''  card: {
+    width: "100%",
+    maxWidth: "430px",
+    background: "#ffffff",
+    border: "1px solid rgba(24,35,55,.12)",
+    borderRadius: "18px",
+    padding: "30px 24px 26px",
+    boxShadow: "0 18px 54px rgba(21,27,38,.08)",
+  },''',
+            'goldLabel': '''  goldLabel: {
+    color: "#526c91",
+    fontSize: "10px",
+    letterSpacing: "2.2px",
+    textAlign: "left",
+    fontWeight: "800",
+  },''',
+            'title': '''  title: {
+    textAlign: "left",
+    fontSize: "34px",
+    lineHeight: "1.05",
+    letterSpacing: "-.9px",
+    margin: "12px 0 10px",
+    color: "#182337",
+    fontWeight: "850",
+  },''',
+            'description': '''  description: {
+    color: "#596273",
+    textAlign: "left",
+    lineHeight: "1.65",
+    fontSize: "14px",
+    margin: 0,
+  },''',
+            'tabs': '''  tabs: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 0,
+    background: "transparent",
+    padding: 0,
+    borderRadius: 0,
+    marginBottom: "26px",
+    borderBottom: "1px solid rgba(24,35,55,.12)",
+  },''',
+            'tab': '''  tab: {
+    border: 0,
+    borderBottom: "2px solid transparent",
+    background: "transparent",
+    color: "#818a98",
+    padding: "13px 4px 12px",
+    borderRadius: 0,
+    cursor: "pointer",
+    fontWeight: "750",
+    fontSize: "13px",
+  },''',
+            'activeTab': '''  activeTab: {
+    background: "transparent",
+    color: "#182337",
+    borderBottom: "2px solid #526c91",
+  },''',
+            'label': '''  label: {
+    fontSize: "11px",
+    color: "#596273",
+    margin: "0 0 7px 1px",
+    fontWeight: "700",
+    letterSpacing: ".2px",
+  },''',
+            'input': '''  input: {
+    boxSizing: "border-box",
+    width: "100%",
+    background: "#ffffff",
+    color: "#151b26",
+    border: "1px solid rgba(24,35,55,.16)",
+    borderRadius: "10px",
+    padding: "14px 13px",
+    marginBottom: "17px",
+    outline: "none",
+    fontSize: "16px",
+    touchAction: "manipulation",
+  },''',
+            'primary': '''  primary: {
+    background: "#182337",
+    color: "#ffffff",
+    border: 0,
+    borderRadius: "10px",
+    padding: "15px",
+    fontWeight: "800",
+    cursor: "pointer",
+    marginTop: "3px",
+  },''',
+            'notice': '''  notice: {
+    marginTop: "16px",
+    background: "#f7f9fc",
+    border: "1px solid rgba(82,108,145,.22)",
+    color: "#46566d",
+    borderRadius: "9px",
+    padding: "12px",
+    fontSize: "12px",
+    lineHeight: "1.55",
+    textAlign: "center",
+  },''',
+            'footer': '''  footer: {
+    color: "#818a98",
+    textAlign: "center",
+    fontSize: "9px",
+    letterSpacing: "1.55px",
+    marginTop: "24px",
+  },''',
+            'luxLoginHero': '''  luxLoginHero:{
+    position:"relative",
+    padding:"4px 0 24px",
+    margin:"0 0 10px",
+    borderRadius:0,
+    overflow:"hidden",
+    textAlign:"left",
+    background:"transparent",
+    border:0,
+    borderBottom:"1px solid rgba(24,35,55,.10)",
+    boxShadow:"none"
+  },''',
+            'luxHeroCaption': '''  luxHeroCaption:{
+    marginTop:"22px",
+    paddingTop:"11px",
+    borderTop:"1px solid rgba(24,35,55,.08)",
+    color:"#818a98",
+    fontSize:"9px",
+    fontWeight:"800",
+    letterSpacing:"1.6px",
+    textAlign:"left"
+  },''',
+          }
+
+          for key, value in replacements.items():
+              pattern = rf'  {re.escape(key)}:\s*\{{.*?\n  \}},'
+              page, count = re.subn(pattern, value, page, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f'failed to replace style {key}: {count}')
+
+          banned = ['VIP PRIVATE</h1>', 'profile-01.jpg" alt="AI PROCESS VIP"', 'type="password"', 'passwordCandidates', 'normalizePasswordInput']
+          for token in banned:
+              if token in page:
+                  raise SystemExit(f'banned auth token remains in page.js: {token}')
+
+          page_path.write_text(page)
+
+          login = '''import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+function createAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const secretKey = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !secretKey) throw new Error("Supabase 서버 환경변수가 설정되지 않았습니다.");
+  return createClient(url, secretKey, {
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+  });
+}
+
+function createLoginClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!url || !publishableKey) throw new Error("Supabase 공개 환경변수가 설정되지 않았습니다.");
+  return createClient(url, publishableKey, {
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+  });
+}
+
+export async function POST(request) {
+  try {
+    const body = await request.json();
+    const nickname = String(body?.nickname || "").trim();
+    const realName = String(body?.realName || "").trim();
+
+    if (!nickname || !realName) {
+      return NextResponse.json({ message: "닉네임과 이름을 모두 입력해주세요." }, { status: 400 });
+    }
+
+    const admin = createAdminClient();
+    const { data: profile, error: profileError } = await admin
+      .from("profiles")
+      .select("id,nickname,real_name,approval_status")
+      .eq("nickname", nickname)
+      .eq("real_name", realName)
+      .maybeSingle();
+
+    if (profileError) throw profileError;
+    if (!profile?.id) {
+      return NextResponse.json({ message: "닉네임 또는 이름을 확인해주세요." }, { status: 401 });
+    }
+    if (profile.approval_status !== "approved") {
+      return NextResponse.json({ message: "가입 승인이 완료된 후 로그인할 수 있습니다." }, { status: 403 });
+    }
+
+    const { data: authData, error: authError } = await admin.auth.admin.getUserById(profile.id);
+    const authEmail = authData?.user?.email;
+    if (authError || !authEmail) {
+      return NextResponse.json({ message: "회원 인증 정보를 확인할 수 없습니다." }, { status: 401 });
+    }
+
+    const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+      type: "magiclink",
+      email: authEmail,
+    });
+    const tokenHash = linkData?.properties?.hashed_token;
+    if (linkError || !tokenHash) {
+      console.error("내부 로그인 링크 생성 오류:", linkError);
+      return NextResponse.json({ message: "로그인 인증을 만들지 못했습니다." }, { status: 500 });
+    }
+
+    const authClient = createLoginClient();
+    const { data, error } = await authClient.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: "email",
+    });
+
+    if (error || !data?.session?.access_token || !data?.session?.refresh_token) {
+      console.error("내부 로그인 세션 생성 오류:", error);
+      return NextResponse.json({ message: "로그인 인증에 실패했습니다." }, { status: 401 });
+    }
+
+    return NextResponse.json({
+      accessToken: data.session.access_token,
+      refreshToken: data.session.refresh_token,
+    });
+  } catch (error) {
+    console.error("로그인 API 오류:", error);
+    return NextResponse.json({ message: "로그인 중 오류가 발생했습니다." }, { status: 500 });
+  }
+}
+'''
+          Path('app/api/auth/login/route.js').write_text(login)
+
+          signup = '''import { randomUUID } from "crypto";
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
+const RANDOM_PROFILE_KEYS = Array.from({ length: 40 }, (_, index) =>
+  `profile-${String(index + 1).padStart(2, "0")}`
+);
+
+function pickRandomProfile() {
+  return RANDOM_PROFILE_KEYS[Math.floor(Math.random() * RANDOM_PROFILE_KEYS.length)];
+}
+
+function createAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const secretKey = process.env.SUPABASE_SECRET_KEY;
+  if (!url || !secretKey) throw new Error("Supabase 서버 환경변수가 설정되지 않았습니다.");
+  return createClient(url, secretKey, {
+    auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false },
+  });
+}
+
+function makeInternalAuthAddress() {
+  const id = randomUUID().replaceAll("-", "");
+  return `vip.${id}@gmail.com`;
+}
+
+function makeInternalSecret() {
+  return `${randomUUID()}-${randomUUID()}`;
+}
+
+export async function POST(request) {
+  try {
+    const body = await request.json();
+    const nickname = String(body?.nickname || "").trim();
+    const realName = String(body?.realName || "").trim();
+
+    if (!nickname || !realName) {
+      return NextResponse.json({ message: "닉네임과 이름을 모두 입력해주세요." }, { status: 400 });
+    }
+
+    const admin = createAdminClient();
+    const { data: existingProfile, error: existingError } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("nickname", nickname)
+      .maybeSingle();
+
+    if (existingError) {
+      console.error("닉네임 중복 확인 오류:", existingError);
+      return NextResponse.json({ message: "가입 정보를 확인하지 못했습니다. 잠시 후 다시 시도해주세요." }, { status: 500 });
+    }
+    if (existingProfile) {
+      return NextResponse.json({ message: "이미 사용 중인 닉네임입니다." }, { status: 409 });
+    }
+
+    const randomAvatar = pickRandomProfile();
+    const { data, error } = await admin.auth.admin.createUser({
+      email: makeInternalAuthAddress(),
+      password: makeInternalSecret(),
+      email_confirm: true,
+      user_metadata: { nickname, real_name: realName, avatar: randomAvatar },
+    });
+
+    if (error || !data?.user) {
+      console.error("회원 생성 오류:", error);
+      return NextResponse.json({ message: "가입 신청 중 오류가 발생했습니다." }, { status: 400 });
+    }
+
+    const { error: profileError } = await admin.from("profiles").upsert(
+      {
+        id: data.user.id,
+        nickname,
+        real_name: realName,
+        approval_status: "pending",
+        avatar: randomAvatar,
+      },
+      { onConflict: "id" }
+    );
+
+    if (profileError) {
+      console.error("랜덤 프로필 지정 오류:", profileError);
+      return NextResponse.json({ message: "프로필 생성 중 오류가 발생했습니다." }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("가입 API 오류:", error);
+    return NextResponse.json({ message: "가입 신청 중 오류가 발생했습니다." }, { status: 500 });
+  }
+}
+'''
+          Path('app/api/auth/signup/route.js').write_text(signup)
+          PY
+      - name: Verify auth copy and build
+        run: |
+          ! grep -n 'type="password"\|passwordCandidates\|VIP PRIVATE</h1>\|profile-01.jpg" alt="AI PROCESS VIP"' app/page.js
+          ! grep -n '비밀번호' app/page.js app/api/auth/login/route.js app/api/auth/signup/route.js
+          npm run build
+      - name: Commit rebuilt auth
+        run: |
+          git config user.name "ai-so20"
+          git config user.email "skehjwhnf1257@gmail.com"
+          git rm .github/workflows/one-time-modern-auth.yml
+          git add app/page.js app/api/auth/login/route.js app/api/auth/signup/route.js
+          git commit -m "fix: restore nickname-name login and modern private access"
+          git push origin HEAD:design-rebuild-20261019
