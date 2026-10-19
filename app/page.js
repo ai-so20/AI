@@ -1158,7 +1158,7 @@ export default function Home() {
     setEventRewardWorking(true);
     const { error } = await supabase.rpc("claim_ai_process_demo_reward", { p_delivery_id: deliveryId });
     if (error) setNotice(`체험 시작 실패: ${error.message}`);
-    else { setNotice("AI PROCESS 모의체험을 시작했습니다."); await Promise.all([loadEventRewards(), loadAiDemo()]); }
+    else { setNotice("AI PROCESS 체험을 시작했습니다."); await Promise.all([loadEventRewards(), loadAiDemo()]); }
     setEventRewardWorking(false);
   }
 
@@ -1542,7 +1542,7 @@ export default function Home() {
 
     if (data.approval_status !== "approved") {
       await supabase.auth.signOut();
-      setNotice("관리자 승인 대기 중인 계정입니다.");
+      setNotice("");
       setLoading(false);
       return;
     }
@@ -2445,7 +2445,7 @@ export default function Home() {
         await supabase.auth.signOut();
 
         setNotice(
-          "가입 신청이 접수되었습니다. 현재 관리자 승인 대기 중입니다."
+          "가입 승인이 완료된 후 로그인할 수 있습니다."
         );
         return;
       }
@@ -2958,13 +2958,13 @@ export default function Home() {
                   <button type="button" className="vip-v47-modal-close" onClick={()=>setShowAiDemoInfo(false)}>×</button>
                   <div className="vip-v47-modal-kicker">AI PROCESS · 돌발 체험</div>
                   <h3>AI PROCESS 돌발 체험 안내</h3>
-                  <p className="vip-v47-modal-lead">선정된 회원에게 1회 제공되는 모의 체험 이벤트입니다.</p>
+                  <p className="vip-v47-modal-lead">선정된 회원에게 1회 제공되는 AI PROCESS 체험 이벤트입니다.</p>
                   <div className="vip-v47-info-list">
                     <div><b>01</b><span><strong>참여 방법</strong><small>랜덤 선정된 회원에게 체험 혜택이 표시되며, 선정된 회원만 시작할 수 있습니다.</small></span></div>
                     <div><b>02</b><span><strong>진행 확인</strong><small>체험 시작 후 AI PROCESS 화면에서 평가금액과 수익·손실 기록을 실시간으로 확인합니다.</small></span></div>
                     <div><b>03</b><span><strong>완료 안내</strong><small>목표 수익률에 도달하면 자동 종료되며, 체험권은 1회 사용 후 다시 표시되지 않습니다.</small></span></div>
                   </div>
-                  <div className="vip-v47-sim-note">실제 잔액 및 실제 정산과 분리된 모의체험입니다.</div>
+                  <div className="vip-v47-sim-note">별도 체험 혜택으로 진행되며 실제 잔액 및 정산과 구분됩니다.</div>
                   {running ? (
                     <button type="button" className="vip-v47-modal-primary" onClick={()=>{setShowAiDemoInfo(false);changeTab("ai");}}>AI PROCESS에서 확인</button>
                   ) : offer ? (
@@ -3060,7 +3060,7 @@ export default function Home() {
                 <section style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:"10px",marginTop:"12px"}}>
                   <button type="button" onClick={()=>setShowAiDemoInfo(true)} style={{textAlign:"left",border:"1px solid #cbdcd7",borderRadius:"16px",padding:"14px",background:"linear-gradient(145deg,#f1f7f5,#e8f1ee)",color:"#23443a",cursor:"pointer"}}>
                     <span style={{display:"block",fontSize:"9px",fontWeight:900,color:"#4d7a6d"}}>AI PROCESS 체험</span>
-                    <strong style={{display:"block",marginTop:"4px",fontSize:"14px"}}>{aiDemo?.status === "running" ? "모의체험 진행 중" : "AI PROCESS 돌발 체험"}</strong>
+                    <strong style={{display:"block",marginTop:"4px",fontSize:"14px"}}>{aiDemo?.status === "running" ? "체험 진행 중" : "AI PROCESS 돌발 체험"}</strong>
                     <p style={{margin:"6px 0 0",fontSize:"10px",lineHeight:1.5,color:"#667b75"}}>{aiDemo?.status === "running" ? "현재 " + aiKrw(aiDemo.current_amount) + " · " + aiSignedPct(aiDemo.total_return || 0) : "선정된 회원에게 1회 체험 혜택이 표시됩니다."}</p>
                     <em style={{display:"block",marginTop:"8px",fontStyle:"normal",fontSize:"9px",fontWeight:900,color:"#356b5d"}}>{aiDemo?.status === "running" ? "진행 안내 보기 ›" : "안내 보기 ›"}</em>
                   </button>
@@ -3542,8 +3542,8 @@ export default function Home() {
 
             {chatTab === "ai" && (
               <div style={{...styles.refAiScreen,...styles.refAiScreenV2}} className="ai-v2-shell">
-                {profile?.role !== "admin" && aiDemo?.status !== "running" && myEventRewards.find((reward)=>reward.reward_type === "ai_process" && reward.status !== "delivered") && (()=>{ const offer=myEventRewards.find((reward)=>reward.reward_type === "ai_process" && reward.status !== "delivered"); return <section style={{marginBottom:"14px",padding:"16px",borderRadius:"18px",background:"linear-gradient(145deg,#eef5f3,#ffffff)",border:"1px solid #cbdcd7",boxShadow:"0 8px 22px rgba(30,65,55,.07)"}}><span style={{fontSize:"9px",fontWeight:900,color:"#3f7768"}}>AI PROCESS 체험 혜택</span><div style={{display:"flex",justifyContent:"space-between",gap:"14px",alignItems:"center",marginTop:"5px"}}><div><strong style={{display:"block",fontSize:"17px",color:"#243b35"}}>{offer.reward_name}</strong><p style={{margin:"5px 0 0",fontSize:"10px",lineHeight:1.55,color:"#667b75"}}>실제 잔액과 분리된 모의체험입니다. 시작하면 이 체험권은 사용 완료되어 다시 표시되지 않습니다.</p></div><button type="button" disabled={eventRewardWorking} onClick={()=>claimAiDemoReward(offer.id)} style={{border:0,borderRadius:"12px",padding:"11px 14px",background:"#25483e",color:"#fff",fontSize:"11px",fontWeight:900,cursor:"pointer",whiteSpace:"nowrap"}}>체험 시작</button></div></section>; })()}
-                {profile?.role !== "admin" && aiDemo?.status === "running" && <section style={{marginBottom:"12px",padding:"10px 12px",borderRadius:"12px",background:"#edf5f3",border:"1px solid #ccddd8",fontSize:"10px",color:"#41645b"}}><b>모의체험 진행 중</b> · 실제 자산 및 정산에 반영되지 않습니다. 목표 수익률 도달 시 자동 종료됩니다.</section>}
+                {profile?.role !== "admin" && aiDemo?.status !== "running" && myEventRewards.find((reward)=>reward.reward_type === "ai_process" && reward.status !== "delivered") && (()=>{ const offer=myEventRewards.find((reward)=>reward.reward_type === "ai_process" && reward.status !== "delivered"); return <section style={{marginBottom:"14px",padding:"16px",borderRadius:"18px",background:"linear-gradient(145deg,#eef5f3,#ffffff)",border:"1px solid #cbdcd7",boxShadow:"0 8px 22px rgba(30,65,55,.07)"}}><span style={{fontSize:"9px",fontWeight:900,color:"#3f7768"}}>AI PROCESS 체험 혜택</span><div style={{display:"flex",justifyContent:"space-between",gap:"14px",alignItems:"center",marginTop:"5px"}}><div><strong style={{display:"block",fontSize:"17px",color:"#243b35"}}>{offer.reward_name}</strong><p style={{margin:"5px 0 0",fontSize:"10px",lineHeight:1.55,color:"#667b75"}}>별도 체험 혜택입니다. 시작하면 이 체험권은 사용 완료되어 다시 표시되지 않습니다.</p></div><button type="button" disabled={eventRewardWorking} onClick={()=>claimAiDemoReward(offer.id)} style={{border:0,borderRadius:"12px",padding:"11px 14px",background:"#25483e",color:"#fff",fontSize:"11px",fontWeight:900,cursor:"pointer",whiteSpace:"nowrap"}}>체험 시작</button></div></section>; })()}
+                {profile?.role !== "admin" && aiDemo?.status === "running" && <section style={{marginBottom:"12px",padding:"10px 12px",borderRadius:"12px",background:"#edf5f3",border:"1px solid #ccddd8",fontSize:"10px",color:"#41645b"}}><b>체험 진행 중</b> · 실제 자산 및 정산과 구분되어 운영됩니다. 목표 수익률 도달 시 자동 종료됩니다.</section>}
                 {profile?.role === "admin" ? (
                   <AiProcessAdminHeader sessions={aiPublicSessions} />
                 ) : (
@@ -3566,7 +3566,7 @@ export default function Home() {
 
                 {profile?.role !== "admin" && aiDemo && (
                   <section style={{margin:"0 0 14px",padding:"14px 16px",borderRadius:"16px",border:"1px solid #b9d5ef",background:"linear-gradient(145deg,#f0f7ff,#e7f1fb)",color:"#193a5a"}}>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}><div><span style={{display:"block",fontSize:"8px",fontWeight:900,letterSpacing:"1.2px",color:"#5d82a4"}}>모의체험</span><strong style={{display:"block",marginTop:"4px",fontSize:"15px"}}>AI PROCESS 모의체험 {aiDemo.status === "running" ? "진행 중" : "완료"}</strong><p style={{margin:"5px 0 0",fontSize:"10px",color:"#627d95"}}>실제 투자금과 분리된 이벤트 체험금으로 운영됩니다.</p></div><div style={{textAlign:"right"}}><small style={{display:"block",fontSize:"9px",color:"#728ba1"}}>현재 체험금</small><b style={{display:"block",marginTop:"3px",fontSize:"16px"}}>{aiKrw(aiDemo.current_amount)}</b><em className={Number(aiDemo.total_profit||0)>=0?"is-profit":"is-loss"} style={{fontStyle:"normal",fontSize:"10px",fontWeight:900}}>{aiSignedKrw(aiDemo.total_profit||0)} · {aiSignedPct(aiDemo.total_return||0)}</em></div></div>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"12px"}}><div><span style={{display:"block",fontSize:"8px",fontWeight:900,letterSpacing:"1.2px",color:"#5d82a4"}}>체험</span><strong style={{display:"block",marginTop:"4px",fontSize:"15px"}}>AI PROCESS 체험 {aiDemo.status === "running" ? "진행 중" : "완료"}</strong><p style={{margin:"5px 0 0",fontSize:"10px",color:"#627d95"}}>이벤트 체험 혜택으로 운영됩니다.</p></div><div style={{textAlign:"right"}}><small style={{display:"block",fontSize:"9px",color:"#728ba1"}}>현재 체험금</small><b style={{display:"block",marginTop:"3px",fontSize:"16px"}}>{aiKrw(aiDemo.current_amount)}</b><em className={Number(aiDemo.total_profit||0)>=0?"is-profit":"is-loss"} style={{fontStyle:"normal",fontSize:"10px",fontWeight:900}}>{aiSignedKrw(aiDemo.total_profit||0)} · {aiSignedPct(aiDemo.total_return||0)}</em></div></div>
                     {aiDemo.last_asset_name && <div style={{marginTop:"10px",paddingTop:"9px",borderTop:"1px solid #cfe0ef",fontSize:"10px",display:"flex",justifyContent:"space-between",gap:"10px"}}><span>최근 연동 · {aiDemo.last_asset_name}</span><b className={Number(aiDemo.last_market_pct)>=0?"is-profit":"is-loss"}>{aiSignedPct(aiDemo.last_market_pct||0)}</b></div>}
                   </section>
                 )}

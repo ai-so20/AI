@@ -71,7 +71,7 @@ export async function POST(request) {
 
     if (!loginValue || candidates.length === 0) {
       return NextResponse.json(
-        { message: "닉네임 또는 비밀번호를 확인해주세요." },
+        { message: "닉네임/이름 또는 비밀번호를 확인해주세요." },
         { status: 400 }
       );
     }
@@ -81,7 +81,7 @@ export async function POST(request) {
 
     if (!profile?.id) {
       return NextResponse.json(
-        { message: "닉네임 또는 비밀번호를 확인해주세요." },
+        { message: "닉네임/이름 또는 비밀번호를 확인해주세요." },
         { status: 401 }
       );
     }
@@ -93,7 +93,7 @@ export async function POST(request) {
     const authEmail = authData?.user?.email;
     if (authError || !authEmail) {
       return NextResponse.json(
-        { message: "닉네임 또는 비밀번호를 확인해주세요." },
+        { message: "닉네임/이름 또는 비밀번호를 확인해주세요." },
         { status: 401 }
       );
     }
@@ -115,7 +115,7 @@ export async function POST(request) {
     }
 
     return NextResponse.json(
-      { message: "닉네임 또는 비밀번호를 확인해주세요." },
+      { message: "닉네임/이름 또는 비밀번호를 확인해주세요." },
       { status: 401 }
     );
   } catch (error) {
