@@ -25,6 +25,9 @@ jobs:
       - run: npm ci
       - run: python3 scripts/one_time_modern_auth.py
       - name: Validate source and build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-validation-key
         run: |
           ! grep -n 'type="password"\|passwordCandidates\|VIP PRIVATE</h1>\|profile-01.jpg" alt="AI PROCESS VIP"' app/page.js
           ! grep -n '비밀번호' app/page.js app/api/auth/login/route.js app/api/auth/signup/route.js
