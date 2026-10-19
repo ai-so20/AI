@@ -1,0 +1,167 @@
+/*
+ * VIP Design System — Private Financial Editorial + Quiet System Motion
+ * Foundation only. Page-specific selectors adopt these tokens in Parts 2–5.
+ */
+
+:root {
+  /* Surfaces */
+  --vip-page: #f7f8f9;
+  --vip-surface: #ffffff;
+  --vip-surface-soft: #f2f4f6;
+  --vip-surface-quiet: #eceff2;
+
+  /* Typography */
+  --vip-ink: #171d28;
+  --vip-ink-2: #4f5b6b;
+  --vip-ink-3: #727d8b;
+  --vip-ink-4: #98a1ad;
+
+  /* Lines */
+  --vip-line: rgba(35, 46, 61, .11);
+  --vip-line-strong: rgba(35, 46, 61, .18);
+
+  /* Brand / role accents — one primary accent per page */
+  --vip-midnight: #182337;
+  --vip-steel: #526c91;
+  --vip-event: #8d6c35;
+  --vip-reward: #695b89;
+  --vip-positive: #356b5d;
+  --vip-negative: #c15f65;
+
+  /* Radius: limited vocabulary */
+  --vip-radius-xs: 8px;
+  --vip-radius-sm: 12px;
+  --vip-radius-md: 16px;
+  --vip-radius-lg: 22px;
+
+  /* Spacing rhythm */
+  --vip-space-1: 4px;
+  --vip-space-2: 8px;
+  --vip-space-3: 12px;
+  --vip-space-4: 20px;
+  --vip-space-5: 32px;
+  --vip-space-6: 48px;
+
+  /* Type scale */
+  --vip-type-micro: 9px;
+  --vip-type-meta: 10px;
+  --vip-type-body: 12px;
+  --vip-type-title: 16px;
+  --vip-type-display-sm: 28px;
+  --vip-type-display: clamp(34px, 9vw, 44px);
+
+  /* Quiet motion */
+  --vip-motion-fast: 140ms;
+  --vip-motion-standard: 210ms;
+  --vip-motion-slow: 620ms;
+  --vip-ease: cubic-bezier(.2, .72, .2, 1);
+
+  /* Depth: intentionally restrained */
+  --vip-shadow-float: 0 18px 46px rgba(24, 35, 55, .08);
+  --vip-shadow-soft: 0 8px 24px rgba(24, 35, 55, .045);
+}
+
+/* Theme contract: each page selects exactly one primary accent. */
+.vip-theme-event,
+.vip-theme-attendance { --vip-accent: var(--vip-event); }
+.vip-theme-ai { --vip-accent: var(--vip-steel); }
+.vip-theme-reward { --vip-accent: var(--vip-reward); }
+
+/* Shared editorial primitives. These do not affect existing UI until adopted. */
+.vip-editorial-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--vip-space-3);
+  padding-block: var(--vip-space-4);
+  border-bottom: 1px solid var(--vip-line);
+}
+
+.vip-editorial-kicker {
+  margin: 0 0 var(--vip-space-2);
+  color: var(--vip-accent, var(--vip-steel));
+  font-size: var(--vip-type-micro);
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.vip-editorial-title {
+  margin: 0;
+  color: var(--vip-ink);
+  font-size: clamp(22px, 6vw, 30px);
+  font-weight: 850;
+  line-height: 1.08;
+  letter-spacing: -.045em;
+}
+
+.vip-editorial-copy {
+  margin: var(--vip-space-2) 0 0;
+  max-width: 48rem;
+  color: var(--vip-ink-2);
+  font-size: var(--vip-type-body);
+  font-weight: 520;
+  line-height: 1.65;
+}
+
+.vip-display-value {
+  color: var(--vip-ink);
+  font-size: var(--vip-type-display);
+  font-weight: 900;
+  line-height: .98;
+  letter-spacing: -.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+.vip-data-rail {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  border-block: 1px solid var(--vip-line);
+}
+
+.vip-data-rail > * {
+  min-width: 0;
+  padding: var(--vip-space-3) var(--vip-space-4);
+}
+
+.vip-data-rail > * + * {
+  border-left: 1px solid var(--vip-line);
+}
+
+.vip-divider { border: 0; border-top: 1px solid var(--vip-line); }
+
+.vip-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--vip-space-3);
+  min-height: 48px;
+  border-bottom: 1px solid var(--vip-line);
+}
+
+.vip-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vip-accent, var(--vip-steel));
+}
+
+.vip-quiet-action {
+  transition: opacity var(--vip-motion-fast) var(--vip-ease),
+              background-color var(--vip-motion-fast) var(--vip-ease),
+              border-color var(--vip-motion-fast) var(--vip-ease),
+              transform var(--vip-motion-fast) var(--vip-ease);
+}
+
+.vip-quiet-action:active { transform: scale(.985); }
+
+@media (prefers-reduced-motion: reduce) {
+  .vip-quiet-action { transition: none !important; }
+}
+
+@media (max-width: 520px) {
+  .vip-editorial-head { padding-block: var(--vip-space-3); }
+  .vip-data-rail { grid-auto-flow: row; grid-auto-columns: unset; }
+  .vip-data-rail > * + * { border-left: 0; border-top: 1px solid var(--vip-line); }
+}
