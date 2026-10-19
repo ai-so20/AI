@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
-import { AVATAR_CATALOG, avatarSrc, normalizePasswordInput } from "./lib/ui-helpers";
+import { AVATAR_CATALOG, avatarSrc } from "./lib/ui-helpers";
 import { aiKrw, aiTime, aiSignedKrw, aiSignedPct, aiFormatMarketPrice, aiRemainingText, buildAiChartModel } from "./lib/ai-process-utils";
 import { buildAiImpactSummary } from "./lib/ai-process-impact";
 import { fetchAiProcessStateData } from "./lib/ai-process-data";
@@ -24,7 +24,6 @@ export default function Home() {
 
   const [nickname, setNickname] = useState("");
   const [realName, setRealName] = useState("");
-  const [password, setPassword] = useState("");
 
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -2315,17 +2314,8 @@ export default function Home() {
     const cleanNickname = nickname.trim();
     const cleanRealName = realName.trim();
 
-    if (!cleanNickname || !cleanRealName || !password) {
-      setNotice(
-        "닉네임, 성함, 비밀번호를 모두 입력해주세요."
-      );
-      return;
-    }
-
-    if (password.length < 6) {
-      setNotice(
-        "비밀번호는 6자리 이상 입력해주세요."
-      );
+    if (!cleanNickname || !cleanRealName) {
+      setNotice("닉네임과 이름을 모두 입력해주세요.");
       return;
     }
 
@@ -2336,34 +2326,19 @@ export default function Home() {
       const response = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nickname: cleanNickname,
-          realName: cleanRealName,
-          password: normalizePasswordInput(password),
-        }),
+        body: JSON.stringify({ nickname: cleanNickname, realName: cleanRealName }),
       });
-
       const result = await response.json().catch(() => ({}));
-
       if (!response.ok) {
-        setNotice(
-          result?.message || "가입 신청 중 오류가 발생했습니다."
-        );
+        setNotice(result?.message || "가입 신청 중 오류가 발생했습니다.");
         return;
       }
-
       setNickname("");
       setRealName("");
-      setPassword("");
       setMode("login");
-
-      setNotice(
-        "가입 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다."
-      );
+      setNotice("가입 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.");
     } catch {
-      setNotice(
-        "가입 신청 중 오류가 발생했습니다."
-      );
+      setNotice("가입 신청 중 오류가 발생했습니다.");
     } finally {
       setWorking(false);
     }
@@ -2373,11 +2348,10 @@ export default function Home() {
     e.preventDefault();
 
     const cleanNickname = nickname.trim();
+    const cleanRealName = realName.trim();
 
-    if (!cleanNickname || !password) {
-      setNotice(
-        "닉네임과 비밀번호를 입력해주세요."
-      );
+    if (!cleanNickname || !cleanRealName) {
+      setNotice("닉네임과 이름을 모두 입력해주세요.");
       return;
     }
 
@@ -2385,28 +2359,14 @@ export default function Home() {
     setNotice("");
 
     try {
-      const normalizedPassword = normalizePasswordInput(password);
-      const passwordCandidates = Array.from(new Set([
-        password,
-        normalizedPassword,
-        normalizedPassword.toUpperCase(),
-      ].filter(Boolean)));
-
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          nickname: cleanNickname,
-          passwordCandidates,
-        }),
+        body: JSON.stringify({ nickname: cleanNickname, realName: cleanRealName }),
       });
-
       const result = await response.json().catch(() => ({}));
-
       if (!response.ok || !result?.accessToken || !result?.refreshToken) {
-        setNotice(
-          result?.message || "닉네임 또는 비밀번호를 확인해주세요."
-        );
+        setNotice(result?.message || "닉네임 또는 이름을 확인해주세요.");
         return;
       }
 
@@ -2414,46 +2374,29 @@ export default function Home() {
         access_token: result.accessToken,
         refresh_token: result.refreshToken,
       });
-
       if (error || !data?.user) {
-        setNotice(
-          "닉네임 또는 비밀번호를 확인해주세요."
-        );
+        setNotice("닉네임 또는 이름을 확인해주세요.");
         return;
       }
 
-      const {
-        data: memberProfile,
-        error: profileError,
-      } = await supabase
+      const { data: memberProfile, error: profileError } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", data.user.id)
         .single();
-
       if (profileError || !memberProfile) {
         await supabase.auth.signOut();
-        setNotice(
-          "회원 정보를 확인할 수 없습니다."
-        );
+        setNotice("회원 정보를 확인할 수 없습니다.");
         return;
       }
-
-      if (
-        memberProfile.approval_status !== "approved"
-      ) {
+      if (memberProfile.approval_status !== "approved") {
         await supabase.auth.signOut();
-
-        setNotice(
-          "가입 승인이 완료된 후 로그인할 수 있습니다."
-        );
+        setNotice("가입 승인이 완료된 후 로그인할 수 있습니다.");
         return;
       }
 
       const landingTab = memberProfile.role === "admin" ? "admin" : "private";
-      if (typeof window !== "undefined") {
-        window.sessionStorage.setItem("vip-active-tab", landingTab);
-      }
+      if (typeof window !== "undefined") window.sessionStorage.setItem("vip-active-tab", landingTab);
       setChatTab(landingTab);
       setUser(data.user);
       setProfile(memberProfile);
@@ -2467,7 +2410,6 @@ export default function Home() {
       } else {
         setShowWelcomeModal(memberProfile.role !== "admin");
       }
-      setPassword("");
     } catch {
       setNotice("로그인 중 오류가 발생했습니다.");
     } finally {
@@ -2546,7 +2488,7 @@ export default function Home() {
 
   async function handleLogout() {
     // "로그아웃"은 VIP 화면만 잠그고 Supabase 인증 세션은 안전하게 유지합니다.
-    // 비밀번호를 localStorage에 저장하지 않으면서 빠른 재접속과 푸시 딥링크를 지원합니다.
+    // 민감한 인증 정보를 브라우저 저장소에 남기지 않으면서 빠른 재접속과 푸시 딥링크를 지원합니다.
     if (typeof window !== "undefined") {
       window.localStorage.setItem("vip-ui-locked", "1");
       window.localStorage.setItem("vip-last-nickname", profile?.nickname || "");
@@ -3021,7 +2963,7 @@ export default function Home() {
                   <div style={{display:"flex",justifyContent:"space-between",padding:"11px 13px",borderBottom:"1px solid #eadbc7"}}><span style={{color:"#8a7768"}}>회원등급</span><b>{profile.role === "admin" ? "관리자" : "VIP 회원"}</b></div>
                   <div style={{display:"flex",justifyContent:"space-between",padding:"11px 13px"}}><span style={{color:"#8a7768"}}>승인상태</span><b>{profile.approval_status === "approved" ? "승인 완료" : profile.approval_status}</b></div>
                 </div>
-                <p style={styles.refProfileNote}>비밀번호는 보안상 화면에 표시되지 않습니다.</p>
+                <p style={styles.refProfileNote}>회원 정보는 관리자 승인 기준으로 안전하게 관리됩니다.</p>
                 <button type="button" onClick={() => {setShowProfileInfo(false); setShowAvatarPicker(true);}} style={styles.refProfileEdit}>
                   프로필 캐릭터 변경
                 </button>
@@ -3798,135 +3740,28 @@ export default function Home() {
   return (
     <main style={styles.page}>
       <section style={styles.card}>
-        <div style={styles.luxLoginHero}>
-          <div style={styles.luxGlowOne}></div>
-          <div style={styles.luxGlowTwo}></div>
-          <div style={styles.luxCrown}>♛</div>
-          <div style={styles.goldLabel}>AI PROCESS</div>
-          <h1 style={styles.title}>VIP PRIVATE</h1>
-          <p style={styles.description}>AI와 함께하는 프라이빗 VIP 커뮤니티</p>
-          <div style={styles.luxMascotFrame}>
-            <div style={styles.luxMascotRing}></div>
-            <img src="/avatars/40/profile-01.jpg" alt="AI PROCESS VIP" style={styles.luxMascotImage}/>
-            <div style={styles.luxVipSeal}>VIP</div>
-          </div>
-          <div style={styles.luxHeroCaption}>PRIVATE · PREMIUM · COMMUNITY</div>
-        </div>
+        <header style={styles.luxLoginHero}>
+          <div style={styles.goldLabel}>AI PROCESS · PRIVATE ACCESS</div>
+          <h1 style={styles.title}>VIP MEMBER</h1>
+          <p style={styles.description}>승인된 회원을 위한 전용 서비스입니다.</p>
+          <div style={styles.luxHeroCaption}>MEMBER ACCESS · AI PROCESS</div>
+        </header>
 
         <div style={styles.tabs}>
-          <button
-            type="button"
-            onClick={() => {
-              setMode("login");
-              setNotice("");
-            }}
-            style={{
-              ...styles.tab,
-              ...(mode === "login"
-                ? styles.activeTab
-                : {}),
-            }}
-          >
-            로그인
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setMode("signup");
-              setNotice("");
-            }}
-            style={{
-              ...styles.tab,
-              ...(mode === "signup"
-                ? styles.activeTab
-                : {}),
-            }}
-          >
-            가입 신청
-          </button>
+          <button type="button" onClick={() => { setMode("login"); setNotice(""); }} style={{ ...styles.tab, ...(mode === "login" ? styles.activeTab : {}) }}>로그인</button>
+          <button type="button" onClick={() => { setMode("signup"); setNotice(""); }} style={{ ...styles.tab, ...(mode === "signup" ? styles.activeTab : {}) }}>가입 신청</button>
         </div>
 
-        <form
-          onSubmit={
-            mode === "login"
-              ? handleLogin
-              : handleSignup
-          }
-          style={styles.form}
-        >
+        <form onSubmit={mode === "login" ? handleLogin : handleSignup} style={styles.form}>
           <label style={styles.label}>닉네임</label>
-
-          <input
-            value={nickname}
-            onChange={(e) =>
-              setNickname(e.target.value)
-            }
-            style={styles.input}
-            placeholder={
-              mode === "login"
-                ? "가입한 닉네임"
-                : "채팅에서 사용할 닉네임"
-            }
-          />
-
-          {mode === "signup" && (
-            <>
-              <label style={styles.label}>
-                성함
-              </label>
-
-              <input
-                value={realName}
-                onChange={(e) =>
-                  setRealName(e.target.value)
-                }
-                style={styles.input}
-                placeholder="성함"
-              />
-            </>
-          )}
-
-          <label style={styles.label}>
-            비밀번호
-          </label>
-
-          <input
-            type="password"
-            value={password}
-            onChange={(e) =>
-              setPassword(e.target.value)
-            }
-            style={styles.input}
-            placeholder={
-              mode === "signup"
-                ? "6자리 이상"
-                : "비밀번호"
-            }
-          />
-
-          <button
-            type="submit"
-            disabled={working}
-            style={styles.primary}
-          >
-            {working
-              ? "처리 중..."
-              : mode === "login"
-                ? "VIP 로그인"
-                : "가입 신청하기"}
-          </button>
+          <input value={nickname} onChange={(e) => setNickname(e.target.value)} style={styles.input} autoComplete="username" placeholder={mode === "login" ? "가입한 닉네임" : "사용할 닉네임"} />
+          <label style={styles.label}>이름</label>
+          <input value={realName} onChange={(e) => setRealName(e.target.value)} style={styles.input} autoComplete="name" placeholder="가입한 이름" />
+          <button type="submit" disabled={working} style={styles.primary}>{working ? "처리 중..." : mode === "login" ? "로그인" : "가입 신청하기"}</button>
         </form>
 
-        {notice && (
-          <div style={styles.notice}>
-            {notice}
-          </div>
-        )}
-
-        <div style={styles.footer}>
-          안전한 커뮤니티 · AI 투자 프로세스 · 다양한 이벤트
-        </div>
+        {notice && <div style={styles.notice}>{notice}</div>}
+        <div style={styles.footer}>PRIVATE MEMBER SERVICE · AI PROCESS</div>
       </section>
     </main>
   );
@@ -3935,24 +3770,23 @@ export default function Home() {
 const styles = {
   page: {
     minHeight: "100vh",
-    background:
-      "radial-gradient(circle at 12% 8%, rgba(225,178,105,.28) 0%, transparent 27%), radial-gradient(circle at 88% 12%, rgba(123,77,48,.18) 0%, transparent 30%), linear-gradient(145deg,#f8efe2 0%,#ead8c2 46%,#f7ead8 100%)",
-    color: "#2c211c",
+    background: "#f5f7fa",
+    color: "#151b26",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "20px",
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    padding: "24px 18px",
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   },
 
   card: {
     width: "100%",
     maxWidth: "430px",
-    background: "rgba(255,250,242,.94)",
-    border: "1px solid rgba(133,91,52,.22)",
-    borderRadius: "24px",
-    padding: "32px 28px",
+    background: "#ffffff",
+    border: "1px solid rgba(24,35,55,.12)",
+    borderRadius: "18px",
+    padding: "30px 24px 26px",
+    boxShadow: "0 18px 54px rgba(21,27,38,.08)",
   },
 
   logo: {
@@ -3969,49 +3803,58 @@ const styles = {
   },
 
   goldLabel: {
-    color: "#a98a4b",
+    color: "#526c91",
     fontSize: "10px",
-    letterSpacing: "3px",
-    textAlign: "center",
+    letterSpacing: "2.2px",
+    textAlign: "left",
+    fontWeight: "800",
   },
 
   title: {
-    textAlign: "center",
-    fontSize: "30px",
-    margin: "8px 0",
+    textAlign: "left",
+    fontSize: "34px",
+    lineHeight: "1.05",
+    letterSpacing: "-.9px",
+    margin: "12px 0 10px",
+    color: "#182337",
+    fontWeight: "850",
   },
 
   description: {
-    color: "#888",
-    textAlign: "center",
-    lineHeight: "1.7",
+    color: "#596273",
+    textAlign: "left",
+    lineHeight: "1.65",
     fontSize: "14px",
-    marginBottom: "25px",
+    margin: 0,
   },
 
   tabs: {
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
-    gap: "5px",
-    background: "rgba(255,255,255,.72)",
-    padding: "5px",
-    borderRadius: "11px",
-    marginBottom: "22px",
+    gap: 0,
+    background: "transparent",
+    padding: 0,
+    borderRadius: 0,
+    marginBottom: "26px",
+    borderBottom: "1px solid rgba(24,35,55,.12)",
   },
 
   tab: {
     border: 0,
+    borderBottom: "2px solid transparent",
     background: "transparent",
-    color: "#777",
-    padding: "11px",
-    borderRadius: "8px",
+    color: "#818a98",
+    padding: "13px 4px 12px",
+    borderRadius: 0,
     cursor: "pointer",
-    fontWeight: "700",
+    fontWeight: "750",
+    fontSize: "13px",
   },
 
   activeTab: {
-    background: "linear-gradient(135deg,#fffaf1,#f1dfc6)",
-    color: "#9b692d",
+    background: "transparent",
+    color: "#182337",
+    borderBottom: "2px solid #526c91",
   },
 
   form: {
@@ -4020,53 +3863,56 @@ const styles = {
   },
 
   label: {
-    fontSize: "12px",
-    color: "#999",
-    margin: "0 0 7px 3px",
+    fontSize: "11px",
+    color: "#596273",
+    margin: "0 0 7px 1px",
+    fontWeight: "700",
+    letterSpacing: ".2px",
   },
 
   input: {
     boxSizing: "border-box",
     width: "100%",
-    background: "rgba(255,255,255,.72)",
-    color: "#2d211b",
-    border: "1px solid rgba(116,79,48,.20)",
+    background: "#ffffff",
+    color: "#151b26",
+    border: "1px solid rgba(24,35,55,.16)",
     borderRadius: "10px",
-    padding: "14px",
-    marginBottom: "15px",
+    padding: "14px 13px",
+    marginBottom: "17px",
     outline: "none",
     fontSize: "16px",
     touchAction: "manipulation",
   },
 
   primary: {
-    background:
-      "linear-gradient(135deg, #a77b30 0%, #dfba63 50%, #9b7029 100%)",
-    color: "#080808",
+    background: "#182337",
+    color: "#ffffff",
     border: 0,
     borderRadius: "10px",
-    padding: "14px",
+    padding: "15px",
     fontWeight: "800",
     cursor: "pointer",
+    marginTop: "3px",
   },
 
   notice: {
-    marginTop: "17px",
-    background: "#fff8ec",
-    border: "1px solid #e0c49a",
-    color: "#9b692d",
+    marginTop: "16px",
+    background: "#f7f9fc",
+    border: "1px solid rgba(82,108,145,.22)",
+    color: "#46566d",
     borderRadius: "9px",
     padding: "12px",
     fontSize: "12px",
+    lineHeight: "1.55",
     textAlign: "center",
   },
 
   footer: {
-    color: "#444",
+    color: "#818a98",
     textAlign: "center",
     fontSize: "9px",
-    letterSpacing: "2px",
-    marginTop: "26px",
+    letterSpacing: "1.55px",
+    marginTop: "24px",
   },
 
   chatBox: {
@@ -5140,7 +4986,7 @@ const styles = {
   refEventSuccessCopy:{minWidth:0,display:"flex",flexDirection:"column",gap:"2px"},
   refEventArtwork:{width:"74px",height:"74px",position:"relative",flexShrink:0,borderRadius:"24px",display:"grid",placeItems:"center",background:"linear-gradient(145deg,rgba(255,255,255,.20),rgba(255,255,255,.04))",border:"1px solid rgba(255,229,181,.35)",boxShadow:"inset 0 0 25px rgba(255,211,128,.12),0 10px 24px rgba(0,0,0,.18)"},
   refEventArtworkHalo:{position:"absolute",inset:"9px",borderRadius:"50%",background:"radial-gradient(circle,rgba(255,212,113,.30),transparent 68%)",filter:"blur(2px)"},
-  luxLoginHero:{position:"relative",padding:"20px 12px 16px",margin:"-6px -6px 14px",borderRadius:"25px",overflow:"hidden",textAlign:"center",background:"radial-gradient(circle at 50% 35%,rgba(255,233,185,.96),rgba(255,249,235,.94) 35%,rgba(236,210,171,.78) 100%)",border:"1px solid #e2c18b",boxShadow:"inset 0 1px 0 #fff,0 14px 35px rgba(109,72,34,.13)"},
+  luxLoginHero:{position:"relative",padding:"4px 0 24px",margin:"0 0 10px",borderRadius:0,overflow:"hidden",textAlign:"left",background:"transparent",border:0,borderBottom:"1px solid rgba(24,35,55,.10)",boxShadow:"none"},
   luxGlowOne:{position:"absolute",width:"190px",height:"190px",borderRadius:"50%",left:"-80px",top:"-95px",background:"rgba(255,255,255,.72)",filter:"blur(8px)"},
   luxGlowTwo:{position:"absolute",width:"160px",height:"160px",borderRadius:"50%",right:"-70px",bottom:"-85px",background:"rgba(184,119,44,.13)",filter:"blur(10px)"},
   luxCrown:{position:"relative",zIndex:2,fontSize:"30px",color:"#a46a24",textShadow:"0 2px 8px rgba(164,106,36,.22)"},
@@ -5148,7 +4994,7 @@ const styles = {
   luxMascotRing:{position:"absolute",inset:"7px",borderRadius:"50%",border:"1px solid rgba(255,255,255,.78)",boxShadow:"inset 0 0 22px rgba(255,255,255,.35)"},
   luxMascotImage:{width:"130px",height:"130px",borderRadius:"50%",objectFit:"cover",display:"block"},
   luxVipSeal:{position:"absolute",right:"1px",bottom:"13px",width:"42px",height:"42px",borderRadius:"50%",display:"grid",placeItems:"center",fontSize:"10px",fontWeight:"900",letterSpacing:".7px",color:"#fff8df",background:"linear-gradient(145deg,#49301e,#9b682f)",border:"2px solid #efcb7f",boxShadow:"0 5px 14px rgba(55,32,16,.25)"},
-  luxHeroCaption:{position:"relative",zIndex:2,fontSize:"8px",fontWeight:"900",letterSpacing:"2.2px",color:"#9d7547"},
+  luxHeroCaption:{marginTop:"22px",paddingTop:"11px",borderTop:"1px solid rgba(24,35,55,.08)",color:"#818a98",fontSize:"9px",fontWeight:"800",letterSpacing:"1.6px",textAlign:"left"},
 
   vipReturnPage:{
     minHeight:"100dvh",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",
