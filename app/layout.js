@@ -2,6 +2,7 @@ import "./globals.css";
 import "./ai-process-p3.css";
 import "./ai-process-controls.css";
 import "./ai-process-mobile.css";
+import "./vip-design-system.css";
 
 export const metadata = {
   title: "VIP 이벤트 혜택방",
