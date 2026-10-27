@@ -1,0 +1,126 @@
+/* AI PROCESS 관리자 콘솔 디자인 — 1차
+   범위: .vip-app-shell.is-admin 안에서만 적용 (회원 화면은 영향 없음)
+   JSX/로직 변경 없음. 되돌리려면 layout.js 의 import 한 줄만 지우면 됩니다. */
+
+.vip-app-shell.is-admin{
+  --ac-bg:#F4F5F8;--ac-surface:#FFFFFF;--ac-line:#E2E5EB;--ac-line-strong:#CDD2DB;
+  --ac-text:#12161D;--ac-sub:#4B5463;--ac-blue:#1B4FD9;--ac-blue-weak:#E8EEFC;--ac-blue-text:#1740B0;
+  --ac-amber:#8A5300;--ac-amber-bg:#FFF1D6;--ac-green:#0F6B38;--ac-green-bg:#E3F4EA;
+  --ac-gray-bg:#EBEDF1;--ac-red:#B42318;--ac-red-bg:#FDECEA;--ac-gold:#C9A227;
+  background:var(--ac-bg)!important;border:1px solid var(--ac-line)!important;
+  border-radius:10px!important;box-shadow:0 12px 40px rgba(18,22,29,.10)!important;
+  font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  font-variant-numeric:tabular-nums;
+}
+.vip-app-shell.is-admin :focus-visible{outline:2px solid var(--ac-blue)!important;outline-offset:2px}
+
+/* ── 상단 헤더 ── */
+.vip-app-shell.is-admin .vip-app-header{background:var(--ac-surface)!important;border-bottom:1px solid var(--ac-line)!important;box-shadow:none!important}
+.vip-app-shell.is-admin .vip-brand-title{color:var(--ac-text)!important;font-size:16px!important;font-weight:800!important}
+.vip-app-shell.is-admin .vip-brand-title span{color:var(--ac-blue)!important}
+.vip-app-shell.is-admin .vip-brand-sub{color:var(--ac-sub)!important;font-size:12px!important;font-weight:600!important;letter-spacing:.3px!important}
+.vip-app-shell.is-admin .vip-myinfo-button{background:var(--ac-surface)!important;color:var(--ac-text)!important;border:1px solid var(--ac-line-strong)!important;border-radius:8px!important;font-size:13px!important;font-weight:600!important}
+.vip-app-shell.is-admin .vip-logout-button{color:var(--ac-sub)!important;font-size:13px!important;font-weight:600!important}
+
+/* ── 메뉴 (공통) ── */
+.vip-app-shell.is-admin .vip-app-nav{background:var(--ac-surface)!important;border-color:var(--ac-line)!important;box-shadow:none!important}
+.vip-app-shell.is-admin .vip-app-nav>button{background:transparent!important;border:0!important;box-shadow:none!important;color:var(--ac-sub)!important;font-weight:600!important;border-radius:8px!important}
+.vip-app-shell.is-admin .vip-app-nav>button:hover{background:var(--ac-gray-bg)!important}
+.vip-app-shell.is-admin .vip-app-nav>button.is-active,
+.vip-app-shell.is-admin .vip-app-nav>button.is-active:hover{background:var(--ac-blue-weak)!important;color:var(--ac-blue-text)!important;font-weight:800!important;box-shadow:none!important;border:0!important}
+.vip-app-shell.is-admin .vip-app-nav>button>i{background:var(--ac-gold)!important;color:#241B00!important;font-weight:800!important}
+
+/* ── PC: 왼쪽 사이드바 ── */
+@media(min-width:1000px){
+  .vip-app-shell.is-admin{grid-template-columns:208px minmax(0,1fr)!important}
+  .vip-app-shell.is-admin .vip-app-nav{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:2px!important;padding:78px 10px 16px!important;border-right:1px solid var(--ac-line)!important;background:var(--ac-surface)!important}
+  .vip-app-shell.is-admin .vip-app-nav:before{content:"AI PROCESS VIP"!important;color:var(--ac-text)!important;font-size:15px!important;font-weight:800!important;letter-spacing:0!important;left:18px!important;top:22px!important}
+  .vip-app-shell.is-admin .vip-app-nav:after{content:"관리자 센터"!important;color:var(--ac-sub)!important;font-size:12px!important;font-weight:600!important;letter-spacing:0!important;left:18px!important;top:44px!important}
+  .vip-app-shell.is-admin .vip-app-nav>button{flex-direction:row!important;justify-content:flex-start!important;height:42px!important;min-height:42px!important;padding:0 12px!important;gap:10px!important;font-size:14px!important}
+  .vip-app-shell.is-admin .vip-app-nav>button>span:first-child{width:20px!important;display:inline-flex!important;justify-content:center!important;font-size:15px!important}
+  .vip-app-shell.is-admin .vip-app-nav>button>i{position:static!important;margin-left:auto!important}
+}
+
+/* ── 모바일: 하단 메뉴 (기존 6~8px 글씨 → 11px) ── */
+@media(max-width:999px){
+  .vip-app-shell.is-admin .vip-app-nav{border-top:1px solid var(--ac-line)!important;border-right:0!important;background:var(--ac-surface)!important}
+  .vip-app-shell.is-admin .vip-app-nav>button{height:56px!important;min-height:56px!important;font-size:11px!important;padding:0 2px!important}
+}
+
+/* ── 본문 바탕 ── */
+.vip-app-shell.is-admin .vip-app-body{background:var(--ac-bg)!important}
+
+/* ── 대시보드 / 회원 관리 : 글씨와 면 ── */
+.vip-app-shell.is-admin .vip-master-admin,
+.vip-app-shell.is-admin .vip-admin-members-screen{background:var(--ac-bg)!important;color:var(--ac-text)!important}
+.vip-app-shell.is-admin .vip-master-admin :is(h1,h2,h3,h4,b,strong,div,span,button,label),
+.vip-app-shell.is-admin .vip-admin-members-screen :is(h1,h2,h3,h4,b,strong,div,span,label){color:var(--ac-text)!important;text-shadow:none!important}
+.vip-app-shell.is-admin .vip-master-admin :is(p,small,em),
+.vip-app-shell.is-admin .vip-admin-members-screen :is(p,small){color:var(--ac-sub)!important}
+.vip-app-shell.is-admin .vip-admin-page-head h2,
+.vip-app-shell.is-admin .vip-admin-members-head h2{font-size:22px!important;font-weight:800!important;letter-spacing:-.3px!important}
+.vip-app-shell.is-admin .vip-admin-page-head p,
+.vip-app-shell.is-admin .vip-admin-members-head p{font-size:14px!important;line-height:1.5!important}
+.vip-app-shell.is-admin .vip-admin-members-head>div:first-child>span{color:var(--ac-blue-text)!important;font-size:12px!important;font-weight:700!important;letter-spacing:.4px!important}
+.vip-app-shell.is-admin .vip-admin-status{color:var(--ac-green)!important;background:var(--ac-green-bg)!important;border:0!important;border-radius:6px!important;font-size:12px!important;font-weight:700!important}
+
+/* 면: 그라데이션·그림자 제거, 얇은 선 */
+.vip-app-shell.is-admin .vip-admin-panel,
+.vip-app-shell.is-admin .vip-admin-members-head,
+.vip-app-shell.is-admin .vip-admin-member-table,
+.vip-app-shell.is-admin .vip-admin-quick-grid button,
+.vip-app-shell.is-admin .vip-admin-members-total{background:var(--ac-surface)!important;border:1px solid var(--ac-line)!important;border-radius:8px!important;box-shadow:none!important}
+.vip-app-shell.is-admin .vip-admin-panel-head{border-bottom:1px solid var(--ac-line)!important}
+
+/* 현황 숫자: 숫자는 크게 */
+.vip-app-shell.is-admin .vip-admin-kpis button{background:var(--ac-surface)!important;border:1px solid var(--ac-line)!important;border-radius:8px!important;box-shadow:none!important;min-height:92px!important}
+.vip-app-shell.is-admin .vip-admin-kpis button:hover{background:var(--ac-blue-weak)!important}
+.vip-app-shell.is-admin .vip-admin-kpis strong{font-size:28px!important;font-weight:800!important;letter-spacing:-.5px!important}
+.vip-app-shell.is-admin .vip-admin-kpis small,
+.vip-app-shell.is-admin .vip-admin-kpis span{font-size:13px!important;color:var(--ac-sub)!important}
+
+/* 승인 대기 요청 표 / 회원 표 */
+.vip-app-shell.is-admin .vip-admin-request-head,
+.vip-app-shell.is-admin .vip-admin-member-row-head{background:var(--ac-surface)!important;border-bottom:1px solid var(--ac-line-strong)!important}
+.vip-app-shell.is-admin .vip-admin-request-head span,
+.vip-app-shell.is-admin .vip-admin-member-row-head span{color:var(--ac-sub)!important;font-size:13px!important;font-weight:700!important}
+.vip-app-shell.is-admin .vip-admin-request-row,
+.vip-app-shell.is-admin .vip-admin-member-row:not(.vip-admin-member-row-head){background:var(--ac-surface)!important;border-bottom:1px solid var(--ac-line)!important;font-size:14px!important}
+.vip-app-shell.is-admin .vip-admin-member-row:not(.vip-admin-member-row-head):hover{background:var(--ac-gray-bg)!important}
+.vip-app-shell.is-admin .vip-admin-member-identity b{font-size:14px!important;font-weight:700!important}
+.vip-app-shell.is-admin .vip-admin-member-identity small,
+.vip-app-shell.is-admin .vip-admin-member-date{font-size:13px!important;color:var(--ac-sub)!important}
+.vip-app-shell.is-admin .vip-admin-member-empty,
+.vip-app-shell.is-admin .vip-admin-request-empty{color:var(--ac-sub)!important;font-size:14px!important}
+
+/* 상태 표시: 글자 + 색 + 점 */
+.vip-app-shell.is-admin .vip-admin-member-state,
+.vip-app-shell.is-admin .vip-admin-process-state{display:inline-flex!important;align-items:center!important;gap:5px!important;height:24px!important;padding:0 9px!important;border-radius:4px!important;font-size:13px!important;font-weight:700!important;width:fit-content!important;border:0!important;background:var(--ac-gray-bg)!important;color:var(--ac-sub)!important}
+.vip-app-shell.is-admin .vip-admin-member-state:before,
+.vip-app-shell.is-admin .vip-admin-process-state:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.vip-app-shell.is-admin .vip-admin-member-state.is-pending{background:var(--ac-amber-bg)!important;color:var(--ac-amber)!important}
+.vip-app-shell.is-admin .vip-admin-member-state.is-approved{background:var(--ac-green-bg)!important;color:var(--ac-green)!important}
+.vip-app-shell.is-admin .vip-admin-member-state.is-rejected{background:var(--ac-red-bg)!important;color:var(--ac-red)!important}
+.vip-app-shell.is-admin .vip-admin-process-state.is-running{background:var(--ac-blue-weak)!important;color:var(--ac-blue-text)!important}
+
+/* 필터 · 검색 */
+.vip-app-shell.is-admin .vip-admin-member-filters button{height:32px!important;padding:0 12px!important;border:1px solid var(--ac-line)!important;border-radius:16px!important;background:var(--ac-surface)!important;color:var(--ac-sub)!important;font-size:13px!important;font-weight:600!important;box-shadow:none!important}
+.vip-app-shell.is-admin .vip-admin-member-filters button b{color:inherit!important;margin-left:5px!important;font-weight:800!important}
+.vip-app-shell.is-admin .vip-admin-member-filters button.is-active{background:var(--ac-blue)!important;border-color:var(--ac-blue)!important;color:#fff!important}
+.vip-app-shell.is-admin .vip-admin-member-toolbar input{height:38px!important;border:1px solid var(--ac-line-strong)!important;border-radius:6px!important;background:var(--ac-surface)!important;color:var(--ac-text)!important;font-size:14px!important;padding:0 12px!important}
+.vip-app-shell.is-admin .vip-admin-member-toolbar input::placeholder{color:var(--ac-sub)!important}
+
+/* 버튼 위계: 기본 = 보조(테두리), 승인 = 주요(파랑), 거절 = 위험(빨강 테두리) */
+.vip-app-shell.is-admin .vip-admin-member-actions button,
+.vip-app-shell.is-admin .vip-admin-request-row button{height:34px!important;padding:0 12px!important;border:1px solid var(--ac-line-strong)!important;border-radius:8px!important;background:var(--ac-surface)!important;color:var(--ac-text)!important;font-size:13px!important;font-weight:700!important;box-shadow:none!important}
+.vip-app-shell.is-admin .vip-admin-member-actions button:hover,
+.vip-app-shell.is-admin .vip-admin-request-row button:hover{background:var(--ac-gray-bg)!important}
+.vip-app-shell.is-admin .vip-admin-member-row:has(.is-pending) .vip-admin-member-actions button:first-of-type,
+.vip-app-shell.is-admin .vip-admin-request-row button:first-of-type{background:var(--ac-blue)!important;border-color:var(--ac-blue)!important;color:#fff!important}
+.vip-app-shell.is-admin .vip-admin-member-row:has(.is-pending) .vip-admin-member-actions button:nth-of-type(2),
+.vip-app-shell.is-admin .vip-admin-request-row button:nth-of-type(2){background:var(--ac-surface)!important;border-color:var(--ac-red)!important;color:var(--ac-red)!important}
+.vip-app-shell.is-admin .vip-admin-member-actions button:disabled,
+.vip-app-shell.is-admin .vip-admin-request-row button:disabled{opacity:.5!important;cursor:not-allowed!important}
+.vip-app-shell.is-admin .vip-admin-member-actions select{height:34px!important;font-size:13px!important;color:var(--ac-text)!important;border:1px solid var(--ac-line-strong)!important;border-radius:8px!important;background:var(--ac-surface)!important}
+
+@media (prefers-reduced-motion:reduce){.vip-app-shell.is-admin *{transition:none!important;animation:none!important}}
