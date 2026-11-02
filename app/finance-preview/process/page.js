@@ -28,13 +28,16 @@ export default function ProcessPreview(){
 
       <section className={styles.section}>
         <div className={styles.head}><h2>PROCESS 진행</h2><em>관리 단계</em></div>
-        <div className={styles.processLine}><div><b>AI 자산 관리</b><span>분석과 매수 판단 이후 포지션 관리가 진행 중입니다.</span></div><strong>진행 중</strong></div>
+        <div className={styles.processLine}><div className={styles.processState}><i /><div><b>AI 자산 관리</b><span>분석과 매수 판단 이후 포지션 관리가 진행 중입니다.</span></div></div><strong>진행 중</strong></div>
       </section>
 
       <section className={styles.section}>
         <div className={styles.head}><h2>평가금액 추이</h2><span>전체 기간</span></div>
         <div className={styles.chartValue}><b>46,813,484원</b><span>+658.73%</span></div>
-        <div className={styles.chart}><svg viewBox="0 0 360 140" preserveAspectRatio="none"><polyline points="0,124 28,119 55,121 82,106 110,110 137,92 165,96 192,76 220,82 247,55 275,61 302,38 330,43 360,17" fill="none" stroke="currentColor" strokeWidth="2.2" vectorEffect="non-scaling-stroke"/></svg></div>
+        <div className={styles.chart}>
+          <div className={styles.guide}><i /><i /><i /></div>
+          <svg viewBox="0 0 360 140" preserveAspectRatio="none"><polyline points="0,124 28,119 55,121 82,106 110,110 137,92 165,96 192,76 220,82 247,55 275,61 302,38 330,43 360,17" fill="none" stroke="currentColor" strokeWidth="2.2" vectorEffect="non-scaling-stroke"/><circle cx="360" cy="17" r="3.5" fill="currentColor" vectorEffect="non-scaling-stroke"/></svg>
+        </div>
         <div className={styles.axis}><span>시작</span><span>현재</span></div>
       </section>
 
