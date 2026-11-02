@@ -2,17 +2,9 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const RANDOM_PROFILE_KEYS = Array.from({ length: 40 }, (_, index) =>
-  `profile-${String(index + 1).padStart(2, "0")}`
-);
-
-function pickRandomProfile() {
-  return RANDOM_PROFILE_KEYS[Math.floor(Math.random() * RANDOM_PROFILE_KEYS.length)];
-}
-
 function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const secretKey = process.env.SUPABASE_SECRET_KEY;
+  const secretKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !secretKey) {
     throw new Error("Supabase 서버 환경변수가 설정되지 않았습니다.");
@@ -28,17 +20,16 @@ function createAdminClient() {
 }
 
 function makeInternalAuthAddress() {
-  // 사용자에게 노출하거나 입력받지 않는 내부 인증용 주소입니다.
-  // admin.createUser는 가입 확인 메일을 발송하지 않습니다.
-  const id = randomUUID().replaceAll("-", "");
-  return `vip.${id}@gmail.com`;
+  return `vip.${randomUUID().replaceAll("-", "")}@example.com`;
 }
 
 export async function POST(request) {
+  let createdUserId = null;
+
   try {
-    const body = await request.json();
-    const nickname = String(body?.nickname || "").trim();
-    const realName = String(body?.realName || "").trim();
+    const body = await request.json().catch(() => ({}));
+    const nickname = String(body?.nickname || "").normalize("NFKC").trim();
+    const realName = String(body?.realName || "").normalize("NFKC").trim();
     const password = String(body?.password || "");
 
     if (!nickname || !realName || !password) {
@@ -64,7 +55,6 @@ export async function POST(request) {
       .maybeSingle();
 
     if (existingError) {
-      console.error("닉네임 중복 확인 오류:", existingError);
       return NextResponse.json(
         { message: "가입 정보를 확인하지 못했습니다. 잠시 후 다시 시도해주세요." },
         { status: 500 }
@@ -78,8 +68,6 @@ export async function POST(request) {
       );
     }
 
-    const randomAvatar = pickRandomProfile();
-
     const { data, error } = await admin.auth.admin.createUser({
       email: makeInternalAuthAddress(),
       password,
@@ -87,12 +75,12 @@ export async function POST(request) {
       user_metadata: {
         nickname,
         real_name: realName,
-        avatar: randomAvatar,
       },
     });
 
-    if (error || !data?.user) {
-      console.error("회원 생성 오류:", error);
+    createdUserId = data?.user?.id || null;
+
+    if (error || !createdUserId) {
       return NextResponse.json(
         { message: "가입 신청 중 오류가 발생했습니다." },
         { status: 400 }
@@ -103,19 +91,18 @@ export async function POST(request) {
       .from("profiles")
       .upsert(
         {
-          id: data.user.id,
+          id: createdUserId,
           nickname,
           real_name: realName,
-          approval_status: "pending",
-          avatar: randomAvatar,
+          approval_status: "1",
         },
         { onConflict: "id" }
       );
 
     if (profileError) {
-      console.error("랜덤 프로필 지정 오류:", profileError);
+      await admin.auth.admin.deleteUser(createdUserId).catch(() => {});
       return NextResponse.json(
-        { message: "프로필 생성 중 오류가 발생했습니다." },
+        { message: "회원정보 생성 중 오류가 발생했습니다." },
         { status: 500 }
       );
     }
