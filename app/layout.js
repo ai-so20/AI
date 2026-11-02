@@ -3,6 +3,7 @@ import "./ai-process-p3.css";
 import "./ai-process-controls.css";
 import "./ai-process-mobile.css";
 import "./admin-console.css";
+import "./ai-process-finance.css";
 
 export const metadata = {
   title: "VIP 이벤트 혜택방",
