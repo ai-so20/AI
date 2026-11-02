@@ -108,3 +108,22 @@ test("simulation snapshot falls back safely when logs are absent", () => {
   assert.equal(snapshot.totalProfit, 0);
   assert.equal(snapshot.totalReturn, 0);
 });
+
+
+test("history observes the update committed by the market endpoint", async () => {
+  const { fetchAiSimulationSources } = await import("../app/lib/ai-process-service.js");
+  let committed = false;
+  const query = {
+    select() { return this; }, eq() { return this; }, order() { return this; },
+    limit() { return Promise.resolve({ data: committed ? [{ delta: 125, amount_after: 1125 }] : [], error: null }); },
+  };
+  const result = await fetchAiSimulationSources({
+    supabase: { from: () => query }, processId: "process-1",
+    marketFetch: async () => {
+      await new Promise(resolve => setTimeout(resolve, 10));
+      committed = true;
+      return { text: async () => JSON.stringify({ success: true }) };
+    },
+  });
+  assert.equal(result.logsResult.data[0]?.amount_after, 1125);
+});

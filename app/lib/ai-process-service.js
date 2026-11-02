@@ -38,9 +38,10 @@ export async function fetchAiProcessLogs(supabase, processId, limit = 120) {
 }
 
 export async function fetchAiSimulationSources({ supabase, processId, marketFetch = fetch }) {
-  const marketPromise = marketFetch("/api/market-sim", { cache: "no-store" });
-  const logsPromise = fetchAiProcessLogs(supabase, processId);
-  const [marketResponse, logsResult] = await Promise.all([marketPromise, logsPromise]);
+  // The market endpoint can advance the PROCESS engine. Read logs after it completes
+  // so the history includes the same update as the refreshed session amount.
+  const marketResponse = await marketFetch("/api/market-sim", { cache: "no-store" });
+  const logsResult = await fetchAiProcessLogs(supabase, processId);
   const rawMarketPayload = await marketResponse.text();
 
   return {

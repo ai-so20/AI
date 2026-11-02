@@ -1,5 +1,6 @@
 "use client";
 
+import FinanceMemberView from "./components/finance/FinanceMemberView";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import { AVATAR_CATALOG, avatarSrc, normalizePasswordInput } from "./lib/ui-helpers";
@@ -73,6 +74,8 @@ export default function Home() {
   const [showAiDemoInfo, setShowAiDemoInfo] = useState(false);
 
   const [aiSession, setAiSession] = useState(null);
+  const [aiStateLoading, setAiStateLoading] = useState(true);
+  const [aiStateError, setAiStateError] = useState("");
   const [aiSessions, setAiSessions] = useState([]);
   const [aiSelectedProcessId, setAiSelectedProcessId] = useState("");
   const [aiPublicSessions, setAiPublicSessions] = useState([]);
@@ -423,6 +426,8 @@ export default function Home() {
   async function loadAiProcessState() {
     if (!user) return;
     const needPublicSessions = profile?.role === "admin" || chatTab === "ai";
+    setAiStateLoading(true);
+    setAiStateError("");
     if (needPublicSessions) setAiPublicLoading(true);
     try {
       const {
@@ -439,14 +444,18 @@ export default function Home() {
         selectedProcessId: aiSelectedProcessId,
       });
 
-      if (mineError) console.error("AI PROCESS 내 세션 조회 오류:", mineError);
+      if (mineError) { console.error("AI PROCESS 내 세션 조회 오류:", mineError); setAiStateError("운용 정보를 불러오지 못했습니다."); }
       if (publicError) console.error("AI PROCESS 공개 현황 조회 오류:", publicError);
 
       setAiSessions(rows);
       if (preferredId !== aiSelectedProcessId) setAiSelectedProcessId(preferredId);
       setAiSession(selected);
       if (needPublicSessions) setAiPublicSessions(publicList);
+    } catch (error) {
+      console.error("AI PROCESS 조회 오류:", error);
+      setAiStateError("운용 정보를 불러오지 못했습니다.");
     } finally {
+      setAiStateLoading(false);
       if (needPublicSessions) setAiPublicLoading(false);
     }
   }
@@ -620,7 +629,7 @@ export default function Home() {
   }, [user?.id, profile?.role]);
 
   useEffect(() => {
-    if (chatTab !== "ai" || !aiNextUpdate) return;
+    if (!["ai", "home"].includes(chatTab) || !aiNextUpdate) return;
 
     const tick = () => {
       const remain = Math.max(0, new Date(aiNextUpdate).getTime() - Date.now());
@@ -2450,7 +2459,7 @@ export default function Home() {
         return;
       }
 
-      const landingTab = memberProfile.role === "admin" ? "admin" : "private";
+      const landingTab = memberProfile.role === "admin" ? "admin" : "home";
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem("vip-active-tab", landingTab);
       }
@@ -2783,6 +2792,21 @@ export default function Home() {
 
       setChatTab(id);
     };
+
+    if (profile.role !== "admin" && (chatTab === "home" || chatTab === "ai")) {
+      return <FinanceMemberView
+        tab={chatTab} profile={profile} session={aiSession} sessions={aiSessions}
+        sim={aiSim} stateLoading={aiStateLoading} stateError={aiStateError}
+        simLoading={aiSimLoading} error={aiSimError} countdown={aiCountdown}
+        onNavigate={changeTab} onSelectProcess={(item)=>{ if (!item) return; setAiSelectedProcessId(item.id); setAiSession(item); setAiSim(null); }}
+        onRetry={()=>{loadAiProcessState();updateAiSimulation();}} onLogout={handleLogout}
+        onNotifications={enablePrivateNotifications} onProfileEdit={()=>{setShowAvatarPicker(true);setChatTab("event");}} pushEnabled={pushEnabled} unread={unreadPrivate}
+        events={autoEvents} rewards={myEventRewards} homeNotice={homeNotice} demo={aiDemo}
+        onDemoInfo={()=>{setShowAiDemoInfo(true);setChatTab("event");}}
+        onClaimDemo={claimAiDemoReward} claimWorking={eventRewardWorking}
+        publicSessions={aiPublicSessions} publicLoading={aiPublicLoading} notice={notice}
+      />;
+    }
 
     return (
       <main style={styles.refPage} className="vip-page-shell">
