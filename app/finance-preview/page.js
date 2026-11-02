@@ -6,17 +6,21 @@ const recent = [
   ['10:36','포지션 관리','Bitcoin · COIN','+96,800원'],
 ];
 
+const nav = [
+  ['home','홈'],['event','이벤트'],['process','AI PROCESS'],['reward','지급센터'],['my','내 정보']
+];
+
 export default function FinancePreview(){
   return <main className={styles.page}>
     <div className={styles.phone}>
       <header className={styles.header}>
-        <b>AI PROCESS</b>
-        <button aria-label="내 정보"><span /></button>
+        <div className={styles.brand}><b>AI PROCESS</b><span>VIP</span></div>
+        <button className={styles.profile} aria-label="내 정보"><span /></button>
       </header>
 
       <section className={styles.balance}>
         <div className={styles.balanceLabel}>총 평가금액 <span>RUNNING</span></div>
-        <strong>46,813,484원</strong>
+        <strong>46,813,484<span>원</span></strong>
         <div className={styles.profit}><b>+40,643,484원</b><span>+658.73%</span></div>
         <div className={styles.balanceMeta}><span>투자금</span><b>6,170,000원</b></div>
       </section>
@@ -31,7 +35,7 @@ export default function FinancePreview(){
         <div className={styles.sectionHead}><h2>자산 추이</h2><button>전체</button></div>
         <div className={styles.chartValue}><b>46,813,484원</b><span>+658.73%</span></div>
         <div className={styles.chart} aria-label="평가금액 추이 예시 그래프">
-          <svg viewBox="0 0 360 140" preserveAspectRatio="none"><polyline points="0,124 28,119 55,121 82,106 110,110 137,92 165,96 192,76 220,82 247,55 275,61 302,38 330,43 360,17" fill="none" stroke="currentColor" strokeWidth="2.4" vectorEffect="non-scaling-stroke"/></svg>
+          <svg viewBox="0 0 360 140" preserveAspectRatio="none"><polyline points="0,124 28,119 55,121 82,106 110,110 137,92 165,96 192,76 220,82 247,55 275,61 302,38 330,43 360,17" fill="none" stroke="currentColor" strokeWidth="2.2" vectorEffect="non-scaling-stroke"/></svg>
         </div>
         <div className={styles.axis}><span>시작</span><span>현재</span></div>
       </section>
@@ -47,7 +51,9 @@ export default function FinancePreview(){
         <div className={styles.marketRow}><div><small>COIN</small><b>Bitcoin</b></div><span>매수 구간 탐색</span></div>
       </section>
 
-      <nav className={styles.nav}><b>홈</b><span>이벤트</span><span>AI PROCESS</span><span>지급센터</span><span>내 정보</span></nav>
+      <nav className={styles.nav} aria-label="주요 메뉴">
+        {nav.map(([type,label],index)=><div className={index===0?styles.active:''} key={type}><i className={`${styles.navIcon} ${styles[type]}`}><span /></i><small>{label}</small></div>)}
+      </nav>
     </div>
   </main>
 }
