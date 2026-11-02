@@ -6,13 +6,16 @@ const history = [
   ['10:36','포지션 관리','Bitcoin · COIN','+96,800원'],
 ];
 
+const steps = ['분석','탐색','매수','관리','매도','재분석'];
+
 export default function ProcessPreview(){
   return <main className={styles.page}>
     <div className={styles.phone}>
       <header className={styles.header}><span>‹</span><b>AI PROCESS</b><i /></header>
 
       <section className={styles.hero}>
-        <div className={styles.status}><span>RUNNING</span> 자산 운용 진행 중</div>
+        <div className={styles.status}><span>RUNNING</span><b>자산 운용 진행 중</b></div>
+        <div className={styles.heroLabel}>현재 평가금액</div>
         <strong>46,813,484<span>원</span></strong>
         <div className={styles.profit}><b>+40,643,484원</b><span>+658.73%</span></div>
         <div className={styles.progress}><i /></div>
@@ -26,7 +29,12 @@ export default function ProcessPreview(){
       </section>
 
       <section className={styles.section}>
-        <div className={styles.head}><h2>평가금액 추이</h2><span>전체</span></div>
+        <div className={styles.head}><h2>PROCESS 진행</h2><em>현재 · 관리</em></div>
+        <div className={styles.steps}>{steps.map((step,index)=><div className={`${styles.step} ${index<4?styles.done:''} ${index===3?styles.current:''}`} key={step}><i></i><span>{step}</span></div>)}</div>
+      </section>
+
+      <section className={styles.section}>
+        <div className={styles.head}><h2>평가금액 추이</h2><div className={styles.period}><span>1일</span><span>1주</span><span>1개월</span><b>전체</b></div></div>
         <div className={styles.chartValue}><b>46,813,484원</b><span>+658.73%</span></div>
         <div className={styles.chart}><svg viewBox="0 0 360 140" preserveAspectRatio="none"><polyline points="0,124 28,119 55,121 82,106 110,110 137,92 165,96 192,76 220,82 247,55 275,61 302,38 330,43 360,17" fill="none" stroke="currentColor" strokeWidth="2.2" vectorEffect="non-scaling-stroke"/></svg></div>
         <div className={styles.axis}><span>시작</span><span>현재</span></div>
