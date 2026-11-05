@@ -14,15 +14,15 @@ const icons = {
 };
 function Icon({name,size=22}){return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{icons[name]}</svg>;}
 const items=[["market","시장 분석","실시간 시장 흐름"],["attendance","출석 체크","매일 혜택 받기"],["event","이벤트","진행 중인 이벤트"],["reward","상품 지급","경품 · 포인트 수령"]];
-const nav=[["home","홈"],["ai","AI PROCESS"],["market","투자현황"],["reward","보유자산"],["user","마이페이지"]];
+const nav=[["home","홈"],["ai","AI PROCESS"],["user","마이페이지"]];
 export default function DesignHome(){
  const [period,setPeriod]=useState("3개월");
  const [active,setActive]=useState("home");
  const series={"1주":"M0 100 C30 95 55 78 85 86 S130 63 165 68 S220 35 265 45 S300 24 320 19","1개월":"M0 106 C25 103 45 90 70 92 S100 75 130 79 S172 48 198 59 S240 31 270 40 S305 13 320 15","3개월":"M0 105 C20 101 27 79 49 84 S74 91 95 71 S128 77 151 61 S182 66 204 43 S237 53 264 30 S290 31 320 9","6개월":"M0 107 C35 112 45 93 77 96 S115 81 144 72 S185 73 214 50 S258 41 285 28 S310 17 320 12","전체":"M0 112 C32 108 55 111 80 91 S115 98 150 75 S185 81 215 57 S250 62 278 32 S310 22 320 6"};
  return <div className="dh-stage"><div className="dh-phone">
- {active==="home"?<><div className="dh-hero"><div className="dh-status"><span>9:41</span><span>▂▅▇ ◉ ▰</span></div>
- <header className="dh-header"><b><span className="dh-mark">Λ</span> AI PROCESS</b><div><button aria-label="알림"><Icon name="bell"/></button><button aria-label="내 정보"><Icon name="user"/></button></div></header>
- <section className="dh-balance"><div className="dh-eyebrow">총 평가금액 <span className="dh-info">ⓘ</span></div><div className="dh-money">12,740,320<small>원</small></div><span className="dh-principal">투자금 10,000,000원</span><div className="dh-pnl"><div><span>누적 손익</span><strong className="dh-blue">+2,740,320<small>원</small></strong></div><div><span>수익률</span><strong className="dh-red">+27.40%</strong></div></div></section></div>
+ {active==="home"?<><div className="dh-hero">
+ <header className="dh-header"><b><span className="dh-mark">Λ</span> AI PROCESS</b></header>
+ <section className="dh-balance"><div className="dh-eyebrow">총 평가금액 <span className="dh-info">ⓘ</span></div><div className="dh-money">12,740,320<small>원</small></div><span className="dh-principal">투자금 10,000,000원</span><div className="dh-pnl"><div><span>누적 손익</span><strong className="dh-red">+2,740,320<small>원</small></strong></div><div><span>수익률</span><strong className="dh-red">+27.40%</strong></div></div></section></div>
  <main className="dh-body"><section className="dh-process"><div className="dh-pro-head"><b>AI PROCESS</b><span className="dh-running"><i/>운용 중</span></div><p>AI가 시장을 분석하고 자동으로 운용 중입니다.</p><div className="dh-steps">{["시장 분석","전략 수립","자동 운용","성과 분석"].map((x,i)=><div key={x}><span className={i<3?"on":""} data-current={i===2?"true":undefined}>{i<3?"✓":"✓"}</span><small>{x}</small></div>)}</div><div className="dh-process-footer"><span className="dh-clock">◷</span><span>다음 리밸런싱까지</span><strong>03:24:17</strong><b onClick={()=>setActive("ai")}>자세히 보기 ❯</b></div></section>
  <section className="dh-quick" aria-label="서비스 바로가기">{items.map(([key,label,sub])=><div className="dh-quick-item" key={key} role="button" tabIndex={0} onClick={()=>setActive(key==="market"?"ai":key)} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();setActive(key==="market"?"ai":key);}}}><div className={"dh-quick-icon "+key}><img src={"/"+key+"_3d.png"} alt="" loading="lazy"/></div><b>{label}</b><small>{sub}</small></div>)}</section>
  <div className="dh-bottom-panels"><section className="dh-chart"><div className="dh-panel-title"><b>📈 자산 변동 추이 ⓘ</b><span>{period}⌄</span></div><div className="dh-chart-number"><strong>+27.40%</strong><small>(누적 수익률)</small></div><svg viewBox="0 0 320 115" preserveAspectRatio="none" aria-label="자산 변동 그래프 디자인 예시"><defs><linearGradient id="dh-area" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#398cf0" stopOpacity=".38"/><stop offset="1" stopColor="#398cf0" stopOpacity=".03"/></linearGradient></defs><path d={series[period]+" L320 115 L0 115Z"} fill="url(#dh-area)"/><path d={series[period]} fill="none" stroke="#1683ee" strokeWidth="3"/><circle cx="320" cy="9" r="4" fill="white" stroke="#1683ee" strokeWidth="3"/></svg><div className="dh-periods">{["1주","1개월","3개월","6개월","전체"].map(x=><button key={x} onClick={()=>setPeriod(x)} className={period===x?"selected":""}>{x}</button>)}</div></section><section className="dh-market"><div className="dh-panel-title"><b>📊 시장 현황</b></div>{[["코스피","2,748.56","+0.86%"],["코스닥","879.24","+1.29%"],["비트코인","164,320,000","+2.17%"],["이더리움","5,214,000","+1.63%"]].map(([name,value,pct])=><div className="dh-market-row" key={name}><span>{name}</span><strong>{value}</strong><em>{pct}</em></div>)}</section></div>
@@ -38,7 +38,8 @@ export default function DesignHome(){
 .dh-process{background:linear-gradient(145deg,#f0f8ffdc,#ffffffdd)!important;backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);border:1px solid #ffffffb5!important;box-shadow:0 9px 26px #3879b01a!important}
 .dh-quick-icon{height:72px!important;width:100%;display:flex!important;align-items:center;justify-content:center}
 .dh-quick-icon img{display:block;width:min(90%,76px);height:72px;object-fit:contain;filter:drop-shadow(0 3px 4px #2e528021)}
-.dh-balance{color:#0b1220}.dh-eyebrow,.dh-money{color:#0b1220!important}.dh-pnl .dh-blue,.dh-pnl .dh-red{color:#086cdd!important}
+.dh-balance{color:#0b1220}.dh-eyebrow,.dh-money{color:#0b1220!important}.dh-pnl .dh-blue,.dh-pnl .dh-red{color:#e32649!important}
 @media(max-width:600px){.dh-phone:before{height:600px;background-size:100% 100%,100% auto}.dh-quick-icon{height:50px!important}.dh-quick-icon img{height:50px;width:min(90%,54px)}}
+.dh-chart-number strong{color:#e32649!important}.dh-header{margin-top:6px!important}.dh-balance{margin-top:58px!important}
  `}</style></div>;
 }
