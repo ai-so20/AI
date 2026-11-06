@@ -1,0 +1,267 @@
+AI / 26 DATABASE · RPC · AUTH READ-ONLY GAP AUDIT
+작성: 2026-11-06 | 수정 대상: GitHub ai-so20/AI | 실데이터/환경변수 변경 없음
+연결 기준:
+  원본 26 Vercel → Supabase amgeyannjsslzmoowcmd
+  신규 AI Vercel → Supabase vyjtpushaumjedcfwxbn
+관련 문서:
+  AI_PROJECT_HANDOFF.txt (전체 인수인계)
+  AI_PROJECT_MID_AUDIT_2026-11-06.txt (기능 이식 중간점검)
+  AI_ADMIN_PARITY_AUDIT_2026-11-06.txt (관리자 기능 6개 영역 비교)
+
+[0. 실행 범위와 결론]
+두 Supabase 프로젝트의 information_schema / pg_proc / pg_class / pg_policies / FK 메타데이터와 GitHub 로그인 소스를 읽기 전용으로 확인했다. 운영 데이터 쓰기, 권한 수정, 스키마 생성, cron 변경, Vercel 환경변수 변경, 원본 26 수정 없음.
+판정: 26과 AI는 이름이 비슷한 테이블이 일부 있지만 AI PROCESS, 출석, 상품 재고, 지급 테이블의 계약이 서로 다르다. 두 DB를 교체 연결하거나 26 관리자를 그대로 복제해서 운영할 수 없다. 공통 함수 이름만으로 동일 동작 보장 불가.
+주의: 실제 계정 E2E·외부 API 무단 조회 가능 여부·Auth UUID 교차 DB 일치성은 검증하지 않았다.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. TABLES: 이름·컬럼 구조
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+특정 도메인 관련 테이블만 조사. 필터에 맞는 테이블 개수: 원본 26 = 27, 신규 AI = 24. 프로젝트 전체 테이블 개수로 해석하지 말 것.
+
+[26에 있는 핵심]
+  ai_process_members
+    user_id, available_count, status, investment_amount, target_mode,
+    target_return, duration_hours, min_return, max_return, profit_anchor,
+    profit_anchor_at, profit_adjustment, started_at, completed_at 등
+  ai_process_profit_adjustments
+  vip_daily_attendance
+  attendance_gift_inventory
+  attendance_reward_deliveries
+  gift_inventory / ai_gift_inventory
+  virtual_event_entries / virtual_event_results
+  event_reward_deliveries (26 지급 계약)
+
+[AI의 별도 구조]
+  ai_process_sessions
+    id, user_id, status, start_amount, current_amount, total_profit,
+    total_return, duration_hours, last_market_at, last_delta,
+    snapshot_tick_count, started_at, ends_at, completed_at 등
+  ai_process_logs / ai_process_demo_sessions / ai_process_demo_logs
+  event_prize_catalog (image_url, reward_type, stock_qty, used_qty 등)
+  event_gift_inventory (gift_url, assigned_member_id, delivery_id 등)
+  event_runtime_settings / ai_community_events
+  event_reward_deliveries (AI 지급 계약)
+
+[이름은 같아도 구조가 다른 테이블]
+  profiles: 8개 컬럼은 타입·nullability까지 일치.
+    26 전용: group_joined_at, welcome_popup_seen, reward_account_type.
+    AI 전용: account_type, ai_character_key, ai_chat_enabled.
+    approval_status 실제 값: 26 '1'/'0', AI 'approved'/'pending' 등.
+  events: 기본 19개 컬럼은 타입·nullability 일치. AI에 prize_catalog_id 추가.
+  event_reward_deliveries:
+    공통 컬럼은 일부뿐. 26: gift_id, group_announced_at, private_delivered_at, last_error 등.
+    AI: id, prize_catalog_id, member_id, reward_type, reward_name, status, gift_item_id 등.
+    event_id/winner_id의 nullable 정책도 다름.
+  group_messages: 공통 7개 컬럼 일치. AI에 AI 캐릭터/스레드/답장 관련 컬럼 추가.
+  members: AI에 account_type 추가.
+  event_entries, event_winners, private_chats, private_messages,
+  push_subscriptions, attendance_records 등은 컬럼·타입 기준 일치.
+  단, RLS·트리거·함수·실제 행/회원 ID가 같다는 뜻이 아님.
+
+[참조관계 차이]
+  26 event_reward_deliveries.gift_id → gift_inventory.id
+  AI event_reward_deliveries.prize_catalog_id → event_prize_catalog,
+      member_id → profiles, gift_item_id 관련 지급 시스템은 별도 확인 필요.
+  AI ai_process_sessions.user_id → profiles.
+  private_chats / private_messages의 members 기반 외래키 구조는 양쪽에 있음.
+  26 vip_daily_attendance.member_id → members.
+  FK 존재 여부만으로 두 Supabase의 members/profiles/Auth 사용자 UUID가 같다고 보장하지 못함.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. RPC: 실제 목록·서명·구현 텍스트 비교
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+조사 범위: public 함수 중 admin_ / get_ / check_ / join_ / run_ /
+finish_ / fulfill_ / mark_ 접두어.
+  26: 함수 58개, 이름 58개.
+  AI: 함수 54개, 이름 53개 (admin_add_event_reward 2개 오버로드).
+  공통 함수 이름 16개.
+  26에만 있는 이름 42개.
+  AI에만 있는 이름 37개.
+  이 숫자는 해당 접두어의 함수에 한정되며 DB 전체 함수 수가 아님.
+
+[공통 이름 16개]
+  admin_delete_group_message
+  admin_delete_private_message
+  admin_get_or_create_private_chat
+  admin_kick_member
+  finish_auto_event
+  get_admin_member_list
+  get_admin_private_chats
+  get_admin_private_unread_counts
+  get_auto_events
+  get_chat_avatars
+  get_group_chat_state
+  get_my_private_unread_count
+  get_or_create_admin_chat
+  join_auto_event
+  mark_private_chat_read
+  run_auto_event_engine
+
+공통 이름 16개의 대표 서명·반환형은 동일한 것으로 확인했으나,
+pg_get_functiondef 정의 텍스트 MD5는 16개 모두 일치하지 않음.
+주석·공백 등 텍스트만 다른 경우도 가능하므로 이것만으로 의미가 다르다고 단정하지 말 것.
+다만 동작이 같다는 증거도 아니므로 핵심 get_auto_events, join_auto_event,
+get_admin_private_chats, mark_private_chat_read, run_auto_event_engine은
+테스트 DB에서 결과·부작용을 비교하기 전 '완전 이식'으로 판정 금지.
+
+[원본 26 전용 — 업무상 중요한 함수]
+  AI PROCESS:
+    admin_save_ai_process_member
+    admin_save_ai_process_member_preserving_profit
+    admin_reset_ai_process_member
+    admin_adjust_ai_process_profit
+  출석:
+    get_daily_attendance_status
+    check_daily_attendance
+    fulfill_attendance_reward
+  상품 재고:
+    admin_get_gift_inventory / admin_get_ai_gift_inventory
+    admin_get_attendance_gift_inventory
+    admin_bulk_add_gift_inventory / admin_bulk_add_ai_gift_inventory
+    admin_bulk_add_attendance_gift_inventory
+    admin_delete_*_gift_inventory 계열
+  회원 관리:
+    get_admin_approval_list
+    admin_set_member_approval
+    admin_approve_all_pending_members
+    admin_set_reward_account_type
+  이벤트:
+    get_admin_event_entries
+    admin_update_event_winner_footer
+    admin_update_vip_surprise_copy
+    admin_update_vip_surprise_guide
+    admin_update_vip_surprise_settings
+    run_virtual_event_simulation
+  위 함수들은 현재 AI DB에서 이름상 확인되지 않았다.
+
+[신규 AI 전용 — 다른 계약]
+  AI PROCESS:
+    admin_start_ai_process
+    admin_stop_ai_process
+    admin_adjust_ai_process
+    admin_restart_ai_process
+    run_ai_process_market_tick
+  회원:
+    get_admin_all_profiles
+    admin_set_profile_approval
+    admin_set_account_type
+  상품 / 이벤트:
+    admin_add_event_reward (오버로드 2개)
+    admin_add_gift_links
+    get_admin_gift_inventory_summary
+    get_admin_event_operations
+    admin_mark_event_reward_delivered
+    admin_set_event_runtime_enabled
+    get_event_runtime_settings
+    admin_start_surprise_ai_demo
+  위 함수들을 원본 26에 그대로 호출해도 작동하지 않는다.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. AUTH / 로그인 / 회원 ID
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[원본 26 /v2 회원 입장]
+  nickname + realName 입력.
+  POST /api/auth/member-entry → 서버에서 승인된 profiles id 확인 →
+  같은 Supabase 프로젝트의 Auth 사용자 조회 및 magiclink OTP 확인 →
+  session 발급 → supabase.auth.setSession.
+  승인 상태 비교 '1'.
+
+[신규 AI 루트 / 회원 로그인]
+  nickname + password 입력.
+  POST /api/auth/login → 프로필 nickname으로 id 확인 →
+  같은 AI Supabase 프로젝트의 Auth 사용자 이메일 조회 →
+  signInWithPassword → session 발급 → setSession.
+  승인 상태 비교 'approved'.
+  vip-ui-locked는 세션 삭제가 아니라 기존 UI 잠금으로 사용.
+
+[검증 가능한 집계만]
+  26: Auth 사용자 수 43, public.profiles 43, 인증 사용자/프로필 자체 DB 조인 누락 0 (조회 당시).
+  AI: profiles 승인 회원 33명(관리자 1 + 회원 32, 앞선 읽기 전용 조회값).
+      AI Auth 사용자별 조인 집계는 안전 검사로 조회가 차단되어 검증 못함.
+  개인 이메일, 비밀번호, 사용자 ID 원문, 서비스 비밀키는 이 보고서에 수집/저장하지 않았다.
+
+중요: 양쪽 Auth는 별도 프로젝트에서 토큰과 사용자 ID를 발행한다.
+'닉네임이 같다'는 이유만으로 Auth UUID를 동일하다고 판단하거나
+profiles 행을 복사해 통합하면 안 된다. 교차 프로젝트 UUID 대응은 미검증.
+인증 방식을 통합하려면 회원 계정과 역할/승인, 세션 처리, 데이터 소유권, RLS를
+한꺼번에 설계하고 테스트해야 한다.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. RLS / PUBLIC DATA SECURITY — 우선 검토 필요
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[26 확인]
+  events, event_entries, event_game_secrets, event_reward_deliveries,
+  attendance_records 등은 RLS ON.
+  해당 테이블의 정책이 0개인 항목도 있음. 테이블 직접 조회가 아니라
+  권한 제어된 RPC 흐름을 통해 처리할 가능성을 별도로 검사할 것.
+  private_messages, profiles 등은 RLS ON + 정책 존재.
+
+[AI 확인]
+  events, event_entries, event_game_secrets, event_reward_deliveries,
+  event_gift_inventory, event_prize_catalog, attendance_records 등 RLS OFF.
+  이들 테이블에 anon 및 authenticated 역할의 SELECT 테이블 권한이 부여된 상태 확인.
+  특히:
+    events.quiz_answer             : 이벤트 정답 컬럼
+    event_game_secrets.secret_answer: 비공개 정답 컬럼
+    event_gift_inventory.gift_url  : 기프티콘 URL 컬럼
+  RLS OFF + anon SELECT 권한 조합은 Supabase Data API에 노출되는 경우
+  비로그인 요청으로 정답/상품 URL을 읽을 수 있는 보안 위험이 있음.
+  외부에서 실제 엔드포인트 조회를 시도하지 않았으므로 현재 '위험 확인',
+  실제 공개 데이터 유출 확정 아님.
+  회원 접근 정책 검증 전 원본 데이터/기프티콘/당첨 함수를 AI DB에 복사 금지.
+
+[권한 주의]
+  has_table_privilege는 테이블 권한이며, RLS 및 실제 Data API 노출,
+  API schema 제한을 대체하지 못함. 권한·정책·API 설정을 함께 점검해야 한다.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. 분야별 실제 이식 가능성 / 조건
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A. 프로필·1:1 메시지 (상대적으로 구조가 가까움)
+   profiles 및 private_chats/private_messages의 공통 컬럼은 유사.
+   그러나 승인값, 회원 ID, 접근 정책, RPC 본문이 다를 수 있음.
+   => UI 렌더러와 입력 검증 로직은 일부 공유 가능.
+      데이터·Auth 합치기나 관리자 전송 실사용은 별도 테스트 필요.
+
+B. 이벤트 (직접 복사 금지)
+   events 기본 컬럼은 유사하나 AI에 prize_catalog_id 추가,
+   지급 테이블이 다르고 원본과 AI의 실제 당첨/상품 연결 계약이 다름.
+   RLS OFF와 정답 노출 가능성부터 해결돼야 함.
+   => UI 구성 및 일부 조회·참여 클라이언트 코드는 참고 가능.
+      운영 데이터/당첨내역/기프티콘/자동 엔진은 임의 이식 불가.
+
+C. AI PROCESS (구조 변환 필요)
+   26 ai_process_members vs AI ai_process_sessions / logs.
+   진행기회, 목표 수익밴드, 수익 보존·앵커, 시뮬레이션/실지급 차이가 큼.
+   => 계산/그래프 렌더 코드는 일부 이식됨.
+      관리자 상태 변경·수익조정 기능은 DB 계약 결정 전 연결하면 안 됨.
+
+D. 출석/상품 지급 (독립 구현 필요)
+   26 vip_daily_attendance + attendance_gift_inventory +
+   check_daily_attendance / fulfill_attendance_reward 존재.
+   AI에는 원본 출석 RPC와 지급 재고 테이블이 없음.
+   => 신규 출석 화면은 현재 AI DB에서 실사용 가능 판정 불가.
+      보상 처리와 재고 할당은 데이터 모델·권한·중복지급 방지 설계부터.
+
+E. 관리자 운영 (UI 이동만 부분 완료)
+   /design-*에서 같은 AI 프로젝트 기존 관리자 메뉴로 이동하는 링크는 구현됨.
+   26 관리자 함수·테이블을 그대로 사용하는 새로운 AI 관리자 화면은 없음.
+   => 기능별 읽기 전용 비교 이후 독립 테스트 환경에서만 포팅.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. 다음 단계 / 변경 전 안전 조건
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+우선순위 S0: 신규 AI 이벤트·상품 관련 RLS OFF / anon SELECT 문제를
+             실제 Data API 노출 여부 및 보안정책과 함께 점검.
+             운영 DB 권한/정책은 명시적 승인 후 별도 검증·적용.
+우선순위 S1: 사용자에게 데이터 아키텍처 결정 필요:
+             (1) AI 독립 Supabase 유지 + 필요한 기능을 안전하게 재구현,
+             (2) 완전히 별도의 검증/테스트 프로젝트를 먼저 구성,
+             (3) 26 데이터 공유는 승인 범위와 Auth/보안 정합성이 검증될 때만 고려.
+             현재 AI → 26 DB로 Vercel 환경변수 자동 변경 절대 금지.
+우선순위 S2: Auth ID/role/approval 상태 호환, table FK,
+             저장·지급 RPC 파라미터/권한/트랜잭션 계약 작성.
+우선순위 S3: 백업 후 격리된 테스트 환경에서 회원·관리자 E2E.
+우선순위 S4: 모든 기능 연결·검증 끝난 뒤 사용자 디자인 일괄 평가.
+
+이번 턴에서는 안전 확인/읽기 비교/보고서 저장만 수행.
