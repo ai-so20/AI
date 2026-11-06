@@ -1,5 +1,5 @@
 "use client";
-import {useEffect,useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import Link from "next/link";
 import {supabase} from "../supabase";
 function Message({value,onOpenAi}){
@@ -25,9 +25,28 @@ function messagePreview(raw){
  for(const p of ["[[GIFT_REWARD]]","[[VIP_SURPRISE_LINK]]","[[LINK_BUTTON]]"]){if(text.startsWith(p)){try{const data=JSON.parse(text.slice(p.length));return String(data.product_name||data.text||data.button_text||"새 상품 지급 안내").slice(0,140)}catch{return "새 상품 지급 안내"}}}
  return text.replace(/\s+/g," ").slice(0,140);
 }
-export default function DesignReward(){const [user,setUser]=useState(null),[chat,setChat]=useState(null),[messages,setMessages]=useState([]),[loading,setLoading]=useState(true),[notice,setNotice]=useState(""),[text,setText]=useState(""),[sending,setSending]=useState(false);
+export default function DesignReward(){const [user,setUser]=useState(null),[chat,setChat]=useState(null),[messages,setMessages]=useState([]),[loading,setLoading]=useState(true),[notice,setNotice]=useState(""),[text,setText]=useState(""),[sending,setSending]=useState(false),[unreadAtOpen,setUnreadAtOpen]=useState(0),[toast,setToast]=useState("");const messageBoxRef=useRef(null),toastTimerRef=useRef(null);
 async function refresh(id){const {data,error}=await supabase.from("private_messages").select("*").eq("chat_id",id).eq("is_deleted",false).order("created_at",{ascending:false}).limit(200);if(error)setNotice("지급 메시지를 불러오지 못했습니다.");else setMessages([...(data||[])].reverse())}
-useEffect(()=>{let alive=true;async function boot(){const {data:{session}}=await supabase.auth.getSession();if(!alive)return;if(!session?.user){setLoading(false);return}const {data:profile}=await supabase.from("profiles").select("role,approval_status").eq("id",session.user.id).maybeSingle();if(!alive)return;if(!profile||String(profile.approval_status)!=="1"){setNotice("승인된 회원만 이용할 수 있습니다.");setLoading(false);return}setUser(session.user);if(profile.role==="admin"){setNotice("관리자 지급 관리는 기존 관리자 화면을 이용하세요.");setLoading(false);return}const {data:id,error}=await supabase.rpc("get_or_create_admin_chat");if(error||!id){setNotice("상품 지급 메시지함 연결에 실패했습니다.");setLoading(false);return}setChat(id);await supabase.rpc("mark_private_chat_read",{target_chat_id:id});await refresh(id);setLoading(false)}boot();return()=>{alive=false}},[]);
+useEffect(()=>{let alive=true;async function boot(){try{
+ if(typeof navigator!=="undefined"&&"serviceWorker" in navigator){try{await navigator.serviceWorker.register("/sw.js",{scope:"/"});}catch{}}
+ const {data:{user:currentUser},error:authError}=await supabase.auth.getUser();
+ if(!alive)return;
+ if(authError)throw authError;
+ if(!currentUser){setLoading(false);return}
+ const {data:profile,error:profileError}=await supabase.from("profiles").select("role,approval_status").eq("id",currentUser.id).maybeSingle();
+ if(!alive)return;
+ if(profileError||!profile||String(profile.approval_status)!=="1"){setNotice("승인된 회원만 이용할 수 있습니다.");setLoading(false);return}
+ setUser(currentUser);
+ if(profile.role==="admin"){setNotice("관리자 지급 관리는 기존 관리자 화면을 이용하세요.");setLoading(false);return}
+ const {data:unread}=await supabase.rpc("get_my_private_unread_count");
+ if(alive)setUnreadAtOpen(Number(unread||0));
+ const {data:id,error}=await supabase.rpc("get_or_create_admin_chat");
+ if(!alive)return;
+ if(error||!id){setNotice("상품 지급 메시지함 연결에 실패했습니다.");setLoading(false);return}
+ setChat(id);await supabase.rpc("mark_private_chat_read",{target_chat_id:id});await refresh(id);
+ if(alive)setLoading(false)
+ }catch(e){if(alive){setNotice("상품 지급센터 정보를 불러오지 못했습니다.");setLoading(false)}}}
+ void boot();return()=>{alive=false;if(toastTimerRef.current)clearTimeout(toastTimerRef.current)}},[]);
 useEffect(()=>{if(!chat)return;const channel=supabase.channel("design-reward-"+chat).on("postgres_changes",{event:"*",schema:"public",table:"private_messages",filter:"chat_id=eq."+chat},()=>{refresh(chat);supabase.rpc("mark_private_chat_read",{target_chat_id:chat})}).subscribe();return()=>{supabase.removeChannel(channel)}},[chat]);
 async function send(e){e.preventDefault();const content=text.trim();if(!content||!chat||!user||sending)return;setSending(true);const {error}=await supabase.from("private_messages").insert({chat_id:chat,sender_id:user.id,message_type:"text",content,is_deleted:false,is_read:false});if(error)setNotice("메시지 전송 실패: "+error.message);else{setText("");await refresh(chat)}setSending(false)}
 const gifts=messages.filter(m=>String(m.content||"").startsWith("[[GIFT_REWARD]]")).length;
