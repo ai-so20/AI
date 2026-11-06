@@ -47,8 +47,10 @@ self.addEventListener("notificationclick", (event) => {
     event.notification?.data?.url || VIP_PRIVATE_URL,
     self.location.origin
   );
-  targetUrl.searchParams.set("tab", "private");
-  targetUrl.searchParams.set("from", "push");
+  if (targetUrl.pathname !== "/design-reward") {
+    targetUrl.searchParams.set("tab", "private");
+    targetUrl.searchParams.set("from", "push");
+  }
 
   event.waitUntil(
     (async () => {
