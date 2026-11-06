@@ -171,7 +171,7 @@ Vercel 배포: READY 확인. 실제 계정 지급 테스트: 미수행.
 9. 상품지급센터 이식 보완 (2026-11-06)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 수정 저장소: ai-so20/AI 만. 원본 26 / Supabase DB 쓰기 변경 없음.
-기능 작업 커밋: 3aa5047a, ff0433c3, e88ed43a, 78cf3c28, 3131fd40, 73b13b90, 3d329246, 53779f2a, 70fdf6c5.
+기능 작업 커밋: 3aa5047a, ff0433c3, e88ed43a, 78cf3c28, 3131fd40, 73b13b90, 3d329246, 53779f2a, 70fdf6c5, b40c0139 (비로그인 안내 수정).
 관련 파일: app/design-reward/page.js, app/api/push/private-message/route.js, public/sw.js.
 원본 app/v2/reward/RewardLiveClient.js와 비교하여 기프티콘/출석 보상 메시지([[GIFT_REWARD]]), 링크 버튼, AI PROCESS 이동 버튼, 이미지, 일반 텍스트 URL을 표시하도록 보완.
 get_my_private_unread_count 읽기, mark_private_chat_read, 실시간 INSERT 알림 토스트, 권한이 이미 있는 경우 브라우저 알림, 포커스 복귀 시 동기화, 대화창 스크롤, 성공 전송 후 기존 푸시 API 호출 복원.
