@@ -27,7 +27,7 @@ loadMember();const timer=setInterval(loadMember,10000);return()=>{active=false;c
 useEffect(()=>observeDesignUiLock(()=>{setMember(null);setUserId(null);setAuthState("locked");setPreview(false)}),[]);
 useEffect(()=>{const timer=setInterval(()=>setTick(v=>v+1),1000);return()=>clearInterval(timer)},[]);
 const money=v=>Math.round(Number(v||0)).toLocaleString("ko-KR");
-const live=!preview&&authState==="member"&&member&&(member.status==="running"||member.status==="completed");
+const live=!preview&&!isDesignUiLocked()&&authState==="member"&&member&&(member.status==="running"||member.status==="completed");
 const actualMode=preview?mode:(live?member.status:"ready");
 const snapshot=live?getMemberProcessSnapshot(member,userId):null;
 const marketStates=live?buildAiMarketStates(snapshot.elapsedSteps):[];
