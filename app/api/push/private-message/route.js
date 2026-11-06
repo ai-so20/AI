@@ -44,6 +44,7 @@ export async function POST(request) {
     const body = await request.json();
     const chatId = String(body?.chatId || "");
     const content = String(body?.content || "").slice(0, 180);
+    const isDesignReward = body?.destination === "design-reward";
 
     if (!chatId) {
       return NextResponse.json({ error: "chatId is required." }, { status: 400 });
@@ -107,7 +108,7 @@ export async function POST(request) {
       title: "AI PROCESS VIP · 1:1 새 메시지",
       body: content || "새 1:1 메시지가 도착했습니다.",
       tag: `vip-private-${chatId}`,
-      url: "/?tab=private&from=push",
+      url: isDesignReward ? "/design-reward" : "/?tab=private&from=push",
     });
 
     let sent = 0;
