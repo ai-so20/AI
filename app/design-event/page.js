@@ -2,7 +2,7 @@
 import Link from "next/link";
 import {useEffect,useState} from "react";
 import {supabase} from "../supabase";
-import {isApprovedProfile,isDesignUiLocked} from "../lib/design-member-access";
+import {isApprovedProfile,isDesignUiLocked,observeDesignUiLock} from "../lib/design-member-access";
 const tabs=["전체","참여 가능","참여 완료"];
 const icons={number:"01",gift_box:"□",roulette:"◉",quiz:"?",first_come:"⚡",draw:"◎",attendance:"✓"};
 function parsePublishedWinner(row){
@@ -38,6 +38,7 @@ async function load(){
  setLoading(false);
 }
 useEffect(()=>{let active=true;async function boot(){try{if(isDesignUiLocked()){if(active){setSigned(false);setAccessState("locked");setLoading(false)}return}const {data:{user},error:authError}=await supabase.auth.getUser();if(!active)return;if(!user){setSigned(false);setAccessState("login");setLoading(false);return}if(authError)throw authError;const {data:profile,error:profileError}=await supabase.from("profiles").select("approval_status,nickname,role").eq("id",user.id).maybeSingle();if(profileError)throw profileError;if(!active)return;if(isApprovedProfile(profile)&&profile.role!=="admin"){setNickname(String(profile.nickname||""));setAccessState("member");setSigned(true);await load()}else{setSigned(false);setAccessState(isApprovedProfile(profile)?"admin":"unapproved");setNotice(isApprovedProfile(profile)?"관리자 이벤트 관리는 기존 관리자 화면을 이용하세요.":"승인된 회원만 이벤트에 참여할 수 있습니다.");setLoading(false)}}catch{if(active){setSigned(false);setAccessState("error");setNotice("회원 정보를 확인할 수 없습니다.");setLoading(false)}}}void boot();return()=>{active=false}},[]);
+useEffect(()=>observeDesignUiLock(()=>{setSigned(false);setAccessState("locked");setNickname("");setEvents([]);setRecentWinners([]);setLoading(false)}),[]);
 useEffect(()=>{if(!signed)return;const timer=setInterval(()=>{void load()},30000);return()=>clearInterval(timer)},[signed]);
 async function submit(item,direct){if(busy||!signed||isDesignUiLocked())return;let answer=direct===undefined?(answers[item.event_id]??null):direct;if(item.event_type==="number"){const n=Number(answer);if(!Number.isInteger(n)||n<1||n>100){setNotice("1~100 사이의 숫자를 선택하세요.");return}answer=String(n)}if(["quiz","gift_box"].includes(item.event_type)&&!["1","2","3","4"].includes(String(answer))){setNotice("먼저 보기를 선택하세요.");return}setBusy(item.event_id);setNotice("");if(item.event_type==="roulette")await new Promise(resolve=>setTimeout(resolve,900));try{const {data,error}=await supabase.rpc("join_auto_event",{target_event_id:item.event_id,submitted_answer:answer});if(error){setNotice("참여 실패: "+error.message)}else if(!data?.success){setNotice(data?.message||"참여가 처리되지 않았습니다.")}else{await load();setNotice(data?.message||item.title+" 참여가 완료되었습니다.")}}catch(e){setNotice("참여 처리 중 오류가 발생했습니다.")}finally{setBusy(null)}}
 const isLive=x=>{const start=new Date(x.starts_at).getTime(),end=new Date(x.ends_at).getTime();return Number.isFinite(start)&&Number.isFinite(end)&&Date.now()>=start&&Date.now()<end&&x.status!=="completed"};
