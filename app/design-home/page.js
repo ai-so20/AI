@@ -1,7 +1,7 @@
 "use client";
 import {useState,useEffect} from "react";
 import {useRouter} from "next/navigation";
-import {isApprovedProfile,isDesignUiLocked} from "../lib/design-member-access";
+import {isApprovedProfile,isDesignUiLocked,observeDesignUiLock} from "../lib/design-member-access";
 import {supabase} from "../supabase";
 import {getMemberProcessSnapshot,buildAiMarketStates,buildAiMarketHistory} from "../lib/ai-process-v2-model";
 
@@ -36,6 +36,7 @@ useEffect(()=>{let active=true;
  const tickTimer=setInterval(()=>setMarketTick(v=>v+1),10000);
  return()=>{active=false;clearInterval(membershipTimer);clearInterval(tickTimer)};
 },[]);
+useEffect(()=>observeDesignUiLock(()=>{setMember(null);setMemberId(null);setMemberAccess("locked")}),[]);
 void marketTick;
 const activeProcess=member&&(member.status==="running"||member.status==="completed");
 const snapshot=activeProcess?getMemberProcessSnapshot(member,memberId):null;
