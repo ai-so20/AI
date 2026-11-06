@@ -38,7 +38,7 @@ useEffect(()=>{let active=true;
 },[]);
 useEffect(()=>observeDesignUiLock(()=>{setMember(null);setMemberId(null);setMemberAccess("locked")}),[]);
 void marketTick;
-const activeProcess=member&&(member.status==="running"||member.status==="completed");
+const activeProcess=!isDesignUiLocked()&&member&&(member.status==="running"||member.status==="completed");
 const snapshot=activeProcess?getMemberProcessSnapshot(member,memberId):null;
 const marketStates=snapshot?buildAiMarketStates(snapshot.elapsedSteps):[];
 const marketHistory=snapshot?buildAiMarketHistory(snapshot.elapsedSteps,member.started_at,100):[];
