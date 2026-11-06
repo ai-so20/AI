@@ -16,7 +16,7 @@ function chartModel(values) {
   const min=Math.min(...nums), max=Math.max(...nums), spread=Math.max(1,max-min);
   return nums.map((v,i)=>`${(18+724*i/(nums.length-1)).toFixed(1)},${(190-145*(v-min)/spread).toFixed(1)}`).join(" ");
 }
-export function buildStoredSessionSnapshot(session, logs = [], now = Date.now()) {
+export function buildStoredSessionSnapshot(session, logs = [], now = Date.now(), totalLogCount = null) {
   if (!session) return null;
   const investment=Math.max(0,Number(session.start_amount||0));
   const totalAmount=Number(session.current_amount ?? session.start_amount ?? 0);
@@ -31,7 +31,7 @@ export function buildStoredSessionSnapshot(session, logs = [], now = Date.now())
   const durationMs=Math.max(1,Number(session.duration_hours||24))*3600000;
   const elapsedMs=Number.isFinite(startedMs)?Math.max(0,endMs-startedMs):0;
   const remainingMs=isRunning&&Number.isFinite(endedMs)?Math.max(0,endedMs-now):0;
-  const progress=isFinished?100:Math.min(100,100*elapsedMs/durationMs);
+  const progress=session.status==="completed"?100:Math.min(100,100*elapsedMs/durationMs);
   const datedLogs=(Array.isArray(logs)?logs:[]).filter(row=>Number.isFinite(timeMs(row.market_at))).slice().sort((a,b)=>timeMs(a.market_at)-timeMs(b.market_at));
   const history=[];
   if(Number.isFinite(startedMs))history.push({step:0,amount:investment,delta:0,at:session.started_at,stage:"시작"});
@@ -39,11 +39,11 @@ export function buildStoredSessionSnapshot(session, logs = [], now = Date.now())
   const values=history.slice(-48).map(x=>x.amount);
   const lastTick=timeMs(session.last_tick_at||session.last_market_at);
   const nextMs=isRunning&&Number.isFinite(lastTick)?Math.max(0,lastTick+180000-now):NaN;
-  const totalSteps=Math.max(0,Number(session.snapshot_tick_count||0));
+  const totalSteps=Math.max(0,Number(totalLogCount??session.snapshot_tick_count??datedLogs.length));
   return {
     investment,totalAmount,earnedProfit,currentReturn,progress,
-    elapsedSteps:totalSteps||datedLogs.length,
-    averagePerStep:totalSteps>0?earnedProfit/totalSteps:datedLogs.length?earnedProfit/datedLogs.length:0,
+    elapsedSteps:totalSteps,
+    averagePerStep:totalSteps>0?earnedProfit/totalSteps:0,
     remainingText:isRunning?Number.isFinite(endedMs)?durationText(remainingMs):"종료 예정 시간 미설정":isFinished?"종료":"대기",
     nextText:Number.isFinite(nextMs)?durationText(nextMs):"서버 반영 확인 중",
     chartPoints:chartModel(values),
