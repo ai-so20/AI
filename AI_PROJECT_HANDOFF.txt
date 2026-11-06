@@ -181,4 +181,16 @@ get_my_private_unread_count 읽기, mark_private_chat_read, 실시간 INSERT 알
 원본 상품지급 안내/이벤트·출석 혜택 설명 및 링크 추가. 실제 회원 수신/전송/푸시 구독·도착·브라우저 테스트는 아직 수행하지 않음. 배포 상태는 최신 Vercel을 확인하여 별도 검증.
 다음: 이벤트 상품 이미지 경로 실사, 최근 당첨·권한 및 실제 회차 결과 연동 검증. 이후 AI PROCESS 실계정 비교 → 홈 하단 주식·코인 상태 연결 → 메뉴/관리자 연결 → 전체 통합 검증 → 사용자 디자인 최종 검토.
 
+10. 이벤트 이미지 / 당첨 내역 점검 (2026-11-06)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- 기준: 원본 26의 app/v2/V2LiveClientStage2.js 및 Supabase 프로젝트 amgeyannjsslzmoowcmd. SQL 읽기 조회만 실행.
+- 26의 public.events / public.gift_inventory / 관련 결과 테이블에 상품 이미지 URL 컬럼 없음. Supabase storage.objects 0개. 그룹 당첨 공지에도 이미지 URL 없음. 이미지 이식은 원본 경로가 생길 때까지 보류. 임의 생성/유사 상품 이미지 연결 금지.
+- 참고: 별개 옛 Supabase vyjtpushaumjedcfwxbn에는 event_prize_catalog.image_url이 존재하나, 26과 다른 DB/데이터 계약이므로 자동 연결 금지.
+- get_auto_events()는 KST 당일 자동 이벤트와 참석 여부·당첨자·정답 공개를 반환한다. 오늘 데이터 및 결과 조회 당시: 24회차, 완료 16, virtual_event_results 16, event_winners 당일 0. 가상 결과를 실제 회원 당첨으로 설명하면 안 됨.
+- group_messages에는 '🎉 VIP EVENT · 당첨 안내' 343건, 최근 7일 기준 약 110건이 존재함(조회 시점). 당첨 공지 모두 message_type='event'. 과거 기록 조회는 group_messages RLS(승인 회원, group_joined_at 이후) 적용을 받으므로 모든 회원에게 과거 전체를 보이게 우회하면 안 됨.
+- 신규 AI/app/design-event/page.js 수정: 당첨 공지에서 message_type='event' 필터, 읽기 오류 감지 및 오늘 회차 결과 fallback, 현재 계정에서 확인 가능한 내역만 표시하는 안내, 이벤트 조회 오류 별도 처리, auth.getUser() 회원 검증 및 오류 처리.
+- 기능 변경 커밋: 7691950710ff5b77ddb83913df110a71afb6e257, 2695970a48cfb4eea7028426b8f7eca455c2e632, 89fd4b477e15f9410816b2da27f0fe62f1d07eec, 452f70437a2641096ecf3c5861236cbfd9e9f38c. 최종 기능 커밋 452f7043 Vercel READY 확인.
+- 실제 승인 회원 브라우저에서 과거 당첨 공지 접근, 응모 및 회차 결과 노출 확인은 아직 미실시. 운영 DB에 쓰기/참여 테스트를 무단 수행하지 말 것.
+- 다음 작업: AI PROCESS 대기/진행/완료 데이터의 26 원본 일치성 검증. 이후 홈 하단 주식·코인 등 남은 기능.
+
 끝.
