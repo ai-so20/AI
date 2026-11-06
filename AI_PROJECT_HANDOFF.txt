@@ -221,4 +221,18 @@ get_my_private_unread_count 읽기, mark_private_chat_read, 실시간 INSERT 알
 - 홈의 하단 주식·코인 정보/AI 판단 상태만 원본 26과 대조. 나머지 홈 변경 금지.
 - 별도 이슈: AI PROCESS와 출석의 실사용 검증은 Supabase 데이터 연결 전략이 확정되어야 진행 가능.
 
+12. 홈 하단 주식·코인 영역 이식 (2026-11-06)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+수정 파일: ai-so20/AI/app/design-home/page.js (Market 함수와 상단 import에 한정).
+기능 커밋: a4ab9511, ecf3f6fa, d68537b3d5410ac7bcc46a2b1fa78e5c466998cb.
+마지막 기능 커밋 d68537b3 Vercel READY 확인.
+원본 26의 8개 자산(BTC/USD, ETH/USD, SOL/USD, XRP/USD, AAPL, NVDA, MSFT, TSLA)을 유지.
+기존 /api/ai-assets → 26 시장가격 API 조회는 유지하고, payload.success 확인 및 연결 실패·최근 정상값·업데이트 시각 표시.
+AI 프로세스 회원용 상태는 기존 ai-process-v2-model.js의 getMemberProcessSnapshot, buildAiMarketStates, buildAiMarketHistory를 그대로 사용하여 방향·AI 상태·판단 action·탐색/매수/보유 등 집계·최근 5건의 상태 변화를 표시.
+로그인 사용자 profiles 승인 확인 후 ai_process_members를 읽기 전용 조회. running/completed 회원인 경우에만 상태를 계산. ready/로그아웃/관리자/승인대기/DB 미연결은 실제 데이터 없이 상태 표시를 꾸며내지 않음.
+중요: 현재 AI Vercel은 별도 이전 Supabase DB에 연결되어 ai_process_members 테이블이 없음. 따라서 실제 회원 AI 상태는 '회원 상태 데이터 미연결'로 나타날 수 있으며 이를 실사용 성공으로 주장하면 안 됨. DB나 환경변수는 변경하지 않았다.
+검증 범위: GitHub 코드 / Vercel 빌드 READY. 실제 회원 상태·가격 API의 브라우저 실행까지 확인한 것은 아님.
+홈의 export default DesignHome 이후 본문 및 기존 디자인, 상단 수치, 다른 구성은 변경하지 않았음.
+이후: 메뉴 링크·로그인 승인과 접근 동선의 원본 기능 일치성 점검. DB 읽기 외 변경 작업은 하지 말 것.
+
 끝.
