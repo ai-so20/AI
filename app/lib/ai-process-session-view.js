@@ -25,9 +25,11 @@ export function buildStoredSessionSnapshot(session, logs = [], now = Date.now(),
   const startedMs=timeMs(session.started_at);
   const finishedMs=timeMs(session.completed_at);
   const endedMs=timeMs(session.ends_at);
+  const stoppedMs=timeMs(session.updated_at||session.last_tick_at||session.last_market_at);
   const isRunning=session.status==="running";
   const isFinished=["stopped","completed"].includes(session.status);
-  const endMs=isFinished&&Number.isFinite(finishedMs)?finishedMs:now;
+  const stopAt=Number.isFinite(finishedMs)?finishedMs:Number.isFinite(stoppedMs)?stoppedMs:now;
+  const endMs=isFinished?stopAt:now;
   const durationMs=Math.max(1,Number(session.duration_hours||24))*3600000;
   const elapsedMs=Number.isFinite(startedMs)?Math.max(0,endMs-startedMs):0;
   const remainingMs=isRunning&&Number.isFinite(endedMs)?Math.max(0,endedMs-now):0;
