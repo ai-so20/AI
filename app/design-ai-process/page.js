@@ -3,7 +3,7 @@ import {useState,useEffect} from "react";
 import Link from "next/link";
 import {supabase} from "../supabase";
 import {aiRemainingText,buildAiChartModel,aiKrw,aiSignedKrw} from "../lib/ai-process-utils";
-import {fetchAiProcessLogs} from "../lib/ai-process-service";
+import {getMemberProcessSnapshot,aiProcessStatusLabel,aiProcessOpportunityDday,aiProcessDurationLabel,buildAiMarketStates,buildAiMarketHistory} from "../lib/ai-process-v2-model";
 const flow=[["시장 분석","시장 데이터를 분석해 현재 조건을 확인합니다."],["기회 포착","설정 기준에 맞는 진행 구간을 탐색합니다."],["AI 진행","선정된 조건을 기반으로 프로세스를 진행합니다."],["실시간 확인","진행 상태와 데이터를 지속적으로 확인합니다."],["위험 관리","설정된 기준에 따라 위험 구간을 관리합니다."],["결과 관리","진행 결과를 확인하고 프로세스를 마무리합니다."]];
 const steps=[["카카오톡 1:1 고객센터","진행 상담 신청"],["예약 안내","이용 가능 일정 확인"],["진행 설정","AI 프로세스 안내"],["프로세스 진행","설정된 방식으로 진행"],["결과 확인","진행 결과 안내"]];
 const stages=["분석","탐색","매수","관리","매도","재분석"];
