@@ -18,7 +18,7 @@ function EventInput({item,answer,onChange,submit,busy}){
  return <div className="event-action"><button disabled={busy} onClick={()=>submit(item.event_type==="roulette"?"roulette":null)}>{item.event_type==="roulette"?"룰렛 돌리고 응모하기":item.event_type==="first_come"?"선착순 참여하기":item.event_type==="attendance"?"출석 참여하기":"응모하기"}</button></div>
 }
 export default function DesignEvent(){
-const [nickname,setNickname]=useState(""),[recentWinners,setRecentWinners]=useState([]),[tab,setTab]=useState("전체"),[events,setEvents]=useState([]),[loading,setLoading]=useState(true),[signed,setSigned]=useState(false),[answers,setAnswers]=useState({}),[busy,setBusy]=useState(null),[notice,setNotice]=useState("");
+const [nickname,setNickname]=useState(""),[recentWinners,setRecentWinners]=useState([]),[winnerHistoryState,setWinnerHistoryState]=useState("loading"),[tab,setTab]=useState("전체"),[events,setEvents]=useState([]),[loading,setLoading]=useState(true),[signed,setSigned]=useState(false),[answers,setAnswers]=useState({}),[busy,setBusy]=useState(null),[notice,setNotice]=useState("");
 async function load(){
  const {data,error}=await supabase.rpc("get_auto_events");
  if(error)setNotice("이벤트 조회 실패: "+error.message);
@@ -27,8 +27,11 @@ async function load(){
   rows.sort((a,b)=>{const order=x=>isLive(x)?0:x.status==="scheduled"?1:x.status==="completed"?2:3;return order(a)-order(b)||Number(a.round_number||0)-Number(b.round_number||0)});
   setEvents(rows);
  }
- const {data:announcements,error:announcementsError}=await supabase.from("group_messages").select("id,content,created_at").eq("is_deleted",false).like("content","🎉 VIP EVENT · 당첨 안내%").order("created_at",{ascending:false}).limit(40);
- if(!announcementsError)setRecentWinners((announcements||[]).map(parsePublishedWinner).filter(Boolean));
+ try{
+ const {data:announcements,error:announcementsError}=await supabase.from("group_messages").select("id,content,created_at").eq("is_deleted",false).eq("message_type","event").like("content","🎉 VIP EVENT · 당첨 안내%").order("created_at",{ascending:false}).limit(40);
+ if(announcementsError){setWinnerHistoryState("error")}
+ else{setRecentWinners((announcements||[]).map(parsePublishedWinner).filter(Boolean));setWinnerHistoryState("ready")}
+ }catch{setWinnerHistoryState("error")}
  setLoading(false);
 }
 useEffect(()=>{let active=true;supabase.auth.getSession().then(({data})=>{if(!active)return;setSigned(false);if(data?.session?.user){supabase.from("profiles").select("approval_status,nickname").eq("id",data.session.user.id).maybeSingle().then(({data:profile})=>{if(!active)return;if(String(profile?.approval_status)==="1"){setNickname(String(profile?.nickname||""));setSigned(true);load();}else{setSigned(false);setNotice("승인된 회원만 이벤트에 참여할 수 있습니다.");setLoading(false)}})}else setLoading(false)});return()=>{active=false}},[]);
