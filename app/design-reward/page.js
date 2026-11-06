@@ -32,8 +32,8 @@ useEffect(()=>{let alive=true;async function boot(){try{
  if(typeof navigator!=="undefined"&&"serviceWorker" in navigator){try{await navigator.serviceWorker.register("/sw.js",{scope:"/"});}catch{}}
  const {data:{user:currentUser},error:authError}=await supabase.auth.getUser();
  if(!alive)return;
- if(authError)throw authError;
  if(!currentUser){setLoading(false);return}
+ if(authError)throw authError;
  const {data:profile,error:profileError}=await supabase.from("profiles").select("role,approval_status").eq("id",currentUser.id).maybeSingle();
  if(!alive)return;
  if(profileError||!profile||String(profile.approval_status)!=="1"){setNotice("승인된 회원만 이용할 수 있습니다.");setLoading(false);return}
