@@ -2,7 +2,7 @@
 import {useState,useEffect} from "react";
 import Link from "next/link";
 import {supabase} from "../supabase";
-import {isApprovedProfile,isDesignUiLocked} from "../lib/design-member-access";
+import {isApprovedProfile,isDesignUiLocked,observeDesignUiLock} from "../lib/design-member-access";
 import {aiKrw,aiSignedKrw} from "../lib/ai-process-utils";
 import {getMemberProcessSnapshot,aiProcessStatusLabel,aiProcessOpportunityDday,aiProcessDurationLabel,buildAiMarketStates,buildAiMarketHistory} from "../lib/ai-process-v2-model";
 const flow=[["시장 분석","시장 데이터를 분석해 현재 조건을 확인합니다."],["기회 포착","설정 기준에 맞는 진행 구간을 탐색합니다."],["AI 진행","선정된 조건을 기반으로 프로세스를 진행합니다."],["실시간 확인","진행 상태와 데이터를 지속적으로 확인합니다."],["위험 관리","설정된 기준에 따라 위험 구간을 관리합니다."],["결과 관리","진행 결과를 확인하고 프로세스를 마무리합니다."]];
@@ -24,6 +24,7 @@ const {data,error}=await supabase.from("ai_process_members").select("*").eq("use
 setUserId(user.id);setMember(data||{user_id:user.id,status:"ready",available_count:0,investment_amount:0,duration_hours:720,min_return:800,max_return:1200});setAuthState("member");setMemberError("");
 }catch(e){if(active){setMemberError("회원 진행 정보를 불러오지 못했습니다.");setAuthState("error")}}}
 loadMember();const timer=setInterval(loadMember,10000);return()=>{active=false;clearInterval(timer)}},[]);
+useEffect(()=>observeDesignUiLock(()=>{setMember(null);setUserId(null);setAuthState("locked");setPreview(false)}),[]);
 useEffect(()=>{const timer=setInterval(()=>setTick(v=>v+1),1000);return()=>clearInterval(timer)},[]);
 const money=v=>Math.round(Number(v||0)).toLocaleString("ko-KR");
 const live=!preview&&authState==="member"&&member&&(member.status==="running"||member.status==="completed");
