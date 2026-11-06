@@ -4,13 +4,21 @@ import {useEffect,useState} from "react";
 import {supabase} from "../supabase";
 const tabs=["전체","참여 가능","참여 완료"];
 const icons={number:"01",gift_box:"□",roulette:"◉",quiz:"?",first_come:"⚡",draw:"◎",attendance:"✓"};
+function parsePublishedWinner(row){
+ const content=String(row?.content||"");
+ if(!content.startsWith("🎉 VIP EVENT · 당첨 안내"))return null;
+ const name=content.match(/🏆\s*([^\n]+?)\s*님(?:입니다|이|께|$)/)?.[1]?.trim();
+ if(!name)return null;
+ const prize=content.match(/🎁\s*당첨 상품\s*\n([^\n]+)/)?.[1]?.trim()||"";
+ return {id:row.id,name,prize,at:row.created_at};
+}
 function EventInput({item,answer,onChange,submit,busy}){
  if(item.event_type==="number")return <div className="event-action"><input type="number" min="1" max="100" value={answer||""} onChange={e=>onChange(e.target.value)} placeholder="1~100 숫자"/><button disabled={busy} onClick={()=>submit()}>숫자 제출</button></div>;
  if(item.event_type==="quiz"||item.event_type==="gift_box")return <div className="event-action"><div className="question">{item.event_type==="quiz"?item.quiz_question:"상자 하나를 선택하세요"}</div><div className="choices">{[1,2,3,4].map(n=><button key={n} className={String(answer)===String(n)?"picked":""} onClick={()=>onChange(String(n))}>{item.event_type==="quiz"?(item["quiz_option_"+n]||n+"번"):n+"번 상자"}</button>)}</div><button disabled={busy} onClick={()=>submit()}>참여하기</button></div>;
  return <div className="event-action"><button disabled={busy} onClick={()=>submit(item.event_type==="roulette"?"roulette":null)}>{item.event_type==="roulette"?"룰렛 돌리고 응모하기":item.event_type==="first_come"?"선착순 참여하기":item.event_type==="attendance"?"출석 참여하기":"응모하기"}</button></div>
 }
 export default function DesignEvent(){
-const [nickname,setNickname]=useState(""),[tab,setTab]=useState("전체"),[events,setEvents]=useState([]),[loading,setLoading]=useState(true),[signed,setSigned]=useState(false),[answers,setAnswers]=useState({}),[busy,setBusy]=useState(null),[notice,setNotice]=useState("");
+const [nickname,setNickname]=useState(""),[recentWinners,setRecentWinners]=useState([]),[tab,setTab]=useState("전체"),[events,setEvents]=useState([]),[loading,setLoading]=useState(true),[signed,setSigned]=useState(false),[answers,setAnswers]=useState({}),[busy,setBusy]=useState(null),[notice,setNotice]=useState("");
 async function load(){const {data,error}=await supabase.rpc("get_auto_events");if(error)setNotice("이벤트 조회 실패: "+error.message);else setEvents((data||[]).filter(x=>x.event_type!=="attendance"));setLoading(false)}
 useEffect(()=>{let active=true;supabase.auth.getSession().then(({data})=>{if(!active)return;setSigned(false);if(data?.session?.user){supabase.from("profiles").select("approval_status,nickname").eq("id",data.session.user.id).maybeSingle().then(({data:profile})=>{if(!active)return;if(String(profile?.approval_status)==="1"){setNickname(String(profile?.nickname||""));setSigned(true);load();}else{setSigned(false);setNotice("승인된 회원만 이벤트에 참여할 수 있습니다.");setLoading(false)}})}else setLoading(false)});return()=>{active=false}},[]);
 useEffect(()=>{if(!signed)return;const timer=setInterval(()=>{void load()},30000);return()=>clearInterval(timer)},[signed]);
