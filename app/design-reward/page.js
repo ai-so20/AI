@@ -2,7 +2,7 @@
 import {useEffect,useRef,useState} from "react";
 import Link from "next/link";
 import {supabase} from "../supabase";
-import {isApprovedProfile,isDesignUiLocked} from "../lib/design-member-access";
+import {isApprovedProfile,isDesignUiLocked,observeDesignUiLock} from "../lib/design-member-access";
 function urlBase64ToUint8Array(base64String){const padding="=".repeat((4-(base64String.length%4))%4);const base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");return Uint8Array.from([...window.atob(base64)].map(x=>x.charCodeAt(0)))}
 function Message({value,onOpenAi}){
  const raw=String(value||"");
@@ -51,6 +51,7 @@ useEffect(()=>{let alive=true;async function boot(){try{
  if(alive){setAccessState("member");setLoading(false)}
  }catch(e){if(alive){setAccessState("error");setNotice("상품 지급센터 정보를 불러오지 못했습니다.");setLoading(false)}}}
  void boot();return()=>{alive=false;if(toastTimerRef.current)clearTimeout(toastTimerRef.current)}},[]);
+useEffect(()=>observeDesignUiLock(()=>{setChat(null);setUser(null);setMessages([]);setAccessState("locked");setLoading(false)}),[]);
 useEffect(()=>{if(!chat||!user?.id)return;
  const notify=payload=>{
   if(isDesignUiLocked()||payload.eventType!=="INSERT"||payload.new?.sender_id===user.id)return;
