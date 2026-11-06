@@ -4,8 +4,8 @@ import {useEffect,useState} from "react";
 import {supabase} from "../supabase";
 const initial={checked_today:false,total_count:0,reward_ready:false,next_reward_at:30};
 export default function DesignAttendance(){
- const [status,setStatus]=useState(initial),[loading,setLoading]=useState(true),[working,setWorking]=useState(false),[notice,setNotice]=useState(""),[signedIn,setSignedIn]=useState(false);
- async function load(){const {data,error}=await supabase.rpc("get_daily_attendance_status");if(error){setNotice("출석 정보를 불러오지 못했습니다: "+error.message)}else{const row=Array.isArray(data)?data[0]:data;if(row)setStatus({checked_today:Boolean(row.checked_today),total_count:Number(row.total_count||0),reward_ready:Boolean(row.reward_ready),next_reward_at:Number(row.next_reward_at||30)});setNotice("")}setLoading(false)}
+ const [status,setStatus]=useState(initial),[loading,setLoading]=useState(true),[working,setWorking]=useState(false),[notice,setNotice]=useState(""),[signedIn,setSignedIn]=useState(false),[rewardInfo,setRewardInfo]=useState(null);
+ async function load(){const {data,error}=await supabase.rpc("get_daily_attendance_status");if(error){setNotice("출석 정보를 불러오지 못했습니다: "+error.message)}else{const row=Array.isArray(data)?data[0]:data;if(row)setStatus({checked_today:Boolean(row.checked_today),total_count:Number(row.total_count||0),reward_ready:Boolean(row.reward_ready),next_reward_at:Number(row.next_reward_at||30)})}setLoading(false)}
  useEffect(()=>{let alive=true;supabase.auth.getSession().then(({data})=>{if(!alive)return;setSignedIn(Boolean(data?.session?.user));if(data?.session?.user)load();else setLoading(false)});return()=>{alive=false}},[]);
  async function check(){if(working||status.checked_today)return;setWorking(true);const {data,error}=await supabase.rpc("check_daily_attendance");if(error)setNotice("출석 실패: "+error.message);else{const result=Array.isArray(data)?data[0]:data;await load();setNotice(result?.message||"오늘 출석이 완료되었습니다.")}setWorking(false)}
  const cycle=status.total_count>0&&status.total_count%30===0&&status.checked_today?30:status.total_count%30;
