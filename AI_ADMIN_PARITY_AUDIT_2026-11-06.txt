@@ -1,0 +1,134 @@
+AI 프로젝트 관리자 기능 6개 영역 세부 비교 / 2026-11-06
+
+[범위]
+원본: ai-so20/26 (app/v2/admin/AdminLiveClient.js + AdminMembers.js, AdminAiProcess.js, AdminRewards.js, AdminMessages.js, AdminOperations.js)
+새 프로젝트: ai-so20/AI (app/page.js, app/lib/ai-process-service.js, /design-* 페이지)
+원본 배포의 관리자 URL: /v2/admin
+신규 AI 기존 관리자: /?tab=admin ; 세부 메뉴 /?tab=members, /?tab=ai, /?tab=event, /?tab=group, /?tab=private
+관찰 방법: 두 GitHub의 실제 호출/버튼/페이지 코드 및 두 Supabase의 pg_proc 함수 존재 여부를 읽기 전용으로 대조.
+기존 26/Supabase/AI DB/Vercel 환경변수는 변경하지 않았다. 실제 관리자 로그인 후 클릭·전송·등록 테스트는 미수행.
+
+판정:
+  공통 일부 있음 = 양쪽에 유사한 사용자 동작 존재. 같은 데이터 계약이라는 뜻은 아님.
+  미확인/미이식 = 검사한 관리자 화면 파일에서 원본과 같은 조작을 확인하지 못함.
+  비호환 = 원본 RPC나 테이블이 현 AI Supabase에 없거나 다른 RPC로 작동. 복사만 해서는 실행할 수 없음.
+  실사용 검증 = 아직 완료되지 않음. Vercel READY는 빌드 성공만 의미.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+01 / 운영 요약
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+26: 전체 회원, 승인 대기, AI PROCESS 진행 중, 지급 대기 상품(일반+AI+출석), 1:1 미확인 메시지.
+    5개 운영 관리 메뉴로 빠른 이동, 새로고침.
+AI: 대시보드에서 승인 회원/승인 대기/AI 프로젝트 현황/문의 미확인, 회원·AI·이벤트 등 이동.
+공통 일부 있음: 회원·진행·문의 현황과 관리자 메뉴 연결.
+차이: 26의 3종 상품 재고 합산/지급대기 집계가 AI 관리자 대시보드와 동일한 방식으로 구현됐다고 확인할 수 없음.
+특히 26에서 사용하는 admin_get_gift_inventory / admin_get_ai_gift_inventory / admin_get_attendance_gift_inventory 함수가 AI DB에 없음.
+판정: 부분 대응 / 재고 KPI 원본 일치 미완료. 우선순위 P2.
+
+02 / 회원 관리
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+26:
+- 승인 대기 조회 get_admin_approval_list, 승인/승인 해제 admin_set_member_approval, 일괄 승인 admin_approve_all_pending_members.
+- 닉네임·실명 변경, 비밀번호 변경, 회원 직접 등록(API 연결), 그룹 퇴장/승인 해제.
+- 지급용 계정 유형 관리 admin_get_reward_account_types + admin_set_reward_account_type.
+- 회원 푸시 등록 현황 admin_get_member_push_statuses.
+AI:
+- get_admin_all_profiles + admin_set_profile_approval로 승인/거절, 검색/상태 필터.
+- admin_set_account_type으로 사람/관리형/AI 캐릭터 유형 변경, AI 캐릭터 동기화. admin_kick_member 사용.
+공통 일부 있음: 회원 검색, 승인 관리, 계정 유형, 퇴장.
+미확인/미이식(검사한 AI 기존 관리자 화면 기준):
+- 대기 회원 전체 일괄 승인, 원본과 같은 승인 해제 semantics,
+- 관리자 수동 회원 등록, 닉네임/실명 직접 수정, 비밀번호 변경,
+- 원본 지급용 계정 유형 및 푸시 등록 현황.
+DB 불일치: 26 approval_status '0'/'1', AI 'pending'/'approved'/'rejected' 등 다른 계약.
+               26 admin_set_member_approval은 현재 AI DB에 없고 AI admin_set_profile_approval은 26 DB에 없음.
+판정: 부분 대응 / 동일 방식 복사 불가. 우선순위 P1 (회원 관리 계약부터 확정).
+
+03 / AI PROCESS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+26:
+- ai_process_members 테이블 사용.
+- 회원별 진행기회 available_count, 금액 investment_amount, 기간 duration_hours, 수익률 상·하한 min_return/max_return, 상태 ready/waiting/running/completed 등 설정.
+- 수익 보존하며 저장 admin_save_ai_process_member_preserving_profit.
+- 상태 초기화 admin_reset_ai_process_member.
+- 수익 추가/차감 admin_adjust_ai_process_profit.
+AI:
+- app/lib/ai-process-service.js에서 admin_start_ai_process, admin_stop_ai_process, admin_adjust_ai_process, admin_restart_ai_process 호출.
+- 관리자 UI에서 금액/기간 설정, 시작/중단/재시작, 조정 액션 제공.
+- 실제 프로세스 세션과 시뮬레이션 소스/로그는 ai_process_sessions / ai_process_logs 계열로 구성.
+공통 일부 있음: 회원 선택, 금액 설정, 진행 시작/종료, 수익 조정.
+비호환:
+- 원본 ai_process_members 테이블이 AI DB에 없음.
+- 원본 admin_save_ai_process_member_preserving_profit / admin_reset_ai_process_member / admin_adjust_ai_process_profit RPC가 AI DB에 없음.
+- AI의 admin_start_ai_process / admin_stop_ai_process / admin_adjust_ai_process / admin_restart_ai_process RPC는 26 DB에 없음.
+- 원본의 진행기회·수익 목표 밴드·수익 보존 계약을 AI 관리자 기능이 동일하게 구현했다고 볼 근거 없음.
+판정: 핵심 비호환 / 원본 기능을 그대로 이식했다고 말하면 안 됨. 우선순위 P0 (연결 전략과 DB 계약 결정 전 쓰기 금지).
+
+04 / 상품 재고
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+26:
+- 일반 이벤트 / AI 전용 / 출석체크의 3종 재고 탭과 전체·지급대기·지급완료 현황.
+- 각 카테고리별 bulk RPC로 일괄 등록.
+- 상품별 삭제, 지급대기 전량 삭제, 지급완료 내역 삭제.
+- event/attendance: '상품명 | https://기프티콘링크' 입력 형식.
+- AI 전용: 상품명만 일괄 등록. 재고와 회원 지급 기록을 분리하여 관리.
+AI:
+- 이벤트 상품 카탈로그, 상품명/종류/이미지/재고 입력 및 admin_add_event_reward 호출.
+- admin_add_gift_links로 기프티콘 URL 재고 등록, get_admin_gift_inventory_summary로 관련 재고 집계.
+- admin_mark_event_reward_delivered로 지급완료 처리.
+공통 일부 있음: 이벤트 상품 등록, 상품 링크 등록, 지급 상태 취급.
+비호환/미이식:
+- 26의 3종 카테고리별 독립 재고 관리 페이지와 일괄등록·지급대기/지급완료 일괄삭제를 AI 기존 관리자 화면에서 동등하게 확인하지 못함.
+- 26 admin_get_gift_inventory / admin_get_ai_gift_inventory / admin_get_attendance_gift_inventory는 AI DB에 없음.
+- 26 출석 30회 지급과 AI DB 현재 출석 함수 자체가 불일치. 재고만 복사하면 출석 지급까지 동작하지 않음.
+판정: 핵심 비호환 / 26 재고·출석 지급 연결 미완료. 우선순위 P0 (계약·데이터 구조 합의 후).
+
+05 / 상품 지급 / 1:1 문의
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+26:
+- get_admin_private_chats / get_admin_member_list / get_admin_private_unread_counts.
+- 신규 1:1 대화 생성, 채팅 조회, 읽음 처리, 텍스트·링크버튼 [[LINK_BUTTON]]·사진 [[IMAGE]] 전송, 메시지 삭제, 푸시 호출.
+- 전용 상품지급 안내 내용에 기프티콘 [[GIFT_REWARD]] 표시.
+AI:
+- get_admin_private_chats, get_admin_member_list, 읽음 처리, 일반 1:1 텍스트, 그룹/개인 이미지 및 메시지 삭제, 푸시 호출 관련 코드 존재.
+- 신규 /design-reward(회원 페이지)는 [[LINK_BUTTON]], [[GIFT_REWARD]], [[IMAGE]]를 수신/표시하도록 보완됨.
+공통 일부 있음: 회원별 1:1 메시지 조회·송신, 읽음, 푸시, 메시지 삭제.
+미확인/미이식:
+- AI 기존 '관리자 전송 화면'에서 26과 동일한 링크 버튼 제작/발송 UI는 확인하지 못함. 회원 화면에 표시 코드가 있다는 사실과 별개.
+- 26 지급 템플릿·이미지/링크·푸시 전달과 AI 데이터의 실제 의미·권한 동일성 미검증.
+판정: 유사 기능 다수 / 특수지급 안내와 관리자 실제 송신 검증 필요. 우선순위 P1~P2.
+
+06 / 이벤트·운영
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+26:
+- 자동 이벤트 회차/참가자 get_auto_events, get_admin_event_entries.
+- group_message 관리, 그룹채팅 동결 set_group_chat_frozen, 관리자 메시지 삭제.
+- 당첨 공지 문구 admin_update_event_winner_footer.
+- 돌발 체험 안내/완료 안내/자동 공지 admin_update_vip_surprise_guide, admin_update_vip_surprise_settings, admin_update_vip_surprise_copy.
+- 일반 회원 돌발 이벤트 현황 admin_list_real_surprise_processes.
+AI:
+- 이벤트 자동 운영 ON/OFF(admin_set_event_runtime_enabled), get_admin_event_operations(회차·참여·당첨 현황), 상품 카탈로그·상품 이미지 등록, 홈 공지 저장, 그룹채팅 잠금/삭제.
+- 지급 처리 admin_mark_event_reward_delivered, 별도 AI 체험형 이벤트 시작 기능 제공.
+공통 일부 있음: 진행 이벤트 현황, 그룹 채팅 운영, 상품 지급/공지.
+미확인/미이식:
+- 원본 get_admin_event_entries의 회원별 참가자 명단 전용 동작,
+- 당첨 공지 하단 문구, 돌발 체험 안내/완료, 자동 공지의 26 원본 RPC와 내용 저장 계약,
+- 기존 26의 일반 회원 돌발 진행 현황과 동일한 표시·제어.
+DB 차이: 26 admin_update_event_winner_footer가 AI DB에 없음. AI get_admin_event_operations는 26 DB에 없음.
+판정: 비슷해 보이나 상당 부분 다른 운영 흐름. 우선순위 P1~P2.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+가장 먼저 결정할 3가지 (임의 작업 금지)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A. 신규 AI를 '26 운영 데이터와 동일한 기능'으로 만들 것인지, 'AI의 독립 DB·회원·별도 로직'을 유지하면서 기능만 유사하게 추가할 것인지.
+B. 원본 26 관리자 기능 중 운영상 꼭 필요한 것(특히 AI PROCESS 수익보존·진행, 3종 상품 재고·출석 보상, 회원 직접 등록·수정)을 무엇부터 이식할지.
+C. 실제 데이터 쓰기 작업과 회원 계정 테스트의 허용 범위.
+
+권장 안전 실행 순서:
+1) 26/AI의 테이블·RPC·Auth ID 매핑 차이를 읽기 전용으로 정리 (현재 수행 가능).
+2) 데이터 계약 결정 후 AI 저장소에 독립 스키마/마이그레이션 방안을 사전 검증 (이 단계에서 운영 DB 직접 수정 금지).
+3) 승인된 범위에서 백업/테스트 DB로 원본 기능별 검증.
+4) 실제 회원/관리자 테스트와 배포·데이터 검증을 분리.
+5) 전체 기능 이식 이후 홈 나머지와 디자인 최종 검수.
+
+이번 상세 비교 작업은 문서화만 실행. 운영 관리자·회원·수익·상품 DB 레코드와 배포 환경변수 변경 없음.
