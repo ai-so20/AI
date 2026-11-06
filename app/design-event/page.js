@@ -19,7 +19,18 @@ function EventInput({item,answer,onChange,submit,busy}){
 }
 export default function DesignEvent(){
 const [nickname,setNickname]=useState(""),[recentWinners,setRecentWinners]=useState([]),[tab,setTab]=useState("전체"),[events,setEvents]=useState([]),[loading,setLoading]=useState(true),[signed,setSigned]=useState(false),[answers,setAnswers]=useState({}),[busy,setBusy]=useState(null),[notice,setNotice]=useState("");
-async function load(){const {data,error}=await supabase.rpc("get_auto_events");if(error)setNotice("이벤트 조회 실패: "+error.message);else setEvents((data||[]).filter(x=>x.event_type!=="attendance"));setLoading(false)}
+async function load(){
+ const {data,error}=await supabase.rpc("get_auto_events");
+ if(error)setNotice("이벤트 조회 실패: "+error.message);
+ else{
+  const rows=(data||[]).filter(x=>x.event_type!=="attendance");
+  rows.sort((a,b)=>{const order=x=>isLive(x)?0:x.status==="scheduled"?1:x.status==="completed"?2:3;return order(a)-order(b)||Number(a.round_number||0)-Number(b.round_number||0)});
+  setEvents(rows);
+ }
+ const {data:announcements,error:announcementsError}=await supabase.from("group_messages").select("id,content,created_at").eq("is_deleted",false).like("content","🎉 VIP EVENT · 당첨 안내%").order("created_at",{ascending:false}).limit(40);
+ if(!announcementsError)setRecentWinners((announcements||[]).map(parsePublishedWinner).filter(Boolean));
+ setLoading(false);
+}
 useEffect(()=>{let active=true;supabase.auth.getSession().then(({data})=>{if(!active)return;setSigned(false);if(data?.session?.user){supabase.from("profiles").select("approval_status,nickname").eq("id",data.session.user.id).maybeSingle().then(({data:profile})=>{if(!active)return;if(String(profile?.approval_status)==="1"){setNickname(String(profile?.nickname||""));setSigned(true);load();}else{setSigned(false);setNotice("승인된 회원만 이벤트에 참여할 수 있습니다.");setLoading(false)}})}else setLoading(false)});return()=>{active=false}},[]);
 useEffect(()=>{if(!signed)return;const timer=setInterval(()=>{void load()},30000);return()=>clearInterval(timer)},[signed]);
 async function submit(item,direct){if(busy)return;let answer=direct===undefined?(answers[item.event_id]??null):direct;if(item.event_type==="number"){const n=Number(answer);if(!Number.isInteger(n)||n<1||n>100){setNotice("1~100 사이의 숫자를 선택하세요.");return}answer=String(n)}if(["quiz","gift_box"].includes(item.event_type)&&!["1","2","3","4"].includes(String(answer))){setNotice("먼저 보기를 선택하세요.");return}setBusy(item.event_id);setNotice("");if(item.event_type==="roulette")await new Promise(resolve=>setTimeout(resolve,900));try{const {data,error}=await supabase.rpc("join_auto_event",{target_event_id:item.event_id,submitted_answer:answer});if(error){setNotice("참여 실패: "+error.message)}else if(!data?.success){setNotice(data?.message||"참여가 처리되지 않았습니다.")}else{await load();setNotice(data?.message||item.title+" 참여가 완료되었습니다.")}}catch(e){setNotice("참여 처리 중 오류가 발생했습니다.")}finally{setBusy(null)}}
