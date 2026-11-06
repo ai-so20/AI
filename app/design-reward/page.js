@@ -2,6 +2,7 @@
 import {useEffect,useRef,useState} from "react";
 import Link from "next/link";
 import {supabase} from "../supabase";
+function urlBase64ToUint8Array(base64String){const padding="=".repeat((4-(base64String.length%4))%4);const base64=(base64String+padding).replace(/-/g,"+").replace(/_/g,"/");return Uint8Array.from([...window.atob(base64)].map(x=>x.charCodeAt(0)))}
 function Message({value,onOpenAi}){
  const raw=String(value||"");
  if(raw.startsWith("[[GIFT_REWARD]]")){
@@ -25,7 +26,7 @@ function messagePreview(raw){
  for(const p of ["[[GIFT_REWARD]]","[[VIP_SURPRISE_LINK]]","[[LINK_BUTTON]]"]){if(text.startsWith(p)){try{const data=JSON.parse(text.slice(p.length));return String(data.product_name||data.text||data.button_text||"새 상품 지급 안내").slice(0,140)}catch{return "새 상품 지급 안내"}}}
  return text.replace(/\s+/g," ").slice(0,140);
 }
-export default function DesignReward(){const [user,setUser]=useState(null),[chat,setChat]=useState(null),[messages,setMessages]=useState([]),[loading,setLoading]=useState(true),[notice,setNotice]=useState(""),[text,setText]=useState(""),[sending,setSending]=useState(false),[unreadAtOpen,setUnreadAtOpen]=useState(0),[toast,setToast]=useState("");const messageBoxRef=useRef(null),toastTimerRef=useRef(null);
+export default function DesignReward(){const [user,setUser]=useState(null),[chat,setChat]=useState(null),[messages,setMessages]=useState([]),[loading,setLoading]=useState(true),[notice,setNotice]=useState(""),[text,setText]=useState(""),[sending,setSending]=useState(false),[unreadAtOpen,setUnreadAtOpen]=useState(0),[toast,setToast]=useState(""),[pushWorking,setPushWorking]=useState(false),[pushEnabled,setPushEnabled]=useState(false);const messageBoxRef=useRef(null),toastTimerRef=useRef(null);
 async function refresh(id){const {data,error}=await supabase.from("private_messages").select("*").eq("chat_id",id).eq("is_deleted",false).order("created_at",{ascending:false}).limit(200);if(error)setNotice("지급 메시지를 불러오지 못했습니다.");else setMessages([...(data||[])].reverse())}
 useEffect(()=>{let alive=true;async function boot(){try{
  if(typeof navigator!=="undefined"&&"serviceWorker" in navigator){try{await navigator.serviceWorker.register("/sw.js",{scope:"/"});}catch{}}
@@ -68,6 +69,28 @@ useEffect(()=>{if(!chat||!user?.id)return;
  return()=>{supabase.removeChannel(channel);document.removeEventListener("visibilitychange",onFocus);window.removeEventListener("focus",onFocus)}
 },[chat,user?.id]);
 useEffect(()=>{if(messageBoxRef.current)messageBoxRef.current.scrollTop=messageBoxRef.current.scrollHeight},[messages.length,chat]);
+async function enablePrivateNotifications(){
+ if(!user){setNotice("회원 로그인 후 알림을 설정하세요.");return}
+ if(typeof window==="undefined"||!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window)){setNotice("이 기기에서는 푸시 알림을 지원하지 않습니다.");return}
+ const ios=/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+ const standalone=window.matchMedia?.("(display-mode: standalone)")?.matches||navigator.standalone===true;
+ if(ios&&!standalone){setNotice("아이폰은 홈 화면에 앱을 추가하고 앱으로 실행한 뒤 알림을 설정해주세요.");return}
+ setPushWorking(true);setNotice("");
+ try{
+ let permission=Notification.permission;
+ if(permission==="default")permission=await Notification.requestPermission();
+ if(permission!=="granted"){setNotice(permission==="denied"?"브라우저 알림 권한이 차단되어 있습니다.":"알림이 허용되지 않았습니다.");return}
+ const registration=await navigator.serviceWorker.register("/sw.js",{scope:"/",updateViaCache:"none"});
+ await registration.update().catch(()=>{});
+ let subscription=await registration.pushManager.getSubscription();
+ if(!subscription){const key=process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;if(!key)throw new Error("알림 설정 정보를 확인할 수 없습니다.");subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(key)})}
+ const json=subscription.toJSON();
+ if(!json.endpoint||!json.keys?.p256dh||!json.keys?.auth)throw new Error("알림 구독 정보를 만들지 못했습니다.");
+ const {error}=await supabase.from("push_subscriptions").upsert({user_id:user.id,endpoint:json.endpoint,p256dh:json.keys.p256dh,auth:json.keys.auth,user_agent:navigator.userAgent,updated_at:new Date().toISOString()},{onConflict:"endpoint"});
+ if(error)throw error;
+ setPushEnabled(true);setNotice("상품 지급 알림이 설정되었습니다.");
+ }catch(e){setNotice("알림 설정 실패: "+(e?.message||"알 수 없는 오류"))}finally{setPushWorking(false)}
+}
 async function sendPush(targetChat,content){try{const {data}=await supabase.auth.getSession();const token=data?.session?.access_token;if(!token)return;await fetch("/api/push/private-message",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+token},cache:"no-store",body:JSON.stringify({chatId:targetChat,content,destination:"design-reward"})})}catch{}}
 async function send(e){e.preventDefault();const content=text.trim();if(!content||!chat||!user||sending)return;setSending(true);setNotice("");try{const {error}=await supabase.from("private_messages").insert({chat_id:chat,sender_id:user.id,message_type:"text",content,is_deleted:false,is_read:false});if(error){setNotice("메시지 전송 실패: "+error.message)}else{setText("");await refresh(chat);void sendPush(chat,content)}}catch{setNotice("메시지 전송 중 오류가 발생했습니다.")}finally{setSending(false)}}
 const gifts=messages.filter(m=>String(m.content||"").startsWith("[[GIFT_REWARD]]")).length;
