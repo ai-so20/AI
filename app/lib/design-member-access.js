@@ -15,3 +15,16 @@ export function isDesignUiLocked() {
     return true;
   }
 }
+
+export function observeDesignUiLock(onLock) {
+  if (typeof window === "undefined") return () => {};
+  const handleChange = () => {
+    if (isDesignUiLocked()) onLock();
+  };
+  window.addEventListener("storage", handleChange);
+  window.addEventListener("focus", handleChange);
+  return () => {
+    window.removeEventListener("storage", handleChange);
+    window.removeEventListener("focus", handleChange);
+  };
+}
