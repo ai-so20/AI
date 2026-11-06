@@ -193,4 +193,32 @@ get_my_private_unread_count 읽기, mark_private_chat_read, 실시간 INSERT 알
 - 실제 승인 회원 브라우저에서 과거 당첨 공지 접근, 응모 및 회차 결과 노출 확인은 아직 미실시. 운영 DB에 쓰기/참여 테스트를 무단 수행하지 말 것.
 - 다음 작업: AI PROCESS 대기/진행/완료 데이터의 26 원본 일치성 검증. 이후 홈 하단 주식·코인 등 남은 기능.
 
+11. AI PROCESS 데이터·그래프 원본 비교 및 연결 문제 (2026-11-06)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[이번 수정]
+- 원본 26: app/v2/V2LiveClientStage2.js. 신규 AI: app/lib/ai-process-v2-model.js 및 app/design-ai-process/page.js.
+- ai-process-v2-model.js의 getMemberProcessSnapshot / market state / market history 원본 코드가 26과 동일함을 확인. AI_PROCESS_STEP_MINUTES=3 일치.
+- 신규 페이지 그래프를 별도 buildAiChartModel 재계산 대신 원본 snapshot.chartPoints 좌표를 이용하도록 변경(그래프 시각 컨테이너는 유지). 원본과 동일한 평가금액 변동 곡선.
+- 최초 step=0 투자금만 있는 상태를 '반영 기록 1건'으로 오인하던 표시 수정. 3분 반영 step>0만 기록.
+- 진행 가능/대기/진행/완료 상태 라벨, 탭의 실제 활성상태, 예상·누적 반영 횟수, 수익/수익률 양수 표기 및 완료시 카운트다운 표시 조정.
+- 주식·코인 8종의 AI 판단 action 문구를 시장 상태에 추가. /api/ai-assets 조회의 갱신/최근 정상값/가격 연결 대기 상태 구분.
+- 작업 커밋: e20cdb4d, 9412ab70, 51aace43, 029b1ef75113deb835a16b827a74c6407ffc1fe8. 최종 기능 커밋 029b1ef7 Vercel READY 확인.
+- 실제 회원 계정으로 running/completed 테스트는 불가. 원본 26 DB에는 조사 당시 ai_process_members 2개 행 모두 status=ready. 진행중/완료 데이터가 없어 실제 운영값 대조 불가.
+
+[중요: 프로젝트별 Supabase 연결이 다름 — 임의 변경 금지]
+- Vercel 프로젝트 26의 운영 환경변수 NEXT_PUBLIC_SUPABASE_URL은 Supabase amgeyannjsslzmoowcmd 를 가리킴.
+- Vercel 프로젝트 AI의 운영 환경변수 NEXT_PUBLIC_SUPABASE_URL은 별도 이전 Supabase vyjtpushaumjedcfwxbn 를 가리킴.
+- 이것은 실제 운영 프로젝트 환경설정을 '읽어서 비교'한 검증 결과이며, GitHub 프로젝트명이나 추측에서 도출하지 않음.
+- 26 DB에는 ai_process_members와 get_daily_attendance_status, check_daily_attendance가 존재.
+- 현재 AI가 연결된 이전 DB에는 ai_process_sessions는 존재하나 ai_process_members가 없음. 또한 위 두 출석 RPC가 없음. AI PROCESS 새 페이지의 ai_process_members 조회는 현재 연결하에서는 정상 동작할 수 없음. 출석 페이지도 해당 RPC 호출 실패가 예상됨.
+- AI의 이전 DB에는 get_auto_events, join_auto_event, get_or_create_admin_chat, mark_private_chat_read, get_my_private_unread_count RPC는 존재. 단, 26과 실제 계약 일치 여부는 별도 검증 필요.
+- 이 상황을 '기능 이식 완료'라고 오해하지 말 것. 코드/빌드 성공 != 실사용 연결 완료.
+- 원본 26, 기존 AI, 두 Supabase DB, Vercel 환경변수 모두 읽기 전용으로 확인했으며 변경하지 않음.
+- 사용자 지시: 26과 기존 프로젝트 작업을 절대 섞지 말 것. 따라서 AI의 Vercel 연결을 26 DB로 자동 변경하거나 DB 복제, 유저 정보 이관, SQL 스키마 추가 금지. 두 Supabase 프로젝트의 회원 Auth ID도 다를 수 있어 단순 전환은 안전하지 않음.
+- 관련 결정과 명시적 범위 합의 이전에는 연결 변경 없이 안전한 코드·디자인의 26 기능 대조만 진행.
+
+[다음]
+- 홈의 하단 주식·코인 정보/AI 판단 상태만 원본 26과 대조. 나머지 홈 변경 금지.
+- 별도 이슈: AI PROCESS와 출석의 실사용 검증은 Supabase 데이터 연결 전략이 확정되어야 진행 가능.
+
 끝.
