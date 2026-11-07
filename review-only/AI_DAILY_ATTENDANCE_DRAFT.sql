@@ -14,20 +14,30 @@
 
 begin;
 
-create table if not exists public.ai_daily_checkins (
+create table public.ai_daily_checkins (
   member_id uuid not null references public.profiles(id) on delete cascade,
   attendance_date date not null,
   checked_at timestamptz not null default now(),
   constraint ai_daily_checkins_pkey primary key(member_id, attendance_date)
 );
 
--- RLS is enabled even though only the controlled RPC is allowed to write.
+-- Preserve 30/60/90/... milestones without creating gift inventory or deliveries.
+create table public.ai_attendance_milestones (
+  member_id uuid not null references public.profiles(id) on delete cascade,
+  milestone_count integer not null check (milestone_count > 0 and milestone_count % 30 = 0),
+  reached_at timestamptz not null default now(),
+  constraint ai_attendance_milestones_pkey primary key(member_id, milestone_count)
+);
+
+-- Direct mutation is denied; privileged RPC performs the strictly checked insert.
 alter table public.ai_daily_checkins enable row level security;
+alter table public.ai_attendance_milestones enable row level security;
 
 revoke all on table public.ai_daily_checkins from public, anon, authenticated;
+revoke all on table public.ai_attendance_milestones from public, anon, authenticated;
 grant select on table public.ai_daily_checkins to authenticated;
+grant select on table public.ai_attendance_milestones to authenticated;
 
-drop policy if exists "ai_daily_checkins_owner_read" on public.ai_daily_checkins;
 create policy "ai_daily_checkins_owner_read"
 on public.ai_daily_checkins
 as permissive for select to authenticated
@@ -41,8 +51,21 @@ using (
   )
 );
 
+create policy "ai_attendance_milestones_owner_read"
+on public.ai_attendance_milestones
+as permissive for select to authenticated
+using (
+  member_id = (select auth.uid())
+  and exists (
+    select 1 from public.profiles as p
+    where p.id = (select auth.uid())
+      and p.role = 'member'
+      and p.approval_status = 'approved'
+  )
+);
+
 -- Read-only RPC returns the original client contract, using this DB's own records.
-create or replace function public.get_daily_attendance_status()
+create function public.get_daily_attendance_status()
 returns jsonb
 language plpgsql
 security definer
@@ -53,6 +76,7 @@ declare
   v_today date := (now() at time zone 'Asia/Seoul')::date;
   v_total integer;
   v_checked boolean;
+  v_pending boolean;
   v_target integer;
 begin
   if v_user is null or not exists (
@@ -70,15 +94,17 @@ begin
     where a.member_id = v_user and a.attendance_date = v_today
   ) into v_checked;
 
-  v_target := case
-    when v_total > 0 and v_total % 30 = 0 then v_total
-    else (v_total / 30 + 1) * 30
-  end;
+  select exists (
+    select 1 from public.ai_attendance_milestones as m
+    where m.member_id = v_user
+  ) into v_pending;
+
+  v_target := (v_total / 30 + 1) * 30;
 
   return jsonb_build_object(
     'checked_today', v_checked,
     'total_count', v_total,
-    'reward_ready', v_total > 0 and v_total % 30 = 0,
+    'reward_ready', v_pending,
     'next_reward_at', v_target,
     'reward_status', 'deferred',
     'gift_delivered', false
@@ -87,7 +113,7 @@ end;
 $$;
 
 -- Atomic check-in. Primary key plus ON CONFLICT is the duplicate-request guard.
-create or replace function public.check_daily_attendance()
+create function public.check_daily_attendance()
 returns jsonb
 language plpgsql
 security definer
@@ -116,11 +142,18 @@ begin
   select count(*)::integer into v_total
   from public.ai_daily_checkins as a where a.member_id = v_user;
 
-  v_milestone := (v_total > 0 and v_total % 30 = 0);
-  v_target := case
-    when v_milestone then v_total
-    else (v_total / 30 + 1) * 30
-  end;
+  if coalesce(v_new, false) and v_total > 0 and v_total % 30 = 0 then
+    insert into public.ai_attendance_milestones (member_id, milestone_count)
+    values (v_user, v_total)
+    on conflict (member_id, milestone_count) do nothing;
+  end if;
+
+  select exists (
+    select 1 from public.ai_attendance_milestones as m
+    where m.member_id = v_user
+  ) into v_milestone;
+
+  v_target := (v_total / 30 + 1) * 30;
 
   return jsonb_build_object(
     'success', true,
@@ -153,8 +186,9 @@ commit;
 -- [ ] Call both as signed-in unapproved user/admin: access denied.
 -- [ ] Approved member A: 0 -> 1 today; duplicate same-day check remains 1.
 -- [ ] Two simultaneous checks for member A: only one row for KST date.
--- [ ] Member B cannot SELECT member A's records; cannot INSERT directly.
+-- [ ] Member B cannot SELECT member A's records or milestones; cannot INSERT either table directly.
 -- [ ] KST 23:59 -> 00:00 test in isolated environment, no client timezone dependence.
--- [ ] At count 30: reward_ready=true but NO gift URL/stock/delivery row created.
+-- [ ] At count 30: a pending milestone ledger row is created ONCE, but no gift URL/stock/delivery row.
+-- [ ] At count 31: milestone 30 remains recorded, reward_ready stays true while unpaid.
 -- [ ] Repeated count-30 check produces no duplicate, no gift payment.
 -- [ ] Confirm previously existing attendance_records and events remain unchanged.
