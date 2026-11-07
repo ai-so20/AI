@@ -1,6 +1,7 @@
 "use client";
 import {useState,useEffect} from "react";
 import {useRouter} from "next/navigation";
+import "./market-home.css";
 import {isApprovedProfile,isDesignUiLocked,observeDesignUiLock} from "../lib/design-member-access";
 import {supabase} from "../supabase";
 import {buildStoredSessionSnapshot,buildStoredMarketStates,buildStoredMarketHistory} from "../lib/ai-process-session-view";
