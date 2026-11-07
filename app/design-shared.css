@@ -159,3 +159,9 @@
 .reward-stage .reward-actions button{border-radius:6px!important;background:#f0f5fb!important;color:#1c659e!important}
 @media(max-width:500px){.ai-page,.event-stage,.attendance-design,.reward-stage{padding:0!important}
 .ai-page .ai-shell,.event-stage .event-phone,.attendance-design .page,.reward-stage .shell{box-shadow:none!important}}
+
+/* Plain text event masthead: no image/logo artwork. */
+.event-stage .event-hero .brand{justify-content:space-between!important}
+.event-stage .event-hero .event-back{text-decoration:none!important;font-size:12px!important;font-weight:650!important;color:#738398!important}
+.event-stage .event-hero .event-wordmark{font-size:16px!important;font-weight:830!important;color:#213852!important;letter-spacing:-.65px!important}
+.event-stage .event-hero .event-wordmark span{color:#1668c4!important}
