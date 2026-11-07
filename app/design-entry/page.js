@@ -93,41 +93,63 @@ export default function DesignEntry(){
     }catch{setNotice("계정 전환에 실패했습니다. 다시 시도해주세요.")}
     finally{setWorking(false)}
   }
-  return <main className="design-entry"><section className="entry-panel">
-    <Link href="/design-home" className="back">‹ 신규 홈</Link>
-    <span className="eyebrow">AI PROCESS · MEMBER ENTRY</span>
-    <h1>회원 입장</h1>
-    <p className="intro">기존 AI 계정으로 로그인하면 요청한 신규 페이지로 이동합니다.</p>
-    {loading?<p className="status">회원 로그인 확인 중</p>:existing?
-      <div className="entry-actions"><p><strong>{existing.nickname||"회원"}</strong> 계정으로 입장할 수 있습니다.</p>
-        <button type="button" onClick={()=>navigateAfterEntry(router,existing)} disabled={working}>잠금 해제 후 입장</button>
-        <button type="button" className="secondary" onClick={switchAccount} disabled={working}>다른 계정으로 로그인</button>
-      </div>:
-      <form onSubmit={submit}>
-        <label htmlFor="design-nickname">닉네임</label>
-        <input id="design-nickname" value={nickname} maxLength={40} onChange={e=>setNickname(e.target.value)} autoComplete="username" required/>
-        <label htmlFor="design-password">비밀번호</label>
-        <input id="design-password" type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required/>
-        <button type="submit" disabled={working}>{working?"확인 중":"로그인 후 이동"}</button>
-      </form>
-    }
-    {notice&&<p className="notice" role="status">{notice}</p>}
-    <p className="foot">이 페이지는 기존 AI 로그인 API를 사용하며 회원 데이터나 지급 기록을 변경하지 않습니다.</p>
-  </section><style jsx>{`
-    .design-entry{min-height:100vh;display:grid;place-items:center;background:#f2f6fb;color:#14253e;padding:24px 15px;font-family:Arial,"Noto Sans KR",sans-serif}
-    .entry-panel{width:min(100%,430px);background:white;padding:30px 25px;border:1px solid #dfe8f2;border-radius:14px}
-    .eyebrow{display:block;margin-top:35px;color:#1674d9;font-size:10px;font-weight:800;letter-spacing:1px}
-    h1{font-size:27px;margin:10px 0 6px}
-    .intro{color:#697a8e;font-size:12px;line-height:1.8;margin-bottom:25px}
-    form{display:flex;flex-direction:column;gap:9px}
-    label{font-size:12px;font-weight:700;margin-top:8px}
-    input{width:100%;height:45px;border:1px solid #cedae8;border-radius:8px;padding:0 12px;background:#fff;font-size:15px}
-    button{width:100%;min-height:46px;margin-top:16px;border:0;border-radius:8px;background:#116bd5;color:white;font-size:14px;font-weight:800;cursor:pointer}
-    button:disabled{opacity:.65;cursor:default}
-    .secondary{background:#edf4fc;color:#1f619f;margin-top:7px}
-    .entry-actions p{font-size:13px;line-height:1.7}
-    .notice{font-size:12px;color:#a64242;line-height:1.6;margin:20px 0 0}
-    .status{font-size:13px;color:#60758b}
-    .foot{font-size:10px;color:#8b99a9;line-height:1.7;margin-top:27px}
+  return <main className="design-entry"><div className="entry-shell">
+    <header className="entry-header">
+      <Link href="/design-home" className="back">‹ 홈</Link>
+      <span className="wordmark"><strong>AI</strong> PROCESS</span>
+    </header>
+    <div className="entry-content">
+      <span className="eyebrow">MEMBER ACCESS</span>
+      <h1>안녕하세요.<br/>회원 입장을 시작합니다.</h1>
+      <p className="intro">기존 AI 계정으로 로그인한 후<br/>이용하시던 화면으로 돌아갈 수 있습니다.</p>
+      {loading?<p className="status" role="status">로그인 상태를 확인하고 있습니다.</p>:existing?
+        <div className="entry-actions">
+          <div className="member-detail"><small>확인된 회원 계정</small><strong>{existing.nickname||"회원"}</strong></div>
+          <button type="button" onClick={()=>navigateAfterEntry(router,existing)} disabled={working}>잠금 해제 후 입장 <span>›</span></button>
+          <button type="button" className="secondary" onClick={switchAccount} disabled={working}>다른 계정으로 로그인</button>
+        </div>:
+        <form onSubmit={submit}>
+          <label htmlFor="design-nickname">닉네임</label>
+          <input id="design-nickname" value={nickname} maxLength={40} onChange={e=>setNickname(e.target.value)} autoComplete="username" placeholder="가입 시 등록한 닉네임" required/>
+          <label htmlFor="design-password">비밀번호</label>
+          <input id="design-password" type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" placeholder="비밀번호 입력" required/>
+          <button type="submit" disabled={working}>{working?"로그인 확인 중":"회원 로그인"} <span>›</span></button>
+        </form>
+      }
+      {notice&&<p className="notice" role="alert">{notice}</p>}
+      <div className="entry-note"><strong>회원 서비스 안내</strong><p>가입된 계정의 승인 상태를 확인한 후 이동합니다. 승인 대기 중인 계정은 이용할 수 없습니다.</p></div>
+    </div>
+    <footer className="entry-footer"><span>AI PROCESS</span><span>MEMBER SERVICE</span></footer>
+  </div><style jsx>{`
+    *{box-sizing:border-box}
+    .design-entry{background:#e9eef4;min-height:100vh;padding:0 12px;color:#1d3047;font-family:"Pretendard Variable","Pretendard","Apple SD Gothic Neo","Malgun Gothic",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+    .entry-shell{width:min(100%,460px);min-height:100vh;margin:auto;background:#fff;box-shadow:0 0 48px #1f3a5912;display:flex;flex-direction:column}
+    .entry-header{height:70px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e9edf2;padding:0 25px}
+    .back{font-size:12px;color:#728198;text-decoration:none}
+    .wordmark{font-size:16px;font-weight:840;letter-spacing:-.7px}
+    .wordmark strong{color:#1867ba}
+    .entry-content{padding:47px 26px 28px;flex:1}
+    .eyebrow{font-size:10px;color:#336d9f;font-weight:800;letter-spacing:1.3px}
+    h1{font-size:29px;line-height:1.42;letter-spacing:-1.3px;color:#192c45;margin:13px 0 12px;font-weight:810}
+    .intro{font-size:12px;line-height:1.8;color:#78879a;margin:0 0 38px}
+    form{display:flex;flex-direction:column;gap:0}
+    label{font-size:12px;font-weight:760;color:#31475f;margin:0 0 9px}
+    input{height:50px;border:1px solid #dae2ec;background:#fafcff;border-radius:7px;padding:0 13px;margin-bottom:23px;color:#1d3045;font-size:14px;outline:none}
+    input:focus{border-color:#1c6abd;box-shadow:0 0 0 2px #c9e0f7}
+    input::placeholder{color:#a1acba}
+    button[type=submit],.entry-actions>button:first-of-type{width:100%;display:flex;justify-content:space-between;align-items:center;min-height:52px;border:0;border-radius:8px;background:#155fb5;color:white;padding:0 18px;font-weight:800;font-size:14px;cursor:pointer;margin-top:5px}
+    button span{font-size:20px;font-weight:400}
+    button:disabled{opacity:.6;cursor:default}
+    .member-detail{border-top:2px solid #1b588e;border-bottom:1px solid #e6edf3;padding:22px 5px;margin-bottom:22px}
+    .member-detail small{display:block;color:#8292a4;font-size:11px;margin-bottom:11px}
+    .member-detail strong{font-size:22px;color:#1b3048}
+    .entry-actions .secondary{width:100%;border:1px solid #dce6f0;color:#3b648b;background:#f6f9fd;border-radius:7px;margin-top:10px;min-height:45px;font-size:12px;font-weight:750;cursor:pointer}
+    .status{color:#5f7085;font-size:12px;border-top:1px solid #e6ebf1;padding:22px 0}
+    .notice{font-size:12px;color:#b23b44;line-height:1.65;margin:20px 0 0}
+    .entry-note{border-top:1px solid #e5ebf2;margin-top:43px;padding:19px 1px}
+    .entry-note strong{font-size:12px;color:#2b4865}
+    .entry-note p{font-size:11px;color:#8390a0;line-height:1.75;margin:8px 0 0}
+    .entry-footer{border-top:1px solid #eef1f5;padding:18px 26px 23px;display:flex;justify-content:space-between;color:#a1acb8;font-size:10px;letter-spacing:.3px}
+    @media(max-width:500px){.design-entry{padding:0}.entry-shell{box-shadow:none}}
   `}</style></main>
 }
