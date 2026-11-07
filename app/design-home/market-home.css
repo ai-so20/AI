@@ -1,0 +1,19 @@
+/* Full-width flat asset rows on the design home, not other pages. */
+.stage .phone .market-wrap .ai-assets-panel{padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+.stage .phone .market-wrap .ai-assets-panel .section-title{padding-bottom:13px!important;margin:0!important}
+.stage .phone .market-wrap .ai-assets-panel .section-title b{font-size:16px!important;color:#1b2c43}
+.stage .phone .market-wrap .ai-assets-panel .section-title span{font-size:10px!important}
+.stage .phone .market-wrap .ai-assets-info{border-top:1px solid #e9edf2;background:#f5f8fb!important;border-radius:0!important;color:#79889b!important}
+.stage .phone .market-wrap .ai-assets-process{padding:12px 3px!important;margin:0!important;border-bottom:1px solid #e9edf2}
+.stage .phone .market-wrap .ai-assets-counts{background:#f3f7fc!important;border-radius:4px!important}
+.stage .phone .market-wrap .ai-assets-list{display:block!important;margin-top:0!important}
+.stage .phone .market-wrap .ai-assets-row{display:flex!important;border:0!important;border-radius:0!important;background:none!important;box-shadow:none!important;padding:14px 1px!important;gap:11px!important;border-bottom:1px solid #edf0f4!important}
+.stage .phone .market-wrap .ai-assets-mark{width:34px!important;height:34px!important;border-radius:8px!important;background:#edf3f9!important;color:#316ba8!important}
+.stage .phone .market-wrap .ai-assets-name strong{font-size:12px!important;color:#243951}
+.stage .phone .market-wrap .ai-assets-name small{font-size:10px!important}
+.stage .phone .market-wrap .ai-assets-price strong{font-size:12px!important}
+.stage .phone .market-wrap .ai-assets-state{padding-left:45px!important;margin-top:-4px!important;border-top:0!important;gap:5px 8px!important}
+.stage .phone .market-wrap .ai-assets-state>small{font-size:10px!important}
+.stage .phone .market-wrap .ai-assets-history{background:#f8fafc!important;border:0!important;border-radius:0!important}
+.stage .phone .market-wrap .ai-assets-note{font-size:10px!important}
+
