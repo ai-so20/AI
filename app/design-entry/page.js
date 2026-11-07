@@ -83,11 +83,15 @@ export default function DesignEntry(){
     finally{setWorking(false)}
   }
   async function switchAccount(){
+    if(working)return;
     setWorking(true);
-    try{await supabase.auth.signOut()}catch{}
-    setExisting(null);setNotice("");
-    if(typeof window!=="undefined")window.localStorage.removeItem("vip-ui-locked");
-    setWorking(false);
+    try{
+      const {error}=await supabase.auth.signOut();
+      if(error)throw error;
+      setExisting(null);setNotice("");setNickname("");setPassword("");
+      if(typeof window!=="undefined")window.localStorage.removeItem("vip-ui-locked");
+    }catch{setNotice("계정 전환에 실패했습니다. 다시 시도해주세요.")}
+    finally{setWorking(false)}
   }
   return <main className="design-entry"><section className="entry-panel">
     <Link href="/design-home" className="back">‹ 신규 홈</Link>
