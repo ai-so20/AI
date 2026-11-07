@@ -1,0 +1,161 @@
+
+/* Shared visual foundation for the isolated AI member design pages only.
+   No styles are applied to the legacy root application or its admin pages. */
+.design-member-nav{position:fixed;z-index:30;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,460px);display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#fff;border-top:1px solid #e7ecf2;padding:11px 4px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -5px 20px #1b35520c}
+.design-member-nav a{min-width:0;display:flex;align-items:center;flex-direction:column;gap:6px;color:#8a98aa;text-decoration:none;font-family:"Pretendard Variable","Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif;font-size:9px;font-weight:680;letter-spacing:-.4px;white-space:nowrap}
+.design-member-nav a.current{color:#1568c5}
+.design-member-nav a:focus-visible,.design-member-nav a:hover{color:#1568c5}
+.design-member-nav svg{flex:none}
+:where(.ai-page,.event-stage,.attendance-design,.reward-stage){font-family:"Pretendard Variable","Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif!important;-webkit-font-smoothing:antialiased}
+:where(.ai-page,.event-stage,.attendance-design,.reward-stage) button{font-family:inherit}
+:where(.ai-page,.event-stage,.attendance-design,.reward-stage) button:focus-visible,
+:where(.ai-page,.event-stage,.attendance-design,.reward-stage) a:focus-visible{outline:2px solid #2175c7;outline-offset:3px}
+@media (prefers-reduced-motion:reduce){:where(.ai-page,.event-stage,.attendance-design,.reward-stage) *{scroll-behavior:auto!important;animation-duration:.01ms!important}}
+
+/* AI PROCESS: bank-like account summary, clear editorial sections and no card grid. */
+.ai-page{background:#e9eef4!important;color:#1b2e44!important;padding:0 12px!important}
+.ai-page .ai-shell{max-width:460px!important;background:#fff!important;box-shadow:0 0 48px #1f3a5912!important;min-height:100vh!important;padding-bottom:calc(94px + env(safe-area-inset-bottom))!important}
+.ai-page .ai-shell>header{background:#fff!important;border-bottom:1px solid #edf0f4!important;padding:20px 24px 24px!important}
+.ai-page .ai-top{margin-bottom:27px!important}
+.ai-page .ai-top a{color:#6e7e91!important;font-size:12px!important}
+.ai-page .ai-top b{color:#1b2e44!important;letter-spacing:-.5px!important;font-size:16px!important}
+.ai-page .ai-shell>header>small{color:#326da9!important;letter-spacing:1.1px!important;font-size:10px!important}
+.ai-page .ai-shell h1{font-size:27px!important;line-height:1.42!important;margin:10px 0 7px!important;letter-spacing:-1.1px!important;color:#1b2e44!important}
+.ai-page .ai-shell>header p{font-size:12px!important;line-height:1.7!important;color:#748398!important}
+.ai-page .ai-tabs{margin:0!important;background:#fff!important;border-bottom:1px solid #e5ebf2!important;padding:0 22px!important;border-radius:0!important;gap:4px!important}
+.ai-page .ai-tabs button{border-radius:0!important;padding:16px 0 14px!important;color:#8090a3!important;background:#fff!important;box-shadow:none!important;font-size:12px!important;border-bottom:2px solid transparent!important}
+.ai-page .ai-tabs button.active{color:#1c66b7!important;border-bottom-color:#1e70c6!important}
+.ai-page .ai-note{margin:13px 24px 8px!important;font-size:10px!important;line-height:1.7!important;color:#8a98aa!important}
+.ai-page .ai-body{padding:0 22px!important}
+.ai-page .ai-hero{background:#fff!important;border-radius:0!important;color:#1b2e44!important;border-top:2px solid #184b82!important;border-bottom:1px solid #e3eaf1!important;padding:18px 2px 21px!important;margin-top:15px!important}
+.ai-page .ai-hero-top{font-size:11px!important;color:#2e638e!important}
+.ai-page .ai-hero-top b{background:#edf5fc!important;color:#23629c!important;border-radius:4px!important;font-size:10px!important}
+.ai-page .ai-ready-main{padding:26px 0 23px!important}
+.ai-page .ai-ready-main small,.ai-page .ai-value small,.ai-page .ai-hero-grid small{color:#76869b!important;font-size:11px!important}
+.ai-page .ai-ready-main strong,.ai-page .ai-value strong{color:#1a304c!important;font-size:35px!important;letter-spacing:-1.4px!important}
+.ai-page .ai-ready-main p{color:#75869a!important;line-height:1.75!important}
+.ai-page .ai-entry-link{color:#1d65b1!important;border:1px solid #c8dbee!important;border-radius:7px!important}
+.ai-page .ai-hero-grid{border-top:1px solid #e9edf2!important;gap:15px 12px!important;padding-top:17px!important}
+.ai-page .ai-hero-grid b{color:#233c59!important;font-size:12px!important}
+.ai-page .ai-value{padding:23px 0 25px!important}
+.ai-page .ai-panel{background:#fff!important;border:0!important;border-top:1px solid #e5ebf2!important;border-radius:0!important;box-shadow:none!important;padding:21px 2px 23px!important;margin-top:6px!important}
+.ai-page .ai-panel h2{font-size:17px!important;letter-spacing:-.5px!important;color:#1e3047!important}
+.ai-page .ai-panel p{color:#708196!important;font-size:12px!important;line-height:1.75!important}
+.ai-page .ai-label{color:#3b6d9f!important;letter-spacing:1px!important;font-size:10px!important}
+.ai-page .ai-flow>div{border-top:1px solid #e8edf3!important;padding:15px 0!important}
+.ai-page .ai-flow>div>span{color:#316da7!important}
+.ai-page .ai-tint{background:#f4f7fb!important;border:0!important;border-left:3px solid #2d78c4!important;padding:19px 18px!important;margin-top:16px!important}
+.ai-page .ai-steps>div{padding:13px 0!important}
+.ai-page .ai-steps i{background:#edf3f9!important;color:#2d6da8!important;border-radius:6px!important}
+.ai-page .ai-event-link{background:#f2f6fb!important;color:#215f9b!important;border-radius:6px!important}
+.ai-page .ai-consult{border-top:1px solid #dae5ef!important;border-radius:0!important;color:#345e83!important;background:transparent!important;padding:13px 0 0!important}
+.ai-page .ai-stages{display:flex!important;flex-direction:column!important;gap:0!important}
+.ai-page .ai-stages>div{display:flex!important;align-items:center;justify-content:space-between;gap:12px;background:transparent!important;border-bottom:1px solid #e9edf2!important;border-radius:0!important;padding:12px 1px!important}
+.ai-page .ai-stages>div small{min-width:28px;font-size:10px!important;color:#326ea9!important}
+.ai-page .ai-stages>div b{margin:0 auto 0 0!important;font-size:12px!important}
+.ai-page .ai-fold{padding:0!important}
+.ai-page .ai-fold>button{padding:20px 2px!important}
+.ai-page .ai-fold>button b{color:#2e6ca9!important}
+.ai-page .ai-fold-body{padding:0 2px 15px!important}
+.ai-page .ai-asset{padding:13px 0!important;border-top-color:#edf1f5!important}
+.ai-page .ai-asset-name i{background:#eef3f8!important;color:#316ba7!important;border-radius:6px!important}
+.ai-page .ai-chart{background:#f7fafc!important;border-radius:0!important}
+.ai-page .ai-stats{border-bottom:1px solid #e9edf2!important}
+
+/* Events: replace oversized photographic banner and floating cards with a flat content index. */
+.event-stage{background:#e9eef4!important;color:#1b2e44!important;padding:0 12px!important}
+.event-stage .event-phone{max-width:460px!important;background:#fff!important;box-shadow:0 0 48px #1f3a5912!important;padding-bottom:calc(94px + env(safe-area-inset-bottom))!important}
+.event-stage .event-hero{background:#fff!important;height:auto!important;min-height:0!important;padding:0 24px 27px!important;border-bottom:1px solid #e7ecf2!important}
+.event-stage .event-hero .brand{height:69px!important;display:flex!important;align-items:center!important;border-bottom:1px solid #edf0f4!important;font-size:18px!important;color:#1b2e44!important;font-weight:830!important;letter-spacing:-.7px!important}
+.event-stage .event-hero .logo{font-size:0!important;padding:0!important}
+.event-stage .event-hero .logo:before{content:"AI";font-size:18px!important;letter-spacing:-.7px;color:#1666bd!important}
+.event-stage .chip{margin-top:26px!important;background:none!important;border-radius:0!important;padding:0!important;color:#326fa9!important;font-size:10px!important;letter-spacing:1px!important}
+.event-stage .event-hero h1{font-size:28px!important;line-height:1.4!important;color:#1e3046!important;margin:12px 0 9px!important;letter-spacing:-1.3px!important}
+.event-stage .event-hero p{color:#748398!important;font-size:12px!important;line-height:1.75!important}
+.event-stage .event-body{padding:0 22px!important}
+.event-stage .event-summary{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;box-shadow:none!important;border:0!important;border-bottom:1px solid #e6ecf2!important;border-radius:0!important;padding:21px 0 22px!important;background:#fff!important}
+.event-stage .event-summary>div{padding:0 8px!important}
+.event-stage .event-summary>div:first-child{padding-left:0!important}
+.event-stage .event-summary span{font-size:10px!important;color:#8090a3!important}
+.event-stage .event-summary strong{font-size:24px!important;color:#1b2e44!important}
+.event-stage .section-heading{margin:27px 1px 13px!important}
+.event-stage .section-heading h2{font-size:17px!important;color:#1b2e44!important}
+.event-stage .tabs{border-bottom:1px solid #e9edf2!important;margin:0 0 10px!important;gap:18px!important}
+.event-stage .tabs button{background:#fff!important;border-radius:0!important;padding:11px 1px 12px!important;border-bottom:2px solid transparent!important;color:#8190a3!important}
+.event-stage .tabs button.active{color:#1e69b9!important;border-bottom-color:#1f6dc4!important}
+.event-stage .events{gap:0!important}
+.event-stage .event-item{background:#fff!important;box-shadow:none!important;border:0!important;border-bottom:1px solid #e8edf2!important;border-radius:0!important;min-height:100px!important;padding:17px 1px!important;gap:11px!important}
+.event-stage .event-icon{width:44px!important;height:44px!important;background:#edf3f9!important;color:#2767a8!important;border-radius:9px!important;font-size:17px!important}
+.event-stage .event-copy>span{font-size:10px!important;color:#2a70b9!important}
+.event-stage .event-copy h3{font-size:14px!important;color:#243950!important;font-weight:750!important}
+.event-stage .event-copy p{font-size:11px!important;color:#6e8196!important}
+.event-stage .event-result{background:#f4f7fa!important;border-radius:5px!important}
+.event-stage .event-action>button{background:#155fb5!important;border-radius:7px!important}
+.event-stage .choices button{border-radius:7px!important}
+.event-stage .choices button.picked{background:#ebf3fc!important;border-color:#1a69bd!important}
+.event-stage .winner{margin-top:12px!important}
+.event-stage .winner>p,.event-stage .empty{border:0!important;border-top:1px solid #e8edf2!important;border-radius:0!important;background:#fff!important}
+.event-stage .winner-status{border-radius:0!important}
+
+/* Attendance: remove dark dashboard slab and display the actual status clearly. */
+.attendance-design{background:#e9eef4!important;padding:0 12px!important;color:#1b2e44!important}
+.attendance-design .page{max-width:460px!important;background:#fff!important;box-shadow:0 0 48px #1f3a5912!important;padding-bottom:calc(94px + env(safe-area-inset-bottom))!important}
+.attendance-design header{height:70px!important;padding:0 24px!important;border-bottom:1px solid #edf1f5!important}
+.attendance-design header a{color:#738298!important;font-size:12px!important}
+.attendance-design header span{color:#1b3049!important;font-size:16px!important;letter-spacing:-.6px!important}
+.attendance-design main{padding:29px 22px 20px!important}
+.attendance-design .eyebrow{letter-spacing:1.1px!important;font-size:10px!important;color:#3273b0!important}
+.attendance-design h1{font-size:28px!important;letter-spacing:-1.2px!important;color:#1c2e45!important;line-height:1.4!important;margin:12px 0 9px!important}
+.attendance-design .lead{color:#75869a!important;font-size:12px!important;line-height:1.75!important;margin-bottom:26px!important}
+.attendance-design .card{background:#fff!important;border:0!important;border-top:1px solid #e6ebf2!important;border-radius:0!important;box-shadow:none!important;padding:21px 2px!important;margin:12px 0!important}
+.attendance-design .overview{border-top:2px solid #164f88!important;color:#1b3049!important}
+.attendance-design .overview>span{color:#6c7e92!important;font-size:12px!important}
+.attendance-design .total{font-size:39px!important;letter-spacing:-1.5px!important;color:#19324e!important;margin:11px 0 20px!important}
+.attendance-design .total small{font-size:13px!important;color:#6e8195!important}
+.attendance-design .track{height:6px!important;border-radius:3px!important;background:#e8edf3!important}
+.attendance-design .track>div{background:#236cba!important}
+.attendance-design .overview .row{color:#6b7c91!important;font-size:11px!important}
+.attendance-design .overview .row strong{color:#274460!important}
+.attendance-design .row h2,.attendance-design .info h2{font-size:17px!important;letter-spacing:-.5px!important;color:#1e3047!important}
+.attendance-design .waiting{color:#2f6298!important;background:#eef4fb!important;border-radius:4px!important;font-size:10px!important}
+.attendance-design .done{border-radius:4px!important}
+.attendance-design .calendar{gap:6px!important;margin:20px 0!important}
+.attendance-design .calendar div{height:39px!important;border-radius:5px!important;color:#a1adba!important}
+.attendance-design .calendar .checked{background:#eaf3fd!important;border-color:#bfd7ed!important;color:#1f6cbe!important}
+.attendance-design .check{border-radius:8px!important;background:#155fb5!important;font-size:13px!important}
+.attendance-design .check:disabled{background:#e7edf4!important;color:#8292a6!important}
+.attendance-design .info p{color:#6e7f94!important}
+.attendance-design .info strong{color:#2467aa!important}
+.attendance-design .login{color:#1d64ae!important}
+
+/* Reward center: clean message service with no oversized dark cards. */
+.reward-stage{background:#e9eef4!important;padding:0 12px!important;color:#1b2e44!important}
+.reward-stage .shell{max-width:460px!important;background:#fff!important;box-shadow:0 0 48px #1f3a5912!important;padding-bottom:calc(94px + env(safe-area-inset-bottom))!important}
+.reward-stage header{height:70px!important;padding:0 24px!important;border-bottom:1px solid #edf1f5!important;align-items:center!important}
+.reward-stage header a{color:#738298!important;font-size:12px!important}
+.reward-stage header b{color:#1b3049!important;font-size:17px!important}
+.reward-stage main{padding:29px 22px 23px!important}
+.reward-stage .kicker{letter-spacing:1.1px!important;font-size:10px!important;color:#3273b0!important}
+.reward-stage h1{font-size:28px!important;color:#1c2e45!important;margin:12px 0 8px!important}
+.reward-stage .sub{font-size:12px!important;line-height:1.8!important;color:#75869a!important}
+.reward-stage .summary{background:#fff!important;border-radius:0!important;border-top:2px solid #164f88!important;border-bottom:1px solid #e7edf3!important;color:#1b3049!important;margin:23px 0 0!important;padding:21px 2px 23px!important}
+.reward-stage .summary div+div{border-left:1px solid #e5ebf2!important;padding-left:20px!important}
+.reward-stage .summary small{color:#718398!important;font-size:11px!important}
+.reward-stage .summary strong{font-size:33px!important;letter-spacing:-1px!important;margin-top:10px!important}
+.reward-stage .benefits{border:0!important;border-bottom:1px solid #e8edf3!important;border-radius:0!important;padding:19px 0!important;margin:0!important}
+.reward-stage .benefits strong{color:#283c52!important;font-size:13px!important}
+.reward-stage .benefits p{font-size:11px!important;color:#718096!important}
+.reward-stage .benefits a{color:#1b69b6!important}
+.reward-stage .inbox{border:0!important;border-radius:0!important;padding:19px 0!important;min-height:300px!important}
+.reward-stage .heading h2{font-size:17px!important;color:#1c304a!important}
+.reward-stage .heading span{font-size:10px!important;color:#8a98a8!important}
+.reward-stage .empty{border-top:1px solid #edf1f5!important;margin-top:10px!important;padding:44px 5px!important}
+.reward-stage .messages{gap:11px!important}
+.reward-stage .bubble{border-radius:9px!important;background:#f1f5f8!important;color:#284057!important}
+.reward-stage .bubble.mine{background:#e8f2fd!important}
+.reward-stage form{border-top-color:#e5eaf1!important}
+.reward-stage form button{background:#165fb2!important;border-radius:7px!important}
+.reward-stage input{border-radius:7px!important}
+.reward-stage .reward-actions button{border-radius:6px!important;background:#f0f5fb!important;color:#1c659e!important}
+@media(max-width:500px){.ai-page,.event-stage,.attendance-design,.reward-stage{padding:0!important}
+.ai-page .ai-shell,.event-stage .event-phone,.attendance-design .page,.reward-stage .shell{box-shadow:none!important}}
