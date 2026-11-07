@@ -49,24 +49,177 @@ const marketStateBySymbol=Object.fromEntries(marketStates.map(item=>[item.symbol
 const marketCounts={recorded:marketStates.filter(item=>item.phase==="record").length,missing:marketStates.filter(item=>item.phase!=="record").length};
 const memberStatusText=memberAccess==="unavailable"?"회원 상태 데이터 미연결":memberAccess==="error"?"회원 상태 조회 실패":memberAccess==="log-error"?"반영 기록 조회 실패":memberAccess==="login"?"로그인 후 AI 상태 확인":memberAccess==="locked"?"회원 입장 잠금 해제 필요":memberAccess==="unapproved"?"회원 승인 후 확인":memberAccess==="admin"?"회원 전용 상태":memberAccess==="ready"?"AI PROCESS 진행 전":memberAccess==="loading"?"회원 상태 확인 중":member?.status==="waiting"?"AI PROCESS 시작 준비":member?.status==="ready"?"AI PROCESS 진행 전":member?.status==="completed"?"AI PROCESS 진행 완료":member?.status==="stopped"?"AI PROCESS 진행 중단":"AI PROCESS 진행 중";
 useEffect(()=>{let active=true;async function load(){try{const r=await fetch("/api/ai-assets",{cache:"no-store"});if(!r.ok)throw Error("feed");const data=await r.json();if(!data?.success||!Array.isArray(data.assets))throw Error("invalid feed");if(active){setFeed(data);setError(false)}}catch{if(active)setError(true)}}load();const t=setInterval(load,60000);return()=>{active=false;clearInterval(t)}},[]);const defaults=[["BTC/USD","비트코인","coin"],["ETH/USD","이더리움","coin"],["SOL/USD","솔라나","coin"],["XRP/USD","XRP","coin"],["AAPL","애플","stock"],["NVDA","엔비디아","stock"],["MSFT","마이크로소프트","stock"],["TSLA","테슬라","stock"]].map(([symbol,name,type])=>({symbol,name,type,price:null}));const items=feed?.assets||defaults;return <section className="panel ai-assets-panel"><div className="section-title"><b>AI 주식·코인 현황</b><span>AI DB 반영 기록</span></div><div className="ai-assets-info"><span>시장가격 <strong>{error?"연결 대기":feed?.stale?"최근 정상값":feed?"연결됨":"확인 중"}</strong></span><span>{feed?.updatedAt?"기준 "+new Date(feed.updatedAt).toLocaleString("ko-KR",{timeZone:"Asia/Seoul",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}):"업데이트 대기"}</span></div><div className="ai-assets-process"><span>AI PROCESS <strong>{memberStatusText}</strong></span>{snapshot&&<span>조회 로그 {marketLogs.length.toLocaleString("ko-KR")}건 · 최근 기록</span>}</div>{snapshot&&<div className="ai-assets-counts"><span>반영 기록 확인 {marketCounts.recorded}종</span><span>기록 없음 {marketCounts.missing}종</span></div>}<div className="ai-assets-list">{items.map(item=><div className="ai-assets-row" key={item.symbol}><span className={"ai-assets-mark "+item.type}>{item.type==="coin"?"₿":"ST"}</span><div className="ai-assets-name"><strong>{item.name}</strong><small>{item.symbol}</small></div><div className="ai-assets-price"><strong>{Number.isFinite(item.price)&&item.price>0?"$"+item.price.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:item.price<1?4:2}):"가격 대기"}</strong><small>{Number.isFinite(item.price)&&item.price>0?"시장가격":"데이터 미연결"}</small></div><div className="ai-assets-state"><span className={marketStateBySymbol[item.symbol]?.direction.tone==="down"?"ai-assets-down":marketStateBySymbol[item.symbol]?.direction.tone==="up"?"ai-assets-up":""}>{marketStateBySymbol[item.symbol]?.direction.label||"방향 확인 대기"}</span><strong>{marketStateBySymbol[item.symbol]?.label||"AI 상태 미연결"}</strong><small>{marketStateBySymbol[item.symbol]?.action||memberStatusText}</small></div></div>)}</div>{marketHistory.length>0&&<div className="ai-assets-history"><div className="ai-assets-history-title"><strong>최근 AI 상태 변화</strong><span>최근 {marketHistory.length}건 중 5건</span></div>{marketHistory.slice(0,5).map(row=><div className="ai-assets-history-row" key={row.id}><span>{row.name}<small>{row.at?new Date(row.at).toLocaleString("ko-KR",{timeZone:"Asia/Seoul",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}):"—"}</small></span><section><b>{row.previousLabel} → {row.label}</b><small>{row.action}</small></section></div>)}</div>}<p className="ai-assets-note">시장가격은 기존 26의 데이터 공급원을 조회합니다. 자산별 상태와 변화 내역은 AI DB에 저장된 최근 반영 기록이며 실제 주문·체결을 의미하지 않습니다.{error?" · 시장가격 공급원 연결 실패":""}</p><style jsx global>{`.stage .ai-assets-panel{padding:14px 13px;background:#fff;border:1px solid #e5edf7;border-radius:17px}.stage .ai-assets-panel .section-title{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:11px}.stage .ai-assets-panel .section-title span{font-size:10px;color:#71819a}.stage .ai-assets-info{display:flex;justify-content:space-between;gap:8px;font-size:10px;color:#72829b;background:#f4f8fd;padding:10px;border-radius:9px}.stage .ai-assets-info strong{color:#0c6de1}.stage .ai-assets-process{display:flex;flex-wrap:wrap;justify-content:space-between;gap:7px;margin-top:8px;padding:7px 4px;color:#637991;font-size:10px}.stage .ai-assets-process strong{color:#164f90}.stage .ai-assets-counts{display:flex;justify-content:space-between;gap:7px;padding:9px 8px;background:#edf5ff;border-radius:8px;color:#31577d;font-size:10px}.stage .ai-assets-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:11px}.stage .ai-assets-row{display:flex;flex-wrap:wrap;align-items:center;gap:7px;min-width:0;padding:11px 7px;background:#f9fbff;border:1px solid #e7edf6;border-radius:11px}.stage .ai-assets-mark{display:grid;place-items:center;flex-shrink:0;width:28px;height:28px;border-radius:8px;background:#e4f0ff;color:#0877ed;font-size:12px;font-weight:800}.stage .ai-assets-mark.stock{background:#eaf0fa;color:#46658e;font-size:10px}.stage .ai-assets-name{min-width:0;flex:1}.stage .ai-assets-name strong{display:block;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.stage .ai-assets-name small{display:block;font-size:9px;color:#8493a7;margin-top:4px}.stage .ai-assets-price{text-align:right;min-width:0}.stage .ai-assets-price strong{display:block;font-size:10px;white-space:nowrap}.stage .ai-assets-price small{display:block;font-size:9px;color:#8a9aaf;margin-top:4px}.stage .ai-assets-state{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 7px;flex-basis:100%;border-top:1px solid #e9eff7;padding-top:7px;margin-top:3px}.stage .ai-assets-state>span{font-size:10px;font-weight:700;color:#536780}.stage .ai-assets-state .ai-assets-down{color:#58769c}.stage .ai-assets-state .ai-assets-up{color:#d44b70}.stage .ai-assets-state>strong{font-size:10px;color:#284966}.stage .ai-assets-state>small{flex-basis:100%;font-size:9px;color:#7f8fa4;line-height:1.55}.stage .ai-assets-history{margin-top:12px;padding:10px 11px;background:#f7faff;border:1px solid #e5edf7;border-radius:10px}.stage .ai-assets-history-title{display:flex;justify-content:space-between;align-items:center;gap:8px;padding-bottom:7px;border-bottom:1px solid #e5edf7}.stage .ai-assets-history-title strong{font-size:12px}.stage .ai-assets-history-title span{font-size:10px;color:#8090a6}.stage .ai-assets-history-row{display:flex;justify-content:space-between;gap:9px;padding:9px 0;border-bottom:1px solid #edf1f7}.stage .ai-assets-history-row:last-child{border-bottom:0}.stage .ai-assets-history-row>span{flex:0 0 35%;font-size:11px;font-weight:700}.stage .ai-assets-history-row section{flex:1;text-align:right;min-width:0}.stage .ai-assets-history-row b{display:block;font-size:10px;color:#385575}.stage .ai-assets-history-row small{display:block;font-size:9px;color:#8798ab;line-height:1.5;margin-top:3px}.stage .ai-assets-note{font-size:10px;color:#74859c;line-height:1.65;margin:12px 2px 0}@media(max-width:370px){.stage .ai-assets-list{grid-template-columns:1fr}}`}</style></section>}
+
 export default function DesignHome(){
- const router=useRouter();
- const go=(key)=>{const paths={ai:"/design-ai-process",event:"/design-event",attendance:"/design-attendance",reward:"/design-reward",market:"/design-ai-process"};if(key==="home"){setActive("home");return}router.push(paths[key]||"/design-home")};
- const [started,setStarted]=useState(false),[active,setActive]=useState("home"),[period,setPeriod]=useState("3개월");
- const [slide,setSlide]=useState(0);
- useEffect(()=>{if(active!=="home"||started)return;const timer=setInterval(()=>setSlide(s=>(s+1)%3),10000);return()=>clearInterval(timer)},[active,started]);
- return <div className="stage"><div className="phone">
- {active==="home"?<><div className="hero"><div className="brand"><span className="logo">ΛI</span> PROCESS</div>
- {started?<div className="portfolio"><div className="eyebrow">총 평가금액 ⓘ</div><div className="amount">12,740,320<small>원</small></div><p>투자금 10,000,000원</p><div className="returns"><div><span>누적 손익</span><strong>+2,740,320<small>원</small></strong></div><div><span>수익률</span><strong>+27.40%</strong></div></div></div>:<div className="intro"><div className="hero-slide" key={slide} aria-live="polite">{slide===0?<><span className="chip">AI 자산 운용 서비스</span><h1>AI가 시장을 분석하고<br/>당신의 자산을 운용합니다.</h1><p>시장 데이터 분석부터 전략 수립, 자동 운용까지<br/>AI가 체계적으로 관리합니다.</p><button className="start" onClick={()=>go("ai")}>AI PROCESS 시작하기 <span>›</span></button></>:slide===1?<><span className="chip">매일 누리는 회원 혜택</span><h1>하루 한 번 출석하고<br/>다양한 혜택을 확인하세요.</h1><p>매일 출석 체크로 참여 현황을 확인하고<br/>회원 이벤트와 혜택을 만나보세요.</p><button className="start" onClick={()=>go("attendance")}>출석 체크 바로가기 <span>›</span></button></>:<><span className="chip">SPECIAL EVENT</span><h1>놓치기 아쉬운<br/>돌발 이벤트 안내</h1><p>진행 중인 돌발 이벤트와 참여 방법을<br/>이벤트 메뉴에서 확인하세요.</p><button className="start" onClick={()=>go("event")}>이벤트 확인하기 <span>›</span></button></>}</div><div className="dots">{[0,1,2].map(i=><button key={i} className={slide===i?"on":""} aria-label={`소개 ${i+1}`} onClick={()=>setSlide(i)}/>)}</div></div>}
- </div><main className="body">
- {started?<section className="process panel"><div className="process-head"><b>AI PROCESS</b><span className="running">● 운용 중</span></div><p>AI가 시장을 분석하고 자동으로 운용 중입니다.</p><div className="steps">{["시장 분석","전략 수립","자동 운용","성과 분석"].map((s,i)=><div key={s}><span className={i<3?"done":""}>{i<3?"✓":"✓"}</span><small>{s}</small></div>)}</div><div className="countdown"><span>◷ 다음 수익·손실 업데이트까지</span><strong>03:24:17</strong><button onClick={()=>setActive("ai")}>상세 보기 ›</button></div></section>:<section className="how panel"><h2>AI PROCESS 운용 흐름</h2><div className="how-grid">{[["시장 분석","실시간 데이터로 기회를 포착","market"],["전략 수립","AI가 최적의 운용 전략 설계","ai"],["자동 운용","설정된 전략으로 운용 진행","ai"]].map(([title,sub,ico],i)=><div key={title}><div className="how-icon"><Icon name={ico}/></div><b>{i+1} {title}</b><small>{sub}</small></div>)}</div></section>}
- <section className="quick">{shortcuts.map(([key,title,sub])=><button key={key} onClick={()=>go(key)}><img src={`/${key}_3d.png`} alt=""/><b>{title}</b><small>{sub}</small></button>)}</section>
- {started?<section className="panel trend"><div className="section-title"><b>자산 변동 추이 ⓘ</b><strong className="pink">+27.40%</strong></div><div className="periods">{Object.keys(paths).map(x=><button key={x} className={period===x?"chosen":""} onClick={()=>setPeriod(x)}>{x}</button>)}</div><svg className="trend-svg" viewBox="0 0 240 90" preserveAspectRatio="none" role="img" aria-label={period+" 자산 변동 추이 예시"}><defs><linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#f02f67" stopOpacity=".25"/><stop offset="1" stopColor="#f02f67" stopOpacity=".015"/></linearGradient></defs><path d={paths[period]+" L240 90 L0 90 Z"} fill="url(#trendFill)"/><path d={paths[period]} stroke="#ed3769" strokeWidth="2.3" fill="none" strokeLinecap="round"/></svg><div className="trend-caption">누적 수익률 · 예시 데이터</div></section>:null}
- <Market/>
- </main></>:<main className="subpage"><div className="subhead"><button onClick={()=>setActive("home")}>‹</button><b>{menu.find(x=>x[0]===active)?.[1]||"시장 분석"}</b></div><div className="subcontent"><Icon name={active==="market"?"ai":active} size={42}/><h2>{menu.find(x=>x[0]===active)?.[1]||"시장 분석"}</h2><p>디자인 검수용 화면입니다.<br/>실제 서비스 기능은 아직 연결하지 않았습니다.</p><button onClick={()=>setActive("home")}>홈으로 돌아가기</button></div></main>}
- <nav className="bottom-nav" aria-label="하단 메뉴">{menu.map(([key,label])=><button key={key} className={active===key?"selected":""} onClick={()=>go(key)}><Icon name={key}/><span>{label}</span></button>)}</nav>
- </div><div className="preview-controls"><span>디자인 검수용 · 실제 데이터 미연결</span><button onClick={()=>{setStarted(!started);setActive("home")}}>{started?"미진행 사용자 보기":"진행 중 사용자 보기"} ↔</button></div>
- <style jsx>{`
- *{box-sizing:border-box}.stage{min-height:100vh;background:#edf3fa;padding:20px 12px 36px;font-family:Arial,"Noto Sans KR",sans-serif;color:#11213e}.phone{position:relative;max-width:440px;min-height:100vh;margin:0 auto;background:#f7faff;box-shadow:0 15px 55px #25476c1d;overflow:clip;padding-bottom:calc(78px + env(safe-area-inset-bottom))}.phone:before{content:"";position:absolute;z-index:0;top:0;left:0;right:0;height:650px;background-image:linear-gradient(to bottom,transparent 0%,transparent 42%,#f7faff 94%),url("/hero_clean.png");background-size:100% 100%,100% auto;background-position:top center;background-repeat:no-repeat;pointer-events:none}.hero,.body{position:relative;z-index:1}.hero{padding:27px 24px 0}.brand{display:flex;align-items:center;gap:5px;font-size:20px;font-weight:900;letter-spacing:-.6px}.logo{font-size:31px;color:#0870e9;letter-spacing:-5px;padding-right:5px}.intro{padding-top:42px;min-height:322px}.chip{display:inline-block;padding:5px 11px;background:#d8eaff;color:#076be0;border-radius:100px;font-size:12px;font-weight:700}.intro h1{font-size:24px;line-height:1.4;letter-spacing:-1.1px;margin:15px 0 11px}.intro p{font-size:12px;line-height:1.75;color:#3e506c}.start{margin-top:17px;width:100%;background:linear-gradient(100deg,#0787f8,#0754dd);border:0;color:white;border-radius:28px;padding:14px;font-size:15px;font-weight:800;cursor:pointer}.start span{margin-left:10px;font-size:20px}.dots{display:flex;justify-content:center;gap:7px;margin:17px 0}.dots button{border:0;width:9px;height:9px;border-radius:50%;background:#c3d3e6;padding:0;cursor:pointer}.hero-slide{animation:heroSlideIn .28s ease-out}@keyframes heroSlideIn{from{opacity:.6;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}.dots button.on{background:#0877f0}.portfolio{padding-top:43px;min-height:257px}.eyebrow{font-size:15px;font-weight:800}.amount{font-size:38px;letter-spacing:-1.6px;font-weight:900;margin-top:9px;white-space:nowrap}.amount small{font-size:17px;margin-left:2px}.portfolio p{font-size:13px;color:#52647c;margin:4px 0 19px}.returns{display:flex;gap:24px}.returns>div{display:flex;flex-direction:column;gap:5px}.returns>div+div{border-left:1px solid #b7c8d8;padding-left:22px}.returns span{font-size:12px;color:#263c59}.returns strong{font-size:22px;color:#e72e60;letter-spacing:-.5px}.returns small{font-size:12px}.body{padding:0 12px 18px}.panel{background:#ffffffea;border:1px solid #e5edf7;border-radius:17px;box-shadow:0 5px 17px #244d7b10}.how{padding:16px 14px;margin-bottom:13px}.how h2{font-size:17px;margin:0 0 17px}.how-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;text-align:center}.how-grid>div{min-width:0}.how-icon{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;margin:0 auto 9px;color:#167bf0;background:#e3f0ff}.how-grid b{display:block;font-size:12px;white-space:nowrap}.how-grid small{display:block;margin-top:6px;font-size:10px;color:#62718b;line-height:1.5}.process{padding:15px 13px 12px;margin-bottom:12px;background:#f7fbffed}.process-head{display:flex;align-items:center;gap:8px}.process-head b{font-size:19px}.running{font-size:11px;background:#d4f6e9;color:#08845c;border-radius:20px;padding:4px 9px;font-weight:800}.process p{font-size:12px;color:#586c84;margin:7px 0 17px}.steps{display:flex;justify-content:space-between;position:relative}.steps:before{content:"";position:absolute;height:3px;background:linear-gradient(to right,#147bf0 70%,#d4dce6 70%);left:11%;right:11%;top:14px}.steps>div{width:25%;position:relative;display:flex;align-items:center;flex-direction:column;gap:7px}.steps span{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#cbd6e4;color:#8b9bae;font-size:15px}.steps span.done{background:#167ef2;color:white;box-shadow:0 3px 8px #0876ec55}.steps small{font-size:11px;white-space:nowrap;font-weight:700}.countdown{display:flex;align-items:center;flex-wrap:wrap;gap:6px;background:#e9f3ff;border-radius:10px;margin-top:15px;padding:10px 9px}.countdown span{font-size:11px;font-weight:700}.countdown strong{color:#096be6;font-size:15px}.countdown button{border:0;background:none;color:#096be6;font-size:11px;font-weight:700;margin-left:auto;cursor:pointer}.quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin-bottom:13px}.quick button{min-width:0;border:1px solid #edf2f8;background:#fff;border-radius:14px;padding:8px 2px 10px;box-shadow:0 4px 12px #244d7b0b;display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer}.quick img{width:54px;height:52px;object-fit:contain}.quick b{font-size:11px;white-space:nowrap}.quick small{font-size:9px;color:#728097;white-space:nowrap}.section-title{display:flex;align-items:center;justify-content:space-between;gap:6px}.section-title b{font-size:16px}.section-title span{font-size:11px;color:#5d6e87}.pink{color:#e72e60;font-size:19px}.trend{padding:14px;margin-bottom:12px}.periods{display:flex;justify-content:flex-start;gap:5px;margin-top:12px}.periods button{background:#f3f7fc;border:0;border-radius:20px;padding:6px 10px;color:#425573;font-size:11px;cursor:pointer}.periods button.chosen{background:#1376eb;color:white}.trend-svg{width:100%;height:105px;display:block;margin:8px 0 0}.trend-caption{text-align:right;color:#7a899e;font-size:10px}.market-panel{padding:13px 10px 15px}.market-panel .section-title{padding:0 5px 12px}.market-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.market-tile{min-width:0;position:relative;overflow:hidden;border:1px solid #e6edf6;border-radius:11px;padding:10px 8px 5px;background:#fff;min-height:105px}.market-tile span{display:block;font-size:11px}.market-tile strong{display:block;font-size:13px;letter-spacing:-.5px;margin-top:5px;white-space:nowrap}.market-tile em{display:block;font-size:12px;font-style:normal;font-weight:800;color:#e72e60;margin-top:5px}.spark{display:block;width:100%;height:28px;margin:7px 0 0}.spark-empty{height:28px;margin-top:7px;font-size:10px;color:#9aa7b8;display:flex;align-items:center}.market-time{display:block;font-size:9px;color:#8190a4;margin-top:4px;white-space:nowrap}.market-source{font-size:10px;line-height:1.5;color:#71819a;margin:11px 5px 0}.market-tile strong{overflow:hidden;text-overflow:ellipsis}.bottom-nav{position:fixed;z-index:20;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,440px);display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:#fffffffa;border-top:1px solid #e0e9f2;padding:10px 3px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -5px 18px #25476c0a}.bottom-nav button{border:0;background:none;display:flex;align-items:center;flex-direction:column;gap:5px;color:#5b6c84;min-width:0;cursor:pointer}.bottom-nav button.selected{color:#096fec}.bottom-nav span{font-size:10px;letter-spacing:-.5px;white-space:nowrap}.subpage{position:relative;z-index:2;min-height:75vh}.subhead{display:flex;align-items:center;gap:14px;padding:24px}.subhead button{border:0;background:none;font-size:30px;color:#0c65cb}.subcontent{text-align:center;padding:85px 20px;color:#1677e9}.subcontent h2{color:#11213e}.subcontent p{color:#65758b;font-size:13px;line-height:1.8}.subcontent button{background:#086fe9;border:0;color:white;border-radius:12px;padding:13px 20px;margin-top:15px}.preview-controls{max-width:440px;margin:12px auto;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:11px;color:#6d7d92}.preview-controls button{background:#fff;border:1px solid #b9d4f1;color:#096be6;border-radius:9px;padding:10px;font-weight:700;cursor:pointer}@media(max-width:370px){.hero{padding-left:16px;padding-right:16px}.intro h1{font-size:21px}.amount{font-size:32px}.returns strong{font-size:19px}.steps small{font-size:10px}.quick b{font-size:10px}.market-tile strong{font-size:11px}.bottom-nav span{font-size:9px}}@media(max-width:480px){.stage{padding:0 0 22px}.phone{box-shadow:none}.preview-controls{padding:0 12px}}
- `}</style></div>;
+  const router=useRouter();
+  const go=(key)=>{
+    const destinations={ai:"/design-ai-process",event:"/design-event",attendance:"/design-attendance",reward:"/design-reward",market:"/design-ai-process"};
+    if(key==="home")return;
+    router.push(destinations[key]||"/design-home");
+  };
+  const [started,setStarted]=useState(false);
+  const [period,setPeriod]=useState("3개월");
+  const [slide,setSlide]=useState(0);
+  const notices=[
+    {label:"AI PROCESS",title:"데이터 분석부터 운용까지",body:"AI 운용 단계와 최근 반영 내역을 한눈에 확인하세요.",action:"운용 현황 확인",key:"ai"},
+    {label:"DAILY CHECK-IN",title:"하루 한 번, 출석 현황 확인",body:"누적 출석과 회원 혜택을 출석 메뉴에서 확인하세요.",action:"출석 메뉴 보기",key:"attendance"},
+    {label:"MEMBER EVENT",title:"놓치기 쉬운 회원 이벤트",body:"진행 중인 이벤트와 최근 결과를 확인할 수 있습니다.",action:"이벤트 확인",key:"event"}
+  ];
+  useEffect(()=>{const timer=setInterval(()=>setSlide(s=>(s+1)%3),10000);return()=>clearInterval(timer)},[]);
+  return <div className="stage"><div className="phone">
+    <header className="topbar">
+      <div className="brand"><span>AI</span> PROCESS</div>
+      <button className="service-link" onClick={()=>go("reward")}>상품 지급 센터</button>
+    </header>
+    <section className="welcome">
+      <div className="kicker">MEMBER FINANCIAL HOME</div>
+      <h1>{started?<>나의 자산 현황을<br/>확인하세요.</>:<>일상의 자산 관리,<br/>더 명확하게.</>}</h1>
+      <p>{started?"아래 평가금액은 디자인 확인용 예시입니다. 실제 금액은 AI PROCESS에서 확인하세요.":"AI 운용 현황과 참여 혜택을 필요한 곳에서 바로 확인하세요."}</p>
+    </section>
+    <section className="account" aria-label="AI PROCESS 자산 상태">
+      <div className="account-top"><b>AI PROCESS</b><span className="status">{started?"진행 중 · 시안":"시작 전"}</span></div>
+      {started?<div>
+        <div className="account-sublabel">총 평가금액 · 디자인 예시</div>
+        <div className="account-amount">12,740,320<small>원</small></div>
+        <p className="account-sublabel">투자금 10,000,000원</p>
+        <div className="account-returns">
+          <div><span>누적 손익</span><strong>+2,740,320<small>원</small></strong></div>
+          <div><span>수익률</span><strong>+27.40%</strong></div>
+        </div>
+        <button className="account-cta" style={{marginTop:17,width:"100%"}} onClick={()=>go("ai")}>AI PROCESS 상세 확인 <span>›</span></button>
+      </div>:<div className="account-content">
+        <p className="account-lead">진행 상태와 운용 정보를<br/><strong>상세 화면에서 확인하세요.</strong></p>
+        <button className="account-cta" onClick={()=>go("ai")}>상태 확인 <span>›</span></button>
+      </div>}
+    </section>
+    <section className="section">
+      <div className="section-heading"><h2>바로가기</h2></div>
+      <div className="quick">
+        {shortcuts.map(([key,title,sub])=><button key={key} onClick={()=>go(key)}>
+          <span className="quick-icon"><Icon name={key==="market"?"market":key} size={22}/></span>
+          <b>{title}</b><small>{sub}</small>
+        </button>)}
+      </div>
+    </section>
+    <section className="section">
+      <div className="section-heading"><h2>AI 운용 과정</h2><button onClick={()=>go("ai")}>자세히 보기 ›</button></div>
+      <ol className="flow-list">
+        <li><span className="flow-num">01</span><div><b>시장 분석</b><small>주식·코인 데이터와 시장 흐름 확인</small></div><span className="flow-arrow">›</span></li>
+        <li><span className="flow-num">02</span><div><b>전략 수립</b><small>AI 판단 기준과 운용 단계 확인</small></div><span className="flow-arrow">›</span></li>
+        <li><span className="flow-num">03</span><div><b>운용 현황</b><small>반영 기록·손익·자산 상태를 한눈에</small></div><span className="flow-arrow">›</span></li>
+      </ol>
+    </section>
+    <section className="notice" aria-label="회원 서비스 안내">
+      <div className="notice-top"><span className="notice-label">{notices[slide].label}</span><span className="notice-index">0{slide+1} / 03</span></div>
+      <strong>{notices[slide].title}</strong>
+      <p>{notices[slide].body}</p>
+      <div className="notice-bottom">
+        <button className="notice-link" onClick={()=>go(notices[slide].key)}>{notices[slide].action} ›</button>
+        <div className="notice-dots">{notices.map((x,i)=><button key={x.key} className={slide===i?"on":""} aria-label={String(i+1)+"번째 안내"} onClick={()=>setSlide(i)}/>)}</div>
+      </div>
+    </section>
+    {started&&<section className="section trend">
+      <div className="section-heading"><h2>자산 변동 추이 · 시안</h2><strong className="trend-summary">+27.40%</strong></div>
+      <div className="periods">{Object.keys(paths).map(x=><button key={x} className={period===x?"chosen":""} onClick={()=>setPeriod(x)}>{x}</button>)}</div>
+      <svg className="trend-svg" viewBox="0 0 240 90" preserveAspectRatio="none" role="img" aria-label={period+" 자산 변동 추이 디자인 예시"}>
+        <path d={paths[period]} stroke="#2377c9" strokeWidth="2" fill="none" strokeLinecap="round"/>
+      </svg>
+      <div className="trend-caption">디자인 예시 데이터 · 실제 기록은 상세 화면에서 확인</div>
+    </section>}
+    <div className="market-wrap"><Market/></div>
+    <nav className="bottom-nav" aria-label="하단 메뉴">
+      {menu.map(([key,label])=><button key={key} className={key==="home"?"selected":""} onClick={()=>go(key)} aria-current={key==="home"?"page":undefined}><Icon name={key} size={21}/><span>{label}</span></button>)}
+    </nav>
+    <style jsx>{`
+*{box-sizing:border-box}
+.stage{min-height:100vh;background:#e9eef4;color:#17283f;font-family:"Pretendard Variable","Pretendard","Apple SD Gothic Neo","Malgun Gothic",Arial,sans-serif;-webkit-font-smoothing:antialiased;padding:0 12px}
+.phone{position:relative;max-width:460px;margin:auto;min-height:100vh;padding-bottom:calc(85px + env(safe-area-inset-bottom));background:#fff;box-shadow:0 0 48px #1f3a5912;overflow:hidden}
+.topbar{height:70px;padding:0 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #eef1f5}
+.brand{font-size:20px;font-weight:850;letter-spacing:-1px;color:#12233e}.brand span{color:#1269d7}
+.service-link{border:0;background:none;font-size:11px;font-weight:700;color:#53667c;display:flex;align-items:center;gap:7px;cursor:pointer}
+.service-link:after{content:"›";color:#7e8da0;font-size:20px;font-weight:400;line-height:1}
+.welcome{padding:29px 25px 20px}
+.kicker{font-size:10px;font-weight:800;color:#2968a9;letter-spacing:1.2px}
+.welcome h1{font-size:28px;line-height:1.4;letter-spacing:-1.4px;font-weight:780;margin:12px 0 11px;color:#1b2b40}
+.welcome p{font-size:12px;line-height:1.85;color:#64748a;margin:0}
+.account{position:relative;margin:5px 22px 0;border-top:2px solid #183e70;border-bottom:1px solid #e2e8f0;padding:20px 3px 20px}
+.account-top{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px}
+.account-top b{font-size:15px;letter-spacing:-.3px}
+.status{font-size:10px;font-weight:750;color:#2463a3;background:#eef5fd;padding:6px 10px;border-radius:4px}
+.account-content{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.account-lead{font-size:12px;color:#6a798d;line-height:1.7;margin:0}
+.account-lead strong{display:block;color:#243d5a;font-size:18px;letter-spacing:-.7px;margin:4px 0}
+.account-cta{display:flex;align-items:center;justify-content:center;min-width:118px;gap:13px;flex-shrink:0;padding:11px 12px;border:0;background:#155db4;color:white;font-weight:750;font-size:12px;border-radius:8px;cursor:pointer}
+.account-cta span{font-size:18px;font-weight:400}
+.account-amount{font-weight:850;letter-spacing:-1.8px;color:#17283e;font-size:35px;white-space:nowrap;line-height:1.2}
+.account-amount small{font-size:15px;letter-spacing:0;margin-left:3px;font-weight:700}
+.account-sublabel{font-size:11px;margin:6px 0 16px;color:#65758b}
+.account-returns{display:flex;gap:0;border-top:1px solid #edf0f4;padding-top:15px;margin-top:12px}
+.account-returns>div{flex:1;min-width:0}
+.account-returns>div+div{border-left:1px solid #e6ebf1;padding-left:19px}
+.account-returns span{display:block;font-size:11px;color:#68798d;margin-bottom:6px}
+.account-returns strong{display:block;font-size:18px;letter-spacing:-.7px;color:#d63858}
+.account-returns small{font-size:11px;margin-left:2px}
+.section{margin:25px 22px 0}
+.section-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px}
+.section-heading h2{margin:0;font-size:16px;letter-spacing:-.55px;font-weight:800;color:#1b2c43}
+.section-heading button{border:0;background:transparent;color:#507291;font-size:11px;font-weight:650;cursor:pointer;padding:4px 0}
+.quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:10px 0 11px;gap:4px;border-top:1px solid #e9edf2;border-bottom:1px solid #e9edf2}
+.quick button{display:flex;align-items:center;flex-direction:column;border:0;background:none;cursor:pointer;min-width:0;gap:9px;padding:6px 2px}
+.quick .quick-icon{display:grid;place-items:center;width:46px;height:46px;background:#eef3f9;border-radius:10px;color:#215b9d}
+.quick b{font-size:10px;letter-spacing:-.45px;font-weight:730;white-space:nowrap;color:#2b3e54}
+.quick small{display:none}
+.flow-list{margin:0;padding:0;list-style:none;border-top:1px solid #e9edf2}
+.flow-list li{display:grid;grid-template-columns:35px 1fr 19px;align-items:center;gap:10px;min-height:71px;border-bottom:1px solid #edf0f4}
+.flow-num{display:grid;place-items:center;width:30px;height:30px;background:#f0f5fb;color:#2462a8;font-size:11px;font-weight:850;border-radius:7px}
+.flow-list b{display:block;font-size:12px;color:#263c55;letter-spacing:-.25px}
+.flow-list small{display:block;font-size:10px;line-height:1.6;color:#7b8a9e;margin-top:4px}
+.flow-arrow{font-size:20px;color:#9aa8b9;text-align:right;font-weight:300}
+.notice{margin:22px 22px 0;background:#f0f4f9;padding:17px 19px 14px;border-left:3px solid #317acc;min-height:130px}
+.notice-top{display:flex;justify-content:space-between;gap:8px}
+.notice-label{font-weight:750;font-size:10px;letter-spacing:.4px;color:#3772b3}
+.notice-index{font-size:10px;color:#8c9cad;font-variant-numeric:tabular-nums}
+.notice strong{display:block;margin:11px 0 5px;font-size:14px;letter-spacing:-.3px;color:#253e5b}
+.notice p{font-size:11px;line-height:1.65;color:#6c7c91;margin:0 0 10px}
+.notice-bottom{display:flex;justify-content:space-between;align-items:center}
+.notice-link{border:0;background:none;padding:0;color:#155dab;font-size:11px;font-weight:750;cursor:pointer}
+.notice-dots{display:flex;gap:5px}
+.notice-dots button{width:18px;height:3px;background:#cdd9e7;border:0;padding:0;cursor:pointer}
+.notice-dots button.on{background:#1a6ac5}
+.trend{padding:3px 0 13px;border-bottom:1px solid #e8edf3}
+.trend-summary{display:flex;justify-content:space-between;align-items:flex-start}
+.trend-summary strong{font-size:19px;letter-spacing:-.7px;color:#cf3456}
+.periods{display:flex;gap:7px;margin:16px 0 0}
+.periods button{background:none;border:0;color:#748398;font-size:10px;padding:6px 9px;border-radius:6px;cursor:pointer}
+.periods button.chosen{color:#1c63b5;background:#edf4fd;font-weight:750}
+.trend-svg{width:100%;height:116px;display:block;margin:7px 0 0}
+.trend-caption{text-align:right;color:#9aa5b2;font-size:10px}
+.market-wrap{margin:24px 22px 0}
+.bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(100%,460px);display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding:11px 4px calc(12px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #e9edf2;z-index:20;box-shadow:0 -5px 20px #263f5810}
+.bottom-nav button{display:flex;align-items:center;flex-direction:column;gap:6px;border:0;background:none;color:#8a97a9;cursor:pointer;min-width:0}
+.bottom-nav button.selected{color:#1565bd}
+.bottom-nav button span{font-size:9px;font-weight:680;white-space:nowrap;letter-spacing:-.45px}
+.preview-controls{max-width:460px;margin:0 auto;padding:13px 14px 20px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;color:#8391a4}
+.preview-controls button{border:1px solid #dce5f0;background:#fff;color:#366695;border-radius:6px;padding:7px 10px;font-size:10px;cursor:pointer}
+.market-wrap .ai-assets-panel{padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+.market-wrap .ai-assets-panel .section-title{padding-bottom:13px!important;margin:0!important}
+.market-wrap .ai-assets-panel .section-title b{font-size:16px!important;color:#1b2c43}
+.market-wrap .ai-assets-panel .section-title span{font-size:10px!important}
+.market-wrap .ai-assets-info{border-top:1px solid #e9edf2;background:#f5f8fb!important;border-radius:0!important;color:#79889b!important}
+.market-wrap .ai-assets-process{padding:12px 3px!important;margin:0!important;border-bottom:1px solid #e9edf2}
+.market-wrap .ai-assets-counts{background:#f3f7fc!important;border-radius:4px!important}
+.market-wrap .ai-assets-list{display:block!important;margin-top:0!important}
+.market-wrap .ai-assets-row{display:flex!important;border:0!important;border-radius:0!important;background:none!important;box-shadow:none!important;padding:14px 1px!important;gap:11px!important;border-bottom:1px solid #edf0f4!important}
+.market-wrap .ai-assets-mark{width:34px!important;height:34px!important;border-radius:8px!important;background:#edf3f9!important;color:#316ba8!important}
+.market-wrap .ai-assets-name strong{font-size:12px!important;color:#243951}
+.market-wrap .ai-assets-name small{font-size:10px!important}
+.market-wrap .ai-assets-price strong{font-size:12px!important}
+.market-wrap .ai-assets-state{padding-left:45px!important;margin-top:-4px!important;border-top:0!important;gap:5px 8px!important}
+.market-wrap .ai-assets-state>small{font-size:10px!important}
+.market-wrap .ai-assets-history{background:#f8fafc!important;border:0!important;border-radius:0!important}
+.market-wrap .ai-assets-note{font-size:10px!important}
+@media(max-width:380px){.welcome{padding:25px 19px 18px}.welcome h1{font-size:25px}.account,.section,.notice,.market-wrap{margin-left:16px;margin-right:16px}.quick-icon{width:39px!important;height:39px!important}.account-amount{font-size:30px}.account-cta{min-width:106px}}
+@media(max-width:500px){.stage{padding:0}.phone{box-shadow:none}.preview-controls{padding-left:16px;padding-right:16px}}
+`}</style>
+  </div><div className="preview-controls"><span>디자인 검수 · 자산 숫자는 시안 예시</span><button onClick={()=>setStarted(s=>!s)}>{started?"시작 전 화면":"진행 중 화면"} 보기</button></div></div>;
 }
