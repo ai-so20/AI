@@ -20,6 +20,12 @@
 -- This draft *intentionally* leaves the public event read-RPC (get_auto_events)
 -- callable by ANY authenticated account, including unapproved accounts.
 -- Harden its FUNCTION BODY with role and approval checks before production.
+-- The current get_auto_events also returns event_entries.result_text for active
+-- quizzes; join_auto_event stores '정답 제출 완료' on correct quiz answers.
+-- This reveals success before event completion via RPC, even if UI hides it.
+-- Add CASE WHEN e.status='completed' THEN result_text ELSE NULL END in the
+-- read-RPC (and preferably make pre-completion quiz status text neutral).
+-- Restrict join_auto_event to role='member' as well as approved status.
 -- Do not claim these commands alone fully secure the application.
 
 begin;
