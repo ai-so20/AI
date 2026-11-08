@@ -66,7 +66,7 @@ useEffect(()=>{if(!chat||!user?.id)return;
  const channel=supabase.channel("design-reward-"+chat).on("postgres_changes",{event:"*",schema:"public",table:"private_messages",filter:"chat_id=eq."+chat},payload=>{
   notify(payload);
   void refresh(chat);
-  if(payload.eventType==="INSERT"&&payload.new?.sender_id!==user.id)void supabase.rpc("mark_private_chat_read",{target_chat_id:chat});
+  if(payload.eventType==="INSERT"&&payload.new?.sender_id!==user.id&&document.visibilityState==="visible"&&!isDesignUiLocked())void supabase.rpc("mark_private_chat_read",{target_chat_id:chat});
  }).subscribe();
  const onFocus=()=>{if(isDesignUiLocked()){setChat(null);setUser(null);setMessages([]);setAccessState("locked");return}if(document.visibilityState==="visible"){void supabase.rpc("mark_private_chat_read",{target_chat_id:chat});void refresh(chat)}};
  document.addEventListener("visibilitychange",onFocus);window.addEventListener("focus",onFocus);
