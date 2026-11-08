@@ -1,0 +1,34 @@
+AI PROJECT — DESIGN RESTORE POINT / RESTORATION STANDARD
+Recorded: 2026-11-09 (KST)
+Owner repository: ai-so20/AI
+Production project: Vercel ai / https://ai-vipai.vercel.app
+BASELINE COMMIT (EXACT, NEVER USE CURRENT MAIN AS THE BACKUP): 075bed348f18c1478a306cb36c6819a83b4c8203
+RESTORE BRANCH: restore/blue-design-2026-11-09
+Restoration URL: https://github.com/ai-so20/AI/tree/restore/blue-design-2026-11-09
+Commit URL: https://github.com/ai-so20/AI/commit/075bed348f18c1478a306cb36c6819a83b4c8203
+
+[USER-APPROVED FROZEN DESIGN BASELINE]
+Keep the restored blue image financial member design as-is. Freeze hierarchy, spacing, color palette, visuals, icons, layout, typography and home screen composition unless user requests a specific design change. The 2026-11-08 white editorial overhaul is NOT the approved baseline.
+Member pages:
+- app/design-home/page.js           (/design-home): /hero_clean.png, AI PROCESS entry call-to-action, three-stage flow, 3D shortcut images, 5-tab bottom navigation, stock/coin list.
+- app/design-ai-process/page.js     (/design-ai-process)
+- app/design-event/page.js          (/design-event)
+- app/design-attendance/page.js     (/design-attendance)
+- app/design-reward/page.js         (/design-reward)
+- app/design-entry/page.js          (/design-entry)
+Related assets: public/hero_clean.png and public/{market,attendance,event,reward}_3d.png.
+Design verification: Vercel production READY on baseline commit; all six routes returned HTTP 200. This is NOT a logged-in mobile visual/end-to-end verification.
+
+[STRICT WORK SCOPE AFTER CHECKPOINT]
+1. Preserve design. Implement missing functional wiring and verification only when requested; no aesthetic refactor while wiring features.
+2. ai-so20/26 is comparison/read-only. Never edit, merge into, or reconfigure it without explicit permission.
+3. AI's Supabase is separate from 26. Never switch project keys, change environment variables, RLS, schema, data, cron, payments or prizes without a specific authorized task. Deferred: RLS/security remodeling and fake gift inventory.
+4. Change narrowly scoped functionality; check commit diff before push. Do not accidentally restore the whole repository to older code if that would lose subsequently completed features.
+5. GitHub commit, Vercel READY, HTTP route response and authenticated member functional E2E are different levels of verification. Report separately.
+
+[HOW TO RESTORE]
+Inspect current main and compare with the BASELINE COMMIT above. For user-requested design restoration, bring back ONLY affected visual files, assets or visual hunks from baseline, keeping subsequent functional and data-related changes. Do not reset main to baseline wholesale. Review diffs, then verify build and actual pages.
+The restore branch is a named backup pointing at the snapshot commit. Keep this branch unchanged; the commit SHA is the stable reference even if main evolves.
+
+[NEXT TASK AFTER FREEZE]
+Prioritize safe functional connection defects while keeping visual output identical. The design-home running preview has a detailed-view action; route that action to /design-ai-process rather than its nonfunctional internal mock subpage, then validate route/build. Keep all other home elements and stored AI session/market logic untouched.
