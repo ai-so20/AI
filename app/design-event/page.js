@@ -31,10 +31,23 @@ async function load(){
  }
  }catch{setEventLoadError("이벤트를 불러오는 중 문제가 발생했습니다.")}
  try{
- const {data:announcements,error:announcementsError}=await supabase.from("group_messages").select("id,content,created_at").eq("is_deleted",false).eq("message_type","event").like("content","🎉 VIP EVENT · 당첨 안내%").order("created_at",{ascending:false}).limit(40);
- if(announcementsError){setWinnerHistoryState("error")}
- else{setRecentWinners((announcements||[]).map(parsePublishedWinner).filter(Boolean));setWinnerHistoryState("ready")}
- }catch{setWinnerHistoryState("error")}
+  // AI-owned completed event winners are the authoritative history.
+  // Read names through the existing approved-member RLS on members.
+  const {data:rows,error:historyError}=await supabase.from("event_winners")
+   .select("id,selected_at,members(nickname),events(title,prize,status)")
+   .order("selected_at",{ascending:false}).limit(40);
+  if(historyError)throw historyError;
+  const history=(rows||[]).filter(row=>row.events?.status==="completed"&&row.members?.nickname)
+   .map(row=>({id:row.id,name:row.members.nickname,prize:row.events.prize||row.events.title||"이벤트 당첨",at:row.selected_at}));
+  setRecentWinners(history);setWinnerHistoryState("ready");
+ }catch{
+  // Preserve the previous announcement-based fallback if history is inaccessible.
+  try{
+   const {data:announcements,error:announcementsError}=await supabase.from("group_messages").select("id,content,created_at").eq("is_deleted",false).eq("message_type","event").like("content","🎉 VIP EVENT · 당첨 안내%").order("created_at",{ascending:false}).limit(40);
+   if(announcementsError)throw announcementsError;
+   setRecentWinners((announcements||[]).map(parsePublishedWinner).filter(Boolean));setWinnerHistoryState("ready");
+  }catch{setRecentWinners([]);setWinnerHistoryState("error")}
+ }
  setLoading(false);
 }
 useEffect(()=>{let active=true;async function boot(){try{if(isDesignUiLocked()){if(active){setSigned(false);setAccessState("locked");setLoading(false)}return}const {data:{user},error:authError}=await supabase.auth.getUser();if(!active)return;if(!user){setSigned(false);setAccessState("login");setLoading(false);return}if(authError)throw authError;const {data:profile,error:profileError}=await supabase.from("profiles").select("approval_status,nickname,role").eq("id",user.id).maybeSingle();if(profileError)throw profileError;if(!active)return;if(isApprovedProfile(profile)&&profile.role!=="admin"){setNickname(String(profile.nickname||""));setAccessState("member");setSigned(true);await load()}else{setSigned(false);setAccessState(isApprovedProfile(profile)?"admin":"unapproved");setNotice(isApprovedProfile(profile)?"관리자 이벤트 관리는 기존 관리자 화면을 이용하세요.":"승인된 회원만 이벤트에 참여할 수 있습니다.");setLoading(false)}}catch{if(active){setSigned(false);setAccessState("error");setNotice("회원 정보를 확인할 수 없습니다.");setLoading(false)}}}void boot();return()=>{active=false}},[]);
