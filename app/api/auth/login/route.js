@@ -54,11 +54,13 @@ export async function POST(request) {
 
     const { data: profile, error: profileError } = await admin
       .from("profiles")
-      .select("id")
+      .select("id,approval_status")
       .eq("nickname", nickname)
       .maybeSingle();
 
-    if (profileError || !profile?.id) {
+    // Reject unapproved AI accounts before creating a password session.
+    // Keep the same generic response as unknown credentials.
+    if (profileError || !profile?.id || profile.approval_status !== "approved") {
       return NextResponse.json(
         { message: "닉네임 또는 비밀번호를 확인해주세요." },
         { status: 401 }
