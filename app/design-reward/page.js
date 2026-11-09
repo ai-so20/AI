@@ -28,6 +28,17 @@ function messagePreview(raw){
  return text.replace(/\s+/g," ").slice(0,140);
 }
 export default function DesignReward(){const [user,setUser]=useState(null),[chat,setChat]=useState(null),[messages,setMessages]=useState([]),[loading,setLoading]=useState(true),[accessState,setAccessState]=useState("loading"),[notice,setNotice]=useState(""),[text,setText]=useState(""),[sending,setSending]=useState(false),[unreadAtOpen,setUnreadAtOpen]=useState(0),[toast,setToast]=useState(""),[pushWorking,setPushWorking]=useState(false),[pushEnabled,setPushEnabled]=useState(false);const messageBoxRef=useRef(null),toastTimerRef=useRef(null);
+// Override the black browser canvas of the legacy root layout for
+// the reward route only, and restore its original styles after leaving.
+useEffect(()=>{
+ const elements=[document.documentElement,document.body];
+ const previous=elements.map(el=>({value:el.style.getPropertyValue("background-color"),priority:el.style.getPropertyPriority("background-color")}));
+ elements.forEach(el=>el.style.setProperty("background-color","#edf3fa","important"));
+ return()=>elements.forEach((el,i)=>{
+  if(previous[i].value)el.style.setProperty("background-color",previous[i].value,previous[i].priority);
+  else el.style.removeProperty("background-color");
+ });
+},[]);
 async function refresh(id){const {data,error}=await supabase.from("private_messages").select("*").eq("chat_id",id).eq("is_deleted",false).order("created_at",{ascending:false}).limit(200);if(error)setNotice("지급 메시지를 불러오지 못했습니다.");else setMessages([...(data||[])].reverse())}
 useEffect(()=>{let alive=true;async function boot(){try{
  if(isDesignUiLocked()){if(alive){setAccessState("locked");setLoading(false)}return}
