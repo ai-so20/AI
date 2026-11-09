@@ -95,7 +95,8 @@ useEffect(()=>{if(!chat||!user?.id)return;
  }).subscribe();
  const onFocus=()=>{if(isDesignUiLocked()){setChat(null);setUser(null);setMessages([]);setAccessState("locked");return}if(document.visibilityState==="visible"){void supabase.rpc("mark_private_chat_read",{target_chat_id:chat});void refresh(chat);void refreshRewards()}};
  document.addEventListener("visibilitychange",onFocus);window.addEventListener("focus",onFocus);
- return()=>{supabase.removeChannel(channel);document.removeEventListener("visibilitychange",onFocus);window.removeEventListener("focus",onFocus)}
+ const rewardTimer=setInterval(()=>{if(document.visibilityState==="visible"&&!isDesignUiLocked())void refreshRewards()},30000);
+ return()=>{clearInterval(rewardTimer);supabase.removeChannel(channel);document.removeEventListener("visibilitychange",onFocus);window.removeEventListener("focus",onFocus)}
 },[chat,user?.id]);
 useEffect(()=>{if(messageBoxRef.current)messageBoxRef.current.scrollTop=messageBoxRef.current.scrollHeight},[messages.length,chat]);
 async function enablePrivateNotifications(){
