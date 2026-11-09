@@ -98,6 +98,7 @@ export default function Home() {
   const [myEventRewards, setMyEventRewards] = useState([]);
   const [adminEventRewards, setAdminEventRewards] = useState([]);
   const [eventRewardWorking, setEventRewardWorking] = useState(false);
+  const [attendanceGiftSelection, setAttendanceGiftSelection] = useState({});
   const [homeNotice, setHomeNotice] = useState(null);
   const [homeNoticeTitle, setHomeNoticeTitle] = useState("VIP 운영 안내");
   const [homeNoticeBody, setHomeNoticeBody] = useState("");
@@ -1193,6 +1194,27 @@ export default function Home() {
     const { error } = await supabase.rpc("claim_ai_process_demo_reward", { p_delivery_id: deliveryId });
     if (error) setNotice(`체험 시작 실패: ${error.message}`);
     else { setNotice("AI PROCESS 모의체험을 시작했습니다."); await Promise.all([loadEventRewards(), loadAiDemo()]); }
+    setEventRewardWorking(false);
+  }
+
+  async function assignAttendanceGift(deliveryId) {
+    if (profile?.role !== "admin" || eventRewardWorking) return;
+    const prizeId = attendanceGiftSelection[deliveryId];
+    if (!prizeId || Number(giftInventorySummary[prizeId]?.available_count || 0) < 1) {
+      setNotice("배정할 기프티콘과 재고를 먼저 선택해주세요.");
+      return;
+    }
+    setEventRewardWorking(true);
+    const { data, error } = await supabase.rpc("admin_assign_attendance_gift", {
+      p_delivery_id: deliveryId,
+      p_prize_id: prizeId,
+    });
+    if (error || data?.success !== true) {
+      setNotice("출석 기프티콘 배정 실패: " + (error?.message || "상품 재고를 확인해주세요."));
+    } else {
+      setNotice("출석 기프티콘을 배정하고 회원 상품지급센터에 안내했습니다. 회원 링크 확인 대기 중입니다.");
+      await Promise.all([loadEventRewards(), loadGiftInventorySummary(), loadEventPrizes()]);
+    }
     setEventRewardWorking(false);
   }
 
@@ -3498,7 +3520,22 @@ export default function Home() {
                   <section style={{margin:"0 0 14px",padding:"14px",border:"1px solid #d8ccb9",borderRadius:"16px",background:"#211d1a",color:"#fff8ed"}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:"10px",marginBottom:"10px"}}><div><span style={{display:"block",fontSize:"8px",fontWeight:900,letterSpacing:"1.2px",color:"#d4a75e"}}>당첨 · 지급</span><strong style={{display:"block",marginTop:"3px",fontSize:"14px"}}>당첨 · 지급 관리</strong></div><button type="button" disabled={eventRewardWorking} onClick={startSurpriseAiDemo} style={{border:"1px solid #c49348",borderRadius:"10px",background:"#3a2b1d",color:"#ffd992",padding:"8px 10px",fontSize:"9px",fontWeight:900,cursor:"pointer"}}>⚡ AI PROCESS 돌발 체험 추첨</button></div>
                     <div style={{display:"grid",gap:"7px"}}>
-                      {adminEventRewards.slice(0,8).map((reward)=><div key={reward.id} style={{display:"grid",gridTemplateColumns:"minmax(90px,1fr) minmax(120px,1.6fr) 80px 78px",gap:"8px",alignItems:"center",padding:"9px 10px",borderRadius:"10px",background:"rgba(255,255,255,.055)",fontSize:"10px"}}><b>{reward.nickname}</b><span>{reward.reward_type === "ai_process" ? "◆ " : "🎁 "}{reward.reward_name}</span><em style={{fontStyle:"normal",color:reward.status === "delivered" ? "#83d9b1" : "#e8bf79"}}>{reward.status === "delivered" ? "지급완료" : reward.reward_type === "ai_process" ? "체험활성" : "지급대기"}</em>{reward.status !== "delivered" ? <button type="button" disabled={eventRewardWorking} onClick={()=>markEventRewardDelivered(reward.id)} style={{border:"1px solid #6c5a45",borderRadius:"8px",background:"#332a22",color:"#fff3df",padding:"6px",fontSize:"9px",cursor:"pointer"}}>완료 처리</button> : <small>완료</small>}</div>)}
+                      {adminEventRewards.slice(0,8).map((reward)=>{
+ const attendance=reward.event_id==null&&reward.reward_type==="physical"&&/^누적 출석 \d+회 달성/.test(reward.reward_name||"");
+ const available=eventPrizes.filter(prize=>prize.reward_type==="physical"&&Number(giftInventorySummary[prize.id]?.available_count||0)>0);
+ return <div key={reward.id} style={{display:"grid",gridTemplateColumns:"minmax(65px,.8fr) minmax(94px,1.5fr) minmax(55px,.7fr) minmax(95px,1fr)",gap:"7px",alignItems:"center",padding:"9px 10px",borderRadius:"10px",background:"rgba(255,255,255,.055)",fontSize:"10px"}}>
+ <b style={{overflowWrap:"anywhere"}}>{reward.nickname}</b><span style={{overflowWrap:"anywhere"}}>{reward.reward_type === "ai_process" ? "◆ " : "🎁 "}{reward.reward_name}</span>
+ <em style={{fontStyle:"normal",color:reward.status === "delivered" ? "#83d9b1" : "#e8bf79"}}>{reward.status === "delivered" ? "지급완료" : reward.status==="ready"&&attendance?"링크 확인 대기":reward.reward_type === "ai_process" ? "체험활성" : "지급대기"}</em>
+ {attendance&&reward.status==="pending"?<div style={{display:"grid",gap:"5px",minWidth:0}}>
+ <select aria-label="출석 보상 기프티콘 선택" value={attendanceGiftSelection[reward.id]||""} onChange={e=>setAttendanceGiftSelection(current=>({...current,[reward.id]:e.target.value}))} disabled={eventRewardWorking||available.length===0} style={{width:"100%",minWidth:0,fontSize:"9px",padding:"5px",background:"#fff",color:"#23384b",borderRadius:"5px"}}>
+ <option value="">{available.length?"상품 선택":"재고 없음"}</option>
+ {available.map(prize=><option key={prize.id} value={prize.id}>{prize.name} ({giftInventorySummary[prize.id]?.available_count}개)</option>)}
+ </select>
+ <button type="button" disabled={eventRewardWorking||!attendanceGiftSelection[reward.id]} onClick={()=>assignAttendanceGift(reward.id)} style={{border:"1px solid #6c5a45",borderRadius:"8px",background:"#332a22",color:"#fff3df",padding:"6px 3px",fontSize:"9px",cursor:"pointer"}}>배정·안내</button></div>
+ :attendance&&reward.status==="ready"?<small>회원 확인 대기</small>
+ :reward.status!=="delivered"?<button type="button" disabled={eventRewardWorking} onClick={()=>markEventRewardDelivered(reward.id)} style={{border:"1px solid #6c5a45",borderRadius:"8px",background:"#332a22",color:"#fff3df",padding:"6px",fontSize:"9px",cursor:"pointer"}}>완료 처리</button>
+ :<small>완료</small>}
+ </div>})}
                       {!adminEventRewards.length && <div style={{padding:"12px",borderRadius:"10px",background:"rgba(255,255,255,.04)",fontSize:"10px",color:"#b9aa99"}}>아직 당첨·지급 기록이 없습니다.</div>}
                     </div>
                   </section>
