@@ -1252,9 +1252,16 @@ export default function Home() {
   }, [profile?.role, user?.id]);
 
   async function loadAutoEvents() {
-    /* V25 EVENT RUNTIME */
+    /* V25 EVENT RUNTIME: require an approved Supabase member session */
     try {
-      await fetch("/api/event-runtime", { method: "POST", cache: "no-store" });
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session?.access_token) throw new Error("member_session_missing");
+      const runtimeResponse = await fetch("/api/event-runtime", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+      });
+      if (!runtimeResponse.ok) console.warn("이벤트 런타임 동기화 응답:", runtimeResponse.status);
     } catch (runtimeError) {
       console.warn("이벤트 런타임 동기화 오류:", runtimeError);
     }
