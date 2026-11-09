@@ -2356,9 +2356,9 @@ export default function Home() {
       return;
     }
 
-    if (password.length < 6) {
+    if (password.length < 4) {
       setNotice(
-        "비밀번호는 6자리 이상 입력해주세요."
+        "비밀번호는 4자리 이상 입력해주세요."
       );
       return;
     }
@@ -3949,7 +3949,7 @@ export default function Home() {
             style={styles.input}
             placeholder={
               mode === "signup"
-                ? "6자리 이상"
+                ? "4자리 이상"
                 : "비밀번호"
             }
           />
