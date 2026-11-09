@@ -43,7 +43,8 @@ export default function DesignEntry(){
           .select("id,nickname,approval_status,role").eq("id",user.id).maybeSingle();
         if(!active)return;
         if(profileError||!isApprovedProfile(profile)){setNotice("관리자 승인 후 이용할 수 있습니다.");setLoading(false);return}
-        if(!isDesignUiLocked()){navigateAfterEntry(router,profile);return}
+        const accountSwitchRequested=typeof window!=="undefined"&&new URLSearchParams(window.location.search).get("switch")==="1";
+        if(!isDesignUiLocked()&&!accountSwitchRequested){navigateAfterEntry(router,profile);return}
         setExisting(profile);
       }catch{if(active)setNotice("로그인 상태를 확인할 수 없습니다.")}
       finally{if(active)setLoading(false)}
@@ -82,6 +83,19 @@ export default function DesignEntry(){
     }catch{setNotice("로그인 중 오류가 발생했습니다.")}
     finally{setWorking(false)}
   }
+  async function enterExisting(){
+    if(working||!existing)return;
+    setWorking(true);setNotice("");
+    try{
+      const {data:{user},error:authError}=await supabase.auth.getUser();
+      if(authError||!user){setExisting(null);setNotice("로그인이 만료되었습니다. 다시 로그인해주세요.");return}
+      const {data:profile,error:profileError}=await supabase.from("profiles")
+        .select("id,nickname,approval_status,role").eq("id",user.id).maybeSingle();
+      if(profileError||!isApprovedProfile(profile)){setExisting(null);setNotice("관리자 승인 후 이용할 수 있습니다.");return}
+      navigateAfterEntry(router,profile);
+    }catch{setNotice("회원 상태를 확인하는 중 문제가 발생했습니다.")}
+    finally{setWorking(false)}
+  }
   async function switchAccount(){
     if(working)return;
     setWorking(true);
@@ -100,7 +114,7 @@ export default function DesignEntry(){
     <p className="intro">기존 AI 계정으로 로그인하면 요청한 신규 페이지로 이동합니다.</p>
     {loading?<p className="status">회원 로그인 확인 중</p>:existing?
       <div className="entry-actions"><p><strong>{existing.nickname||"회원"}</strong> 계정으로 입장할 수 있습니다.</p>
-        <button type="button" onClick={()=>navigateAfterEntry(router,existing)} disabled={working}>잠금 해제 후 입장</button>
+        <button type="button" onClick={enterExisting} disabled={working}>{working?"승인 상태 확인 중":"잠금 해제 후 입장"}</button>
         <button type="button" className="secondary" onClick={switchAccount} disabled={working}>다른 계정으로 로그인</button>
       </div>:
       <form onSubmit={submit}>
