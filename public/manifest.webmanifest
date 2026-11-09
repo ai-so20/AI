@@ -3,7 +3,7 @@
   "name": "AI PROCESS VIP",
   "short_name": "VIP",
   "description": "AI PROCESS VIP Private Community",
-  "start_url": "/?tab=private",
+  "start_url": "/design-home",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
