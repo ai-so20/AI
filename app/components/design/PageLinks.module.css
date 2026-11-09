@@ -1,9 +1,9 @@
-.home{box-sizing:border-box;display:inline-flex;align-items:center;gap:7px;flex-shrink:0;min-height:39px;padding:6px 13px 6px 7px;border:1px solid #dce7f5;border-radius:11px;background:#fff;color:#22466f;text-decoration:none;font-family:inherit;font-size:13px;font-weight:800;letter-spacing:-.2px;line-height:1.2;white-space:nowrap;box-shadow:0 3px 10px rgba(30,80,135,.07);transition:background .16s,border-color .16s,box-shadow .16s}
-.homeIcon{box-sizing:border-box;display:grid;place-items:center;width:27px;height:27px;flex-shrink:0;border-radius:8px;color:#0c68d7;background:#ebf4ff}
+.home{box-sizing:border-box;display:inline-flex;align-items:center;gap:5px;flex-shrink:0;min-height:42px;padding:8px 9px 8px 2px;border:0;border-radius:8px;background:transparent;color:#24466c;text-decoration:none;font-family:inherit;font-size:13px;font-weight:700;letter-spacing:-.2px;line-height:1.2;white-space:nowrap;box-shadow:none;transition:color .16s,background .16s}
+.homeIcon{box-sizing:border-box;display:grid;place-items:center;width:21px;height:23px;flex-shrink:0;border-radius:0;color:#0c68d7;background:transparent}
 .homeIcon svg{display:block}
-.homeLabel{color:inherit;font-size:13px;font-weight:800;line-height:1.2}
-.home:hover{background:#f4f9ff;border-color:#b4d0ee;box-shadow:0 4px 14px rgba(30,80,135,.1)}
-.home:active{background:#e9f3ff}
+.homeLabel{color:inherit;font-size:13px;font-weight:700;line-height:1.2}
+.home:hover{background:rgba(11,109,220,.07);color:#0b63c9}
+.home:active{background:rgba(11,109,220,.12)}
 .action{box-sizing:border-box;display:flex;align-items:center;gap:10px;min-height:59px;max-width:100%;margin:8px 0 0;padding:10px 12px;border:1px solid #dbe7f5;border-radius:11px;background:#f7faff;color:#22456f;font-family:inherit;text-decoration:none;box-shadow:0 2px 8px rgba(30,80,135,.035);transition:background .16s,border-color .16s}
 .actionIcon{box-sizing:border-box;display:grid;place-items:center;flex-shrink:0;width:34px;height:34px;border-radius:9px;color:#0b69d8;background:#e5f0ff}
 .actionIcon svg{display:block;width:20px;height:20px}
@@ -13,4 +13,4 @@
 .actionChevron{font-size:20px;font-weight:600;line-height:1;color:#87a2bf}
 .action:hover{background:#eef6ff;border-color:#adcdee}
 .home:focus-visible,.action:focus-visible{outline:2px solid #0b6fdd;outline-offset:2px}
-@media(max-width:350px){.home{min-height:37px;padding:5px 10px 5px 6px}.action{padding:9px 8px;gap:7px}.actionIcon{width:29px;height:31px}}
+@media(max-width:350px){.home{min-height:42px;padding:8px 7px 8px 2px}.action{padding:9px 8px;gap:7px}.actionIcon{width:29px;height:31px}}
