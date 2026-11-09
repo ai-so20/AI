@@ -2,6 +2,7 @@
 import {useEffect,useState} from "react";
 import {useRouter} from "next/navigation";
 import Link from "next/link";
+import {HomeReturnLink,PageActionLink} from "../components/design/PageLinks";
 import {supabase} from "../supabase";
 import {normalizePasswordInput} from "../lib/ui-helpers";
 import {isApprovedProfile,isDesignUiLocked} from "../lib/design-member-access";
@@ -108,7 +109,7 @@ export default function DesignEntry(){
     finally{setWorking(false)}
   }
   return <main className="design-entry"><section className="entry-panel">
-    <Link href="/design-home" className="back">‹ 신규 홈</Link>
+    <HomeReturnLink/>
     <span className="eyebrow">AI PROCESS · MEMBER ENTRY</span>
     <h1>회원 입장</h1>
     <p className="intro">기존 AI 계정으로 로그인하면 요청한 신규 페이지로 이동합니다.</p>
@@ -126,7 +127,7 @@ export default function DesignEntry(){
       </form>
     }
     {notice&&<p className="notice" role="status">{notice}</p>}
-    <p className="foot">이 페이지는 기존 AI 로그인 API를 사용하며 회원 데이터나 지급 기록을 변경하지 않습니다. <Link href="/?legacy=1">신규 회원가입</Link></p>
+    <p className="foot">이 페이지는 기존 AI 로그인 API를 사용하며 회원 데이터나 지급 기록을 변경하지 않습니다. <PageActionLink href="/?legacy=1" label="신규 회원가입" detail="AI 회원 등록" icon="arrow"/></p>
   </section><style jsx>{`
     .design-entry{min-height:100vh;display:grid;place-items:center;background:#f2f6fb;color:#14253e;padding:24px 15px;font-family:Arial,"Noto Sans KR",sans-serif}
     .entry-panel{width:min(100%,430px);background:white;padding:30px 25px;border:1px solid #dfe8f2;border-radius:14px}
