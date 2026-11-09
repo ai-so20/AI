@@ -649,6 +649,31 @@ export default function Home() {
     checkSession();
   }, []);
 
+  // Mobile visitors arrive through the latest AI member pages. Preserve
+  // admin, group chat, notification deep links, and explicit legacy access.
+  useEffect(() => {
+    if (loading || typeof window === "undefined") return;
+    if (!window.matchMedia("(max-width: 640px)").matches) return;
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    if (params.has("legacy") || params.get("from") === "push" ||
+        ["admin", "members", "group"].includes(tab) || profile?.role === "admin") return;
+
+    const standalone = window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone === true;
+    const routes = {
+      home: "/design-home",
+      ai: "/design-ai-process",
+      event: "/design-event",
+      attendance: "/design-attendance",
+      reward: "/design-reward",
+    };
+    // Older installed PWA versions launched /?tab=private by default.
+    const target = !tab ? "/design-home" :
+      tab === "private" && standalone ? "/design-home" : routes[tab];
+    if (target) window.location.replace(target);
+  }, [loading, profile]);
+
   useEffect(() => {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
 
