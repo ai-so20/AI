@@ -225,11 +225,27 @@ async function ensureAiParticipation(db, event, characters, quiz) {
   return rows.length;
 }
 
-export async function POST() {
+export async function POST(request) {
+  // Only AI members with a verified Supabase session may run the existing
+  // member-triggered event sync. Reject requests before any privileged work.
+  const authorization = request.headers.get("authorization") || "";
+  const token = /^Bearer\\s+([^\\s]+)$/i.exec(authorization)?.[1];
+  if (!token) return Response.json({ ok: false, error: "authentication_required" }, { status: 401 });
+
   const db = dbClient();
   if (!db) return Response.json({ ok: false, error: "server_not_configured" }, { status: 500 });
 
   try {
+    const { data: { user }, error: authError } = await db.auth.getUser(token);
+    if (authError || !user) return Response.json({ ok: false, error: "invalid_session" }, { status: 401 });
+
+    const { data: profile, error: profileError } = await db.from("profiles")
+      .select("role,approval_status").eq("id", user.id).maybeSingle();
+    if (profileError || !profile || profile.approval_status !== "approved" ||
+        !["member", "admin"].includes(profile.role)) {
+      return Response.json({ ok: false, error: "member_access_denied" }, { status: 403 });
+    }
+
     const seededQuizCount = await ensureQuizBank(db);
     const admin = await findAdmin(db);
     const characters = await aiCharacters(db);
