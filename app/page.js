@@ -3536,7 +3536,12 @@ export default function Home() {
  :reward.status!=="delivered"?<button type="button" disabled={eventRewardWorking} onClick={()=>markEventRewardDelivered(reward.id)} style={{border:"1px solid #6c5a45",borderRadius:"8px",background:"#332a22",color:"#fff3df",padding:"6px",fontSize:"9px",cursor:"pointer"}}>완료 처리</button>
  :<small>완료</small>}
  </div>})}
-                      {!adminEventRewards.length && <div style={{padding:"12px",borderRadius:"10px",background:"rgba(255,255,255,.04)",fontSize:"10px",color:"#b9aa99"}}>아직 당첨·지급 기록이 없습니다.</div>}
+                      {adminEventRewards.some(reward=>reward.status==="delivered")&&<section style={{marginTop:"12px",paddingTop:"12px",borderTop:"1px solid rgba(255,255,255,.13)"}}>
+ <strong style={{display:"block",fontSize:"11px",marginBottom:"7px",color:"#bbdfc8"}}>최근 지급 완료 내역</strong>
+ {adminEventRewards.filter(reward=>reward.status==="delivered").slice(0,5).map(reward=><div key={reward.id} style={{display:"grid",gridTemplateColumns:"minmax(66px,.7fr) minmax(110px,1.5fr) auto",gap:"8px",padding:"6px 3px",fontSize:"10px",color:"#e5ecea"}}>
+  <b>{reward.nickname}</b><span style={{overflowWrap:"anywhere"}}>{reward.reward_name}</span><strong style={{color:"#83d9b1",whiteSpace:"nowrap"}}>지급 완료</strong>
+ </div>)}
+ </section>}{!adminEventRewards.length && <div style={{padding:"12px",borderRadius:"10px",background:"rgba(255,255,255,.04)",fontSize:"10px",color:"#b9aa99"}}>아직 당첨·지급 기록이 없습니다.</div>}
                     </div>
                   </section>
                 )}
