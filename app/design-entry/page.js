@@ -112,7 +112,7 @@ export default function DesignEntry(){
       </form>
     }
     {notice&&<p className="notice" role="status">{notice}</p>}
-    <p className="foot">이 페이지는 기존 AI 로그인 API를 사용하며 회원 데이터나 지급 기록을 변경하지 않습니다.</p>
+    <p className="foot">이 페이지는 기존 AI 로그인 API를 사용하며 회원 데이터나 지급 기록을 변경하지 않습니다. <Link href="/?legacy=1">신규 회원가입</Link></p>
   </section><style jsx>{`
     .design-entry{min-height:100vh;display:grid;place-items:center;background:#f2f6fb;color:#14253e;padding:24px 15px;font-family:Arial,"Noto Sans KR",sans-serif}
     .entry-panel{width:min(100%,430px);background:white;padding:30px 25px;border:1px solid #dfe8f2;border-radius:14px}
