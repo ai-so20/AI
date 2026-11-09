@@ -39,9 +39,9 @@ export async function POST(request) {
       );
     }
 
-    if (password.length < 6) {
+    if (password.length < 4) {
       return NextResponse.json(
-        { message: "비밀번호는 6자리 이상 입력해주세요." },
+        { message: "비밀번호는 4자리 이상 입력해주세요." },
         { status: 400 }
       );
     }
