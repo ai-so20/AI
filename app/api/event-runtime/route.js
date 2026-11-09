@@ -229,7 +229,7 @@ export async function POST(request) {
   // Only AI members with a verified Supabase session may run the existing
   // member-triggered event sync. Reject requests before any privileged work.
   const authorization = request.headers.get("authorization") || "";
-  const token = /^Bearer\\s+([^\\s]+)$/i.exec(authorization)?.[1];
+  const token = /^Bearer\s+([^\s]+)$/i.exec(authorization)?.[1];
   if (!token) return Response.json({ ok: false, error: "authentication_required" }, { status: 401 });
 
   const db = dbClient();
