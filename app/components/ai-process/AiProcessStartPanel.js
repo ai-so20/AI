@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 export default function AiProcessStartPanel({
   members = [],
   memberId,
@@ -13,6 +15,13 @@ export default function AiProcessStartPanel({
   working,
   onStart,
 }) {
+  const [memberQuery,setMemberQuery] = useState("");
+  const query = memberQuery.trim().toLowerCase();
+  const visibleMembers = (Array.isArray(members)?members:[]).filter(member =>
+    member.member_id === memberId ||
+    !query ||
+    `${member.nickname || ""} ${member.real_name || ""} ${member.member_id || ""}`.toLowerCase().includes(query)
+  );
   return (
     <section className="ai-v2-admin-console ai-v51-admin-console">
       <div className="ai-v2-admin-head">
@@ -25,9 +34,10 @@ export default function AiProcessStartPanel({
       </div>
 
       <div className="ai-v2-admin-form">
-        <select value={memberId} onChange={(e) => setMemberId(e.target.value)}>
+        <input type="search" aria-label="AI PROCESS 시작할 회원 검색" value={memberQuery} onChange={e=>setMemberQuery(e.target.value)} placeholder={`닉네임 · 성함 · 회원 ID 검색 (${visibleMembers.length}명)`} style={{gridColumn:"1 / -1",width:"100%",minWidth:0}} />
+        <select aria-label="AI PROCESS 시작할 회원 선택" value={memberId} onChange={(e) => setMemberId(e.target.value)}>
           <option value="">회원 선택</option>
-          {members.map((member) => (
+          {visibleMembers.map((member) => (
             <option key={member.member_id} value={member.member_id}>
               {member.nickname}
               {member.account_type === "ai_character"
@@ -37,6 +47,7 @@ export default function AiProcessStartPanel({
                   : ""}
             </option>
           ))}
+          {!visibleMembers.length&&<option value="" disabled>검색된 회원이 없습니다.</option>}
         </select>
 
         <input
