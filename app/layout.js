@@ -6,8 +6,8 @@ import "./admin-console.css";
 import "./ai-process-finance.css";
 
 export const metadata = {
-  title: "VIP 이벤트 혜택방",
-  description: "회원들과 함께하는 실시간 VIP 이벤트 커뮤니티",
+  title: "AI PROCESS",
+  description: "AI PROCESS 회원 서비스 · 자산 현황, 이벤트, 출석, 상품 지급 안내",
   manifest: "/manifest.webmanifest",
 };
 
