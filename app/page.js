@@ -477,6 +477,11 @@ export default function Home() {
     const duration = aiAdminIndefinite ? 0 : Number(aiAdminDurationHours);
     if (!Number.isFinite(amount) || amount <= 0) { setNotice("운용금액을 확인해주세요."); return; }
     if (!aiAdminIndefinite && (!Number.isFinite(duration) || duration < 1 || duration > 720)) { setNotice("진행시간은 1시간~720시간(30일)으로 설정해주세요."); return; }
+    if (typeof window !== "undefined") {
+      const target = adminAllMembers.find((member) => member.member_id === aiAdminMemberId);
+      if (!window.confirm((target?.nickname || "선택한 회원") + "의 AI PROCESS를 시작하시겠습니까?\n운용금액: " + aiKrw(amount) +
+        "\n기간: " + (aiAdminIndefinite ? "미정" : duration+"시간"))) return;
+    }
     setAiAdminWorking(true);
     try {
       const { error } = await startAiProcess(supabase, {
@@ -2314,7 +2319,7 @@ export default function Home() {
       },
     };
 
-    setMemberSearch("");
+    // Keep the current search/filter when returning from this member's chat.
     setChatTab("private");
     if (typeof window !== "undefined") {
       window.sessionStorage.setItem("vip-active-tab", "private");
@@ -3388,13 +3393,14 @@ export default function Home() {
                 <section className="vip-admin-member-table">
                   <div className="vip-admin-member-row vip-admin-member-row-head"><span>회원</span><span>가입일</span><span>상태</span><span>AI PROCESS</span><span>관리</span></div>
                   {adminPagedMembers.map((member) => {
-                    const running = aiPublicSessions.some((session) => session.user_id === member.member_id);
+                    const memberProcess = aiPublicSessions.find((session) => session.user_id === member.member_id);
+                    const running = memberProcess?.status === "running";
                     return (
                       <div className="vip-admin-member-row" key={member.member_id}>
                         <div className="vip-admin-member-identity"><img src={avatarSrc(member.avatar)} alt=""/><span><b>{member.nickname}{member.account_type && member.account_type !== "human" && <em style={{marginLeft:"6px",fontStyle:"normal",fontSize:"10px",padding:"2px 6px",borderRadius:"999px",background:member.account_type==="ai_character"?"#eaf3ff":"#fff2dc",color:member.account_type==="ai_character"?"#315e9b":"#8a5a22"}}>{accountTypeLabel(member.account_type)}</em>}</b><small>{member.real_name || "성함 미입력"}</small></span></div>
                         <span className="vip-admin-member-date">{member.created_at ? new Intl.DateTimeFormat("ko-KR", {year:"2-digit",month:"2-digit",day:"2-digit"}).format(new Date(member.created_at)) : "-"}</span>
                         <span className={`vip-admin-member-state is-${member.approval_status}`}>{member.approval_status === "approved" ? "승인 완료" : member.approval_status === "pending" ? "승인 대기" : "거절"}</span>
-                        <span className={`vip-admin-process-state ${running ? "is-running" : ""}`}>{running ? "진행 중" : "대기"}</span>
+                        <span className={`vip-admin-process-state ${running ? "is-running" : ""}`}>{running ? "진행 중" : memberProcess ? "종료" : "대기"}</span>
                         <div className="vip-admin-member-actions">
                           <select
                             value={member.account_type || "human"}
