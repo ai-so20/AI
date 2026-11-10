@@ -670,7 +670,7 @@ export default function Home() {
   // Mobile visitors arrive through the latest AI member pages. Preserve
   // admin, group chat, notification deep links, and explicit legacy access.
   useEffect(() => {
-    if (loading || typeof window === "undefined") return;
+    if (loading || !user || !profile || typeof window === "undefined") return;
     if (!window.matchMedia("(max-width: 640px)").matches) return;
     const params = new URLSearchParams(window.location.search);
     const tab = params.get("tab");
@@ -690,7 +690,7 @@ export default function Home() {
     const target = !tab ? "/design-home" :
       tab === "private" && standalone ? "/design-home" : routes[tab];
     if (target) window.location.replace(target);
-  }, [loading, profile]);
+  }, [loading, user, profile]);
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
