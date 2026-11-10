@@ -3393,7 +3393,7 @@ export default function Home() {
                 <section className="vip-admin-member-table">
                   <div className="vip-admin-member-row vip-admin-member-row-head"><span>회원</span><span>가입일</span><span>상태</span><span>AI PROCESS</span><span>관리</span></div>
                   {adminPagedMembers.map((member) => {
-                    const memberProcess = aiPublicSessions.find((session) => session.user_id === member.member_id);
+                    const memberProcess = aiPublicSessions.find((session) => session.user_id === member.member_id && session.status === "running") || aiPublicSessions.find((session) => session.user_id === member.member_id);
                     const running = memberProcess?.status === "running";
                     return (
                       <div className="vip-admin-member-row" key={member.member_id}>
