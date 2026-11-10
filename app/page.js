@@ -1,6 +1,8 @@
 "use client";
 
 import FinanceMemberView from "./components/finance/FinanceMemberView";
+import DesignEntry from "./design-entry/page";
+import DesignHome from "./design-home/page";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import { AVATAR_CATALOG, avatarSrc, normalizePasswordInput } from "./lib/ui-helpers";
@@ -2747,10 +2749,13 @@ export default function Home() {
   }
 
   if (loading) {
-    return (
-      <main style={styles.page}>VIP EVENT</main>
-    );
+    return <main style={{minHeight:"100dvh",display:"grid",placeItems:"center",background:"#f2f6fb",color:"#465a75",fontSize:"14px"}}>로그인 상태 확인 중...</main>;
   }
+
+  // The primary domain always uses the current member entry/home.
+  // Only authenticated admins continue into the existing admin console below.
+  if (!user || !profile || vipLocked) return <DesignEntry />;
+  if (profile.role !== "admin") return <DesignHome />;
 
   if (user && profile && vipLocked) {
     const avatarKey = profile.avatar || "profile-01";
@@ -4023,141 +4028,8 @@ export default function Home() {
     );
   }
 
-  return (
-    <main style={styles.page}>
-      <section style={styles.card}>
-        <div style={styles.luxLoginHero}>
-          <div style={styles.luxGlowOne}></div>
-          <div style={styles.luxGlowTwo}></div>
-          <div style={styles.luxCrown}>♛</div>
-          <div style={styles.goldLabel}>AI PROCESS</div>
-          <h1 style={styles.title}>VIP PRIVATE</h1>
-          <p style={styles.description}>AI와 함께하는 프라이빗 VIP 커뮤니티</p>
-          <div style={styles.luxMascotFrame}>
-            <div style={styles.luxMascotRing}></div>
-            <img src="/avatars/40/profile-01.jpg" alt="AI PROCESS VIP" style={styles.luxMascotImage}/>
-            <div style={styles.luxVipSeal}>VIP</div>
-          </div>
-          <div style={styles.luxHeroCaption}>PRIVATE · PREMIUM · COMMUNITY</div>
-        </div>
-
-        <div style={styles.tabs}>
-          <button
-            type="button"
-            onClick={() => {
-              setMode("login");
-              setNotice("");
-            }}
-            style={{
-              ...styles.tab,
-              ...(mode === "login"
-                ? styles.activeTab
-                : {}),
-            }}
-          >
-            로그인
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setMode("signup");
-              setNotice("");
-            }}
-            style={{
-              ...styles.tab,
-              ...(mode === "signup"
-                ? styles.activeTab
-                : {}),
-            }}
-          >
-            가입 신청
-          </button>
-        </div>
-
-        <form
-          onSubmit={
-            mode === "login"
-              ? handleLogin
-              : handleSignup
-          }
-          style={styles.form}
-        >
-          <label style={styles.label}>닉네임</label>
-
-          <input
-            value={nickname}
-            onChange={(e) =>
-              setNickname(e.target.value)
-            }
-            style={styles.input}
-            placeholder={
-              mode === "login"
-                ? "가입한 닉네임"
-                : "채팅에서 사용할 닉네임"
-            }
-          />
-
-          {mode === "signup" && (
-            <>
-              <label style={styles.label}>
-                성함
-              </label>
-
-              <input
-                value={realName}
-                onChange={(e) =>
-                  setRealName(e.target.value)
-                }
-                style={styles.input}
-                placeholder="성함"
-              />
-            </>
-          )}
-
-          <label style={styles.label}>
-            비밀번호
-          </label>
-
-          <input
-            type="password"
-            value={password}
-            onChange={(e) =>
-              setPassword(e.target.value)
-            }
-            style={styles.input}
-            placeholder={
-              mode === "signup"
-                ? "4자리 이상"
-                : "비밀번호"
-            }
-          />
-
-          <button
-            type="submit"
-            disabled={working}
-            style={styles.primary}
-          >
-            {working
-              ? "처리 중..."
-              : mode === "login"
-                ? "VIP 로그인"
-                : "가입 신청하기"}
-          </button>
-        </form>
-
-        {notice && (
-          <div style={styles.notice}>
-            {notice}
-          </div>
-        )}
-
-        <div style={styles.footer}>
-          안전한 커뮤니티 · AI 투자 프로세스 · 다양한 이벤트
-        </div>
-      </section>
-    </main>
-  );
+  // Defensive fallback for an expired admin session.
+  return <DesignEntry />;
 }
 
 const styles = {
