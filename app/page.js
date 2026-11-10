@@ -3234,6 +3234,19 @@ export default function Home() {
                   <div className="vip-admin-status"><i></i> SYSTEM ONLINE</div>
                 </section>
 
+                <section className="vip-admin-action-center" aria-label="관리자 바로 처리" style={{margin:"0 0 16px",padding:"13px 14px",border:"1px solid #dbe4ef",borderRadius:"12px",background:"#f8fbff"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:"10px",flexWrap:"wrap",marginBottom:"9px"}}>
+                    <strong style={{fontSize:"15px",color:"#244465"}}>바로 처리할 일</strong>
+                    <button type="button" disabled={adminRefreshing} onClick={refreshAdminWorkspace} style={{padding:"9px 13px",minHeight:"38px",fontWeight:750,border:"1px solid #b8cadb",background:"#fff",borderRadius:"8px",cursor:"pointer"}}>{adminRefreshing ? "새로고침 중..." : "↻ 데이터 새로고침"}</button>
+                  </div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:"8px"}}>
+                    <button type="button" onClick={()=>{setAdminMemberFilter("pending");setMemberSearch("");changeTab("members");}} style={{padding:"10px 12px",minHeight:"42px",border:"1px solid #dfcaa9",background:"#fff9ef",borderRadius:"8px",cursor:"pointer"}}>승인 대기 <b>{adminPendingMembers.length}명</b></button>
+                    <button type="button" onClick={()=>changeTab("private")} style={{padding:"10px 12px",minHeight:"42px",border:"1px solid #ced9e6",background:"#fff",borderRadius:"8px",cursor:"pointer"}}>미확인 문의 <b>{unreadPrivate}건</b></button>
+                    <button type="button" onClick={()=>{setAdminRewardFilter("waiting");changeTab("event");}} style={{padding:"10px 12px",minHeight:"42px",border:"1px solid #ced9e6",background:"#fff",borderRadius:"8px",cursor:"pointer"}}>지급 대기 <b>{adminEventRewards.filter(x=>x.status!=="delivered").length}건</b></button>
+                    <button type="button" onClick={()=>changeTab("event")} style={{padding:"10px 12px",minHeight:"42px",border:"1px solid #ced9e6",background:"#fff",borderRadius:"8px",cursor:"pointer"}}>이벤트 <b>{activeEvent ? activeEvent.round_number+"회 진행 중" : "현황 확인"}</b></button>
+                  </div>
+                </section>
+
                 <section className="vip-admin-kpis vip-admin-kpis-premium">
                   <button type="button" onClick={() => { setAdminMemberFilter("approved"); setMemberSearch(""); changeTab("members"); }}>
                     <span>전체 회원</span><strong>{adminApprovedMembers.length.toLocaleString("ko-KR")}명</strong><small>승인된 일반 회원</small>
@@ -3330,14 +3343,10 @@ export default function Home() {
                 <section className="vip-admin-members-head">
                   <div><span>MEMBER MANAGEMENT</span><h2>회원 관리</h2><p>회원 승인 상태와 AI PROCESS 진행 여부를 확인하고 1:1 상담으로 바로 이동합니다.</p></div>
                   <div style={{display:"flex",gap:"10px",alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end"}}>
-                    <button
-                      type="button"
-                      disabled={aiAccountsWorking}
-                      onClick={syncAiCharacterAccounts}
-                      style={{border:"1px solid #d8c8b5",background:"#fffaf2",color:"#6e5234",borderRadius:"12px",padding:"10px 13px",fontWeight:800,cursor:"pointer"}}
-                    >
-                      {aiAccountsWorking ? "30명 생성 중..." : "AI 캐릭터 30명 생성/동기화"}
-                    </button>
+                    <button type="button" disabled={adminRefreshing} onClick={refreshAdminWorkspace} style={{padding:"9px 11px",minHeight:"39px",border:"1px solid #c6d4e4",borderRadius:"8px",background:"#fff",fontWeight:750,cursor:"pointer"}}>{adminRefreshing?"조회 중...":"↻ 새로고침"}</button>
+                    <details style={{maxWidth:"100%"}}><summary style={{padding:"9px 10px",cursor:"pointer",fontSize:"12px"}}>고급 관리 · AI 계정 생성</summary>
+                      <button type="button" disabled={aiAccountsWorking} onClick={syncAiCharacterAccounts} style={{marginTop:"7px",padding:"10px",border:"1px solid #d8c8b5",background:"#fffaf2",borderRadius:"8px",fontWeight:700,cursor:"pointer"}}>{aiAccountsWorking?"계정 생성 중...":"AI 캐릭터 30명 생성/동기화"}</button>
+                    </details>
                     <div className="vip-admin-members-total"><span>승인 회원</span><strong>{adminApprovedMembers.length}명</strong></div>
                   </div>
                 </section>
@@ -3353,12 +3362,30 @@ export default function Home() {
                       <button key={value} type="button" className={adminMemberFilter === value ? "is-active" : ""} onClick={() => setAdminMemberFilter(value)}>{label}<b>{count}</b></button>
                     ))}
                   </div>
-                  <input value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder="닉네임 또는 성함 검색"/>
+                  <input aria-label="회원 검색" value={memberSearch} onChange={(e) => setMemberSearch(e.target.value)} placeholder="닉네임 · 성함 · 회원 ID 검색"/>
+                  <div style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:"8px",width:"100%"}}>
+                    <label style={{display:"flex",alignItems:"center",gap:"6px",fontSize:"12px",fontWeight:700}}>계정 유형
+                      <select aria-label="계정 유형 필터" value={adminAccountFilter} onChange={e=>setAdminAccountFilter(e.target.value)} style={{padding:"9px 10px",minHeight:"40px",border:"1px solid #d3dce8",background:"#fff",borderRadius:"7px"}}>
+                        <option value="all">전체</option><option value="human">일반회원</option><option value="ai_character">AI 캐릭터</option><option value="managed">가라계정</option>
+                      </select>
+                    </label>
+                    <label style={{display:"flex",alignItems:"center",gap:"6px",fontSize:"12px",fontWeight:700}}>정렬
+                      <select aria-label="회원 정렬" value={adminMemberSort} onChange={e=>setAdminMemberSort(e.target.value)} style={{padding:"9px 10px",minHeight:"40px",border:"1px solid #d3dce8",background:"#fff",borderRadius:"7px"}}>
+                        <option value="newest">최근 가입순</option><option value="oldest">오래된 가입순</option><option value="name">닉네임순</option>
+                      </select>
+                    </label>
+                    <button type="button" onClick={()=>{setMemberSearch("");setAdminMemberFilter("all");setAdminAccountFilter("all");setAdminMemberSort("newest");setAdminMemberPage(0);}} style={{padding:"9px 12px",minHeight:"40px",border:"1px solid #d3dce8",borderRadius:"7px",background:"#fff",cursor:"pointer"}}>조건 초기화</button>
+                  </div>
                 </section>
+                {adminMemberLoadError && <p role="alert" style={{margin:"10px 0",color:"#b23434",fontSize:"13px"}}>회원 목록 조회 오류: {adminMemberLoadError}</p>}
+                <div role="status" style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"8px",padding:"10px 2px",fontSize:"13px",color:"#38526f"}}>
+                  <strong>검색 결과 {adminVisibleMembers.length.toLocaleString("ko-KR")}명</strong>
+                  <span>{adminVisibleMembers.length? `${adminMemberCurrentPage*30+1}–${Math.min((adminMemberCurrentPage+1)*30,adminVisibleMembers.length)}명 표시` : "표시할 회원 없음"}</span>
+                </div>
 
                 <section className="vip-admin-member-table">
                   <div className="vip-admin-member-row vip-admin-member-row-head"><span>회원</span><span>가입일</span><span>상태</span><span>AI PROCESS</span><span>관리</span></div>
-                  {adminVisibleMembers.map((member) => {
+                  {adminPagedMembers.map((member) => {
                     const running = aiPublicSessions.some((session) => session.user_id === member.member_id);
                     return (
                       <div className="vip-admin-member-row" key={member.member_id}>
@@ -3386,6 +3413,11 @@ export default function Home() {
                   })}
                   {!adminVisibleMembers.length && <div className="vip-admin-member-empty">조건에 맞는 회원이 없습니다.</div>}
                 </section>
+                <div aria-label="회원 목록 페이지" style={{display:"flex",justifyContent:"center",alignItems:"center",gap:"10px",padding:"16px 0"}}>
+                  <button type="button" disabled={adminMemberCurrentPage===0} onClick={()=>setAdminMemberPage(p=>Math.max(0,p-1))} style={{minWidth:"68px",minHeight:"40px",padding:"8px 12px",border:"1px solid #cedae8",borderRadius:"8px",background:"#fff",cursor:"pointer"}}>이전</button>
+                  <strong style={{fontSize:"13px",fontVariantNumeric:"tabular-nums"}}>{adminMemberCurrentPage+1} / {adminMemberPageCount}</strong>
+                  <button type="button" disabled={adminMemberCurrentPage>=adminMemberPageCount-1} onClick={()=>setAdminMemberPage(p=>Math.min(adminMemberPageCount-1,p+1))} style={{minWidth:"68px",minHeight:"40px",padding:"8px 12px",border:"1px solid #cedae8",borderRadius:"8px",background:"#fff",cursor:"pointer"}}>다음</button>
+                </div>
               </div>
             )}
 
