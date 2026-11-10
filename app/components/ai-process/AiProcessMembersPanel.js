@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 import { avatarSrc } from "../../lib/ui-helpers";
 import { aiKrw, aiSignedKrw, aiSignedPct, aiTime, aiRemainingText } from "../../lib/ai-process-utils";
 
@@ -18,6 +20,18 @@ export default function AiProcessMembersPanel({
   const rows = Array.isArray(sessions) ? sessions : [];
   const runningCount = rows.filter((item) => item.status === "running").length;
   const stoppedCount = rows.filter((item) => item.status === "stopped").length;
+  const [adminQuery,setAdminQuery] = useState("");
+  const [adminStatusFilter,setAdminStatusFilter] = useState("running");
+  const [adminPage,setAdminPage] = useState(0);
+  const filteredRows = isAdmin ? rows.filter((item) => {
+    if (adminStatusFilter==="running" && item.status!=="running") return false;
+    if (adminStatusFilter==="stopped" && item.status==="running") return false;
+    const query = adminQuery.trim().toLowerCase();
+    return !query || `${item.nickname || ""} ${item.user_id || ""}`.toLowerCase().includes(query);
+  }) : rows;
+  const pageCount = Math.max(1,Math.ceil(filteredRows.length/15));
+  const currentPage = Math.min(adminPage,pageCount-1);
+  const displayRows = isAdmin ? filteredRows.slice(currentPage*15,(currentPage+1)*15) : rows;
 
   return (
     <section className={isAdmin ? "ai-v2-live-members ai-v51-member-section" : "ai-v2-live-members"}>
@@ -33,11 +47,19 @@ export default function AiProcessMembersPanel({
         </div>
       </div>
 
+      {isAdmin && <div aria-label="AI PROCESS 회원 검색 및 필터" style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:"8px",margin:"12px 0"}}>
+        <input type="search" aria-label="AI PROCESS 관리 회원 검색" value={adminQuery} onChange={e=>{setAdminQuery(e.target.value);setAdminPage(0);}} placeholder="회원명 · 회원 ID 검색" style={{flex:"1 1 155px",minWidth:0,minHeight:"42px",border:"1px solid #cfd9e4",borderRadius:"7px",padding:"9px 12px",background:"#fff",fontSize:"13px"}} />
+        <select aria-label="AI PROCESS 상태 필터" value={adminStatusFilter} onChange={e=>{setAdminStatusFilter(e.target.value);setAdminPage(0);}} style={{minHeight:"42px",border:"1px solid #cfd9e4",borderRadius:"7px",padding:"9px",background:"#fff",fontSize:"13px"}}>
+          <option value="running">진행 중</option><option value="stopped">종료</option><option value="all">전체</option>
+        </select>
+        <span role="status" style={{fontSize:"12px",color:"#51677d"}}>검색 결과 {filteredRows.length}건</span>
+      </div>}
       {loading && !rows.length ? (
         <div className="ai-v2-live-empty">진행 현황을 불러오는 중입니다.</div>
       ) : rows.length ? (
+        <>
         <div className={isAdmin ? "ai-v2-live-member-grid ai-v51-member-list" : "ai-v2-live-member-grid"}>
-          {rows.map((item) => (
+          {displayRows.map((item) => (
             isAdmin ? (
               <article className={`ai-v50-control-card ai-v51-control-row ${item.status === "stopped" ? "is-stopped" : ""}`} key={item.user_id}>
                 <div className="ai-v50-control-head">
@@ -102,6 +124,13 @@ export default function AiProcessMembersPanel({
             )
           ))}
         </div>
+        {isAdmin && !filteredRows.length && <div className="ai-v2-live-empty">선택한 조건의 회원이 없습니다.</div>}
+        {isAdmin && filteredRows.length>0 && <div aria-label="AI PROCESS 회원 목록 페이지" style={{display:"flex",justifyContent:"center",alignItems:"center",gap:"11px",margin:"14px 0 4px"}}>
+          <button type="button" disabled={currentPage===0} onClick={()=>setAdminPage(p=>Math.max(0,p-1))} style={{minHeight:"40px",padding:"9px 14px",border:"1px solid #cfd9e4",borderRadius:"8px",background:"#fff",cursor:"pointer"}}>이전</button>
+          <strong style={{fontSize:"13px"}}>{currentPage+1} / {pageCount}</strong>
+          <button type="button" disabled={currentPage===pageCount-1} onClick={()=>setAdminPage(p=>Math.min(pageCount-1,p+1))} style={{minHeight:"40px",padding:"9px 14px",border:"1px solid #cfd9e4",borderRadius:"8px",background:"#fff",cursor:"pointer"}}>다음</button>
+        </div>}
+        </>
       ) : (
         <div className="ai-v2-live-empty">현재 진행 중인 AI PROCESS 회원이 없습니다.</div>
       )}
