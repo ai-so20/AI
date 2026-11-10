@@ -2,7 +2,7 @@
 import {useEffect,useState} from "react";
 import {useRouter} from "next/navigation";
 import Link from "next/link";
-import {HomeReturnLink,PageActionLink} from "../components/design/PageLinks";
+
 import {supabase} from "../supabase";
 import {normalizePasswordInput} from "../lib/ui-helpers";
 import {isApprovedProfile,isDesignUiLocked} from "../lib/design-member-access";
@@ -29,10 +29,14 @@ export default function DesignEntry(){
   const router=useRouter();
   const [nickname,setNickname]=useState("");
   const [password,setPassword]=useState("");
+  const [realName,setRealName]=useState("");
+  const [signupMode,setSignupMode]=useState(false);
   const [loading,setLoading]=useState(true);
   const [working,setWorking]=useState(false);
   const [existing,setExisting]=useState(null);
   const [notice,setNotice]=useState("");
+
+  useEffect(()=>{if(typeof window!=="undefined" && new URLSearchParams(window.location.search).get("legacy")==="1")setSignupMode(true);},[]);
 
   useEffect(()=>{let active=true;
     async function check(){
@@ -84,6 +88,23 @@ export default function DesignEntry(){
     }catch{setNotice("로그인 중 오류가 발생했습니다.")}
     finally{setWorking(false)}
   }
+  async function submitSignup(e){
+    e.preventDefault();
+    const name=nickname.trim(),person=realName.trim();
+    if(working)return;
+    if(!name||!person||!password){setNotice("닉네임, 성함, 비밀번호를 모두 입력해주세요.");return}
+    if(password.length<4){setNotice("비밀번호는 4자리 이상 입력해주세요.");return}
+    setWorking(true);setNotice("");
+    try{
+      const response=await fetch("/api/auth/signup",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({nickname:name,realName:person,password:normalizePasswordInput(password)})});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok){setNotice(result?.message||"가입 신청 중 오류가 발생했습니다.");return}
+      setNickname("");setRealName("");setPassword("");setSignupMode(false);
+      setNotice("가입 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.");
+    }catch{setNotice("가입 신청 중 오류가 발생했습니다.")}
+    finally{setWorking(false)}
+  }
   async function enterExisting(){
     if(working||!existing)return;
     setWorking(true);setNotice("");
@@ -109,25 +130,34 @@ export default function DesignEntry(){
     finally{setWorking(false)}
   }
   return <main className="design-entry"><section className="entry-panel">
-    <HomeReturnLink/>
-    <span className="eyebrow">AI PROCESS · MEMBER ENTRY</span>
-    <h1>회원 입장</h1>
-    <p className="intro">기존 AI 계정으로 로그인하면 요청한 신규 페이지로 이동합니다.</p>
-    {loading?<p className="status">회원 로그인 확인 중</p>:existing?
+    <span className="eyebrow">AI PROCESS</span>
+    <h1>{signupMode?"회원가입":"회원 로그인"}</h1>
+    <p className="intro">{signupMode?"기존 회원과 동일한 AI PROCESS 서비스를 이용하기 위한 회원가입입니다.":"AI PROCESS 계정으로 로그인하세요."}</p>
+    {loading?<p className="status">로그인 확인 중</p>:existing?
       <div className="entry-actions"><p><strong>{existing.nickname||"회원"}</strong> 계정으로 입장할 수 있습니다.</p>
-        <button type="button" onClick={enterExisting} disabled={working}>{working?"승인 상태 확인 중":"잠금 해제 후 입장"}</button>
+        <button type="button" onClick={enterExisting} disabled={working}>{working?"승인 상태 확인 중":"로그인 상태로 입장"}</button>
         <button type="button" className="secondary" onClick={switchAccount} disabled={working}>다른 계정으로 로그인</button>
       </div>:
-      <form onSubmit={submit}>
-        <label htmlFor="design-nickname">닉네임</label>
-        <input id="design-nickname" value={nickname} maxLength={40} onChange={e=>setNickname(e.target.value)} autoComplete="username" required/>
-        <label htmlFor="design-password">비밀번호</label>
-        <input id="design-password" type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required/>
-        <button type="submit" disabled={working}>{working?"확인 중":"로그인 후 이동"}</button>
-      </form>
+      <>
+        <div className="entry-tabs" aria-label="로그인 또는 가입 신청">
+          <button type="button" className={!signupMode?"is-active":""} onClick={()=>{setSignupMode(false);setNotice("");}}>로그인</button>
+          <button type="button" className={signupMode?"is-active":""} onClick={()=>{setSignupMode(true);setNotice("");}}>가입 신청</button>
+        </div>
+        <form onSubmit={signupMode?submitSignup:submit}>
+          <label htmlFor="design-nickname">닉네임</label>
+          <input id="design-nickname" value={nickname} maxLength={40} onChange={e=>setNickname(e.target.value)} autoComplete="username" required/>
+          {signupMode&&<>
+            <label htmlFor="design-real-name">성함</label>
+            <input id="design-real-name" value={realName} maxLength={80} onChange={e=>setRealName(e.target.value)} autoComplete="name" required/>
+          </>}
+          <label htmlFor="design-password">비밀번호</label>
+          <input id="design-password" type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete={signupMode?"new-password":"current-password"} required/>
+          <button type="submit" disabled={working}>{working?"처리 중...":signupMode?"가입 신청하기":"로그인"}</button>
+        </form>
+      </>
     }
     {notice&&<p className="notice" role="status">{notice}</p>}
-    <p className="foot">이 페이지는 기존 AI 로그인 API를 사용하며 회원 데이터나 지급 기록을 변경하지 않습니다. <PageActionLink href="/?legacy=1" label="신규 회원가입" detail="AI 회원 등록" icon="arrow"/></p>
+    <p className="foot">AI PROCESS 회원 서비스 · 기존 계정과 기록은 그대로 유지됩니다.</p>
   </section><style jsx>{`
     .design-entry{min-height:100vh;display:grid;place-items:center;background:#f2f6fb;color:#14253e;padding:24px 15px;font-family:Arial,"Noto Sans KR",sans-serif}
     .entry-panel{width:min(100%,430px);background:white;padding:30px 25px;border:1px solid #dfe8f2;border-radius:14px}
@@ -143,6 +173,9 @@ export default function DesignEntry(){
     .entry-actions p{font-size:13px;line-height:1.7}
     .notice{font-size:12px;color:#a64242;line-height:1.6;margin:20px 0 0}
     .status{font-size:13px;color:#60758b}
-    .foot{font-size:10px;color:#8b99a9;line-height:1.7;margin-top:27px}
+    .foot{font-size:11px;color:#8b99a9;line-height:1.7;margin-top:27px}
+    .entry-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:#edf3fa;border-radius:9px;margin:0 0 18px}
+    .entry-tabs button{margin:0;min-height:42px;border-radius:7px;background:transparent;color:#5c7086;font-size:13px}
+    .entry-tabs button.is-active{background:#fff;color:#145ea9;box-shadow:0 1px 5px #142d4619}
   `}</style></main>
 }
