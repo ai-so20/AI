@@ -52,7 +52,17 @@ export default function Home() {
   const [adminMemberLoadError, setAdminMemberLoadError] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
   const [adminMemberFilter, setAdminMemberFilter] = useState("all");
+  const [adminAccountFilter, setAdminAccountFilter] = useState("all");
+  const [adminMemberSort, setAdminMemberSort] = useState("newest");
+  const [adminMemberPage, setAdminMemberPage] = useState(0);
+  const [adminRewardFilter, setAdminRewardFilter] = useState("waiting");
+  const [adminRewardSearch, setAdminRewardSearch] = useState("");
+  const [adminRewardPage, setAdminRewardPage] = useState(0);
+  const [adminEventStatusFilter, setAdminEventStatusFilter] = useState("all");
+  const [adminRefreshing, setAdminRefreshing] = useState(false);
   const [selectedAdminChat, setSelectedAdminChat] = useState(null);
+  useEffect(() => { setAdminMemberPage(0); }, [memberSearch, adminMemberFilter, adminAccountFilter, adminMemberSort]);
+  useEffect(() => { setAdminRewardPage(0); }, [adminRewardFilter, adminRewardSearch]);
 
   const [adminUnreadCounts, setAdminUnreadCounts] = useState({});
   const [memberUnreadCount, setMemberUnreadCount] = useState(0);
@@ -1131,6 +1141,8 @@ export default function Home() {
   async function toggleEventRuntimeEnabled() {
     if (profile?.role !== "admin") return;
     const next = !eventRuntimeEnabled;
+    if (!next && typeof window !== "undefined" &&
+        !window.confirm("자동 이벤트 운영을 중지하면 새 회차가 진행되지 않습니다. 중지하시겠습니까?")) return;
     const { error } = await supabase.rpc("admin_set_event_runtime_enabled", { p_enabled: next });
     if (error) setNotice("자동 이벤트 설정 실패: " + error.message);
     else { setEventRuntimeEnabled(next); setNotice(next ? "자동 이벤트를 켰습니다." : "자동 이벤트를 중지했습니다."); }
@@ -1220,6 +1232,7 @@ export default function Home() {
 
   async function markEventRewardDelivered(deliveryId) {
     if (profile?.role !== "admin" || eventRewardWorking) return;
+    if (typeof window !== "undefined" && !window.confirm("실제 지급이 확인된 혜택만 완료 처리해야 합니다. 지급 완료로 표시하시겠습니까?")) return;
     setEventRewardWorking(true);
     const { error } = await supabase.rpc("admin_mark_event_reward_delivered", {
       p_delivery_id: deliveryId,
@@ -2127,8 +2140,28 @@ export default function Home() {
     setAdminAllMembers(data || []);
   }
 
+  async function refreshAdminWorkspace() {
+    if (!user || profile?.role !== "admin" || adminRefreshing) return;
+    setAdminRefreshing(true);
+    try {
+      await Promise.all([
+        loadAdminAllMembers(), loadAdminMembers(), loadAdminUnreadCounts(),
+        loadAiProcessState(), loadAutoEvents(), loadEventPrizes(), loadGiftInventorySummary(),
+      ]);
+      setNotice("관리자 데이터를 다시 조회했습니다.");
+    } catch (error) {
+      setNotice("관리자 데이터 조회 중 오류: " + (error?.message || "확인 필요"));
+    } finally {
+      setAdminRefreshing(false);
+    }
+  }
+
   async function setMemberApproval(memberId, nextStatus) {
-    if (!user || profile?.role !== "admin" || !memberId) return;
+    if (!user || profile?.role !== "admin" || !memberId || working) return;
+    if (nextStatus === "rejected" && typeof window !== "undefined") {
+      const target = adminAllMembers.find((m) => m.member_id === memberId);
+      if (!window.confirm((target?.nickname || "이 회원") + "의 가입 신청을 거절하시겠습니까?")) return;
+    }
     setWorking(true);
     setNotice("");
     try {
@@ -2149,6 +2182,7 @@ export default function Home() {
 
   async function syncAiCharacterAccounts() {
     if (!user || profile?.role !== "admin" || aiAccountsWorking) return;
+    if (typeof window !== "undefined" && !window.confirm("AI 캐릭터 회원계정 30개를 생성하거나 동기화합니다. 계속하시겠습니까?")) return;
     setAiAccountsWorking(true);
     setNotice("");
 
@@ -2189,7 +2223,11 @@ export default function Home() {
   }
 
   async function changeMemberAccountType(member, nextType) {
-    if (!user || profile?.role !== "admin" || !member?.member_id) return;
+    if (!user || profile?.role !== "admin" || !member?.member_id || nextType === (member.account_type || "human")) return;
+    if (typeof window !== "undefined" &&
+        !window.confirm((member.nickname || "회원") + "님의 계정 종류를 " +
+        (nextType === "ai_character" ? "AI 캐릭터" : nextType === "managed" ? "가라계정" : "일반회원") +
+        "으로 변경하시겠습니까?")) return;
     const label = nextType === "ai_character"
       ? "AI 캐릭터"
       : nextType === "managed"
@@ -2771,11 +2809,30 @@ export default function Home() {
       ? adminAllMembers.filter((member) => {
           if (member.role === "admin") return false;
           if (adminMemberFilter !== "all" && member.approval_status !== adminMemberFilter) return false;
+          if (adminAccountFilter !== "all" && (member.account_type || "human") !== adminAccountFilter) return false;
           const query = memberSearch.trim().toLowerCase();
           if (!query) return true;
-          return `${member.nickname || ""} ${member.real_name || ""}`.toLowerCase().includes(query);
+          return `${member.nickname || ""} ${member.real_name || ""} ${member.member_id || ""}`.toLowerCase().includes(query);
+        }).sort((a,b) => {
+          if (adminMemberSort === "name") return (a.nickname || "").localeCompare(b.nickname || "", "ko");
+          const x = Date.parse(a.created_at || "") || 0, y = Date.parse(b.created_at || "") || 0;
+          return adminMemberSort === "oldest" ? x-y : y-x;
         })
       : [];
+    const adminMemberPageCount = Math.max(1, Math.ceil(adminVisibleMembers.length / 30));
+    const adminMemberCurrentPage = Math.min(adminMemberPage, adminMemberPageCount-1);
+    const adminPagedMembers = adminVisibleMembers.slice(adminMemberCurrentPage*30, (adminMemberCurrentPage+1)*30);
+    const adminFilteredRewards = profile?.role === "admin"
+      ? adminEventRewards.filter((reward) => {
+          if (adminRewardFilter === "waiting" && reward.status === "delivered") return false;
+          if (adminRewardFilter === "delivered" && reward.status !== "delivered") return false;
+          const query = adminRewardSearch.trim().toLowerCase();
+          return !query || `${reward.nickname || ""} ${reward.reward_name || ""} ${reward.reward_type || ""}`.toLowerCase().includes(query);
+        }).sort((a,b) => (Date.parse(a.created_at || "") || 0) - (Date.parse(b.created_at || "") || 0))
+      : [];
+    const adminRewardPageCount = Math.max(1, Math.ceil(adminFilteredRewards.length / 20));
+    const adminRewardCurrentPage = Math.min(adminRewardPage, adminRewardPageCount-1);
+    const adminPagedRewards = adminFilteredRewards.slice(adminRewardCurrentPage*20, (adminRewardCurrentPage+1)*20);
 
     const aiRecentResults = Array.isArray(aiSim?.resultHistory) ? aiSim.resultHistory.slice(0, 14) : [];
     const aiCurrentStartMoney = aiStartMoney();
