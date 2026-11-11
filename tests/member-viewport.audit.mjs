@@ -25,16 +25,29 @@ for(const width of widths){
       backColor:back?getComputedStyle(back).color:null,
       iconColor:back?getComputedStyle(back.firstElementChild).color:null,
       navCount:nav?.querySelectorAll("a").length,activeCount:nav?.querySelectorAll('a[aria-current="page"]').length,
-      market:box(".ai-assets-panel"),scrollWidth:document.documentElement.scrollWidth};
+      market:box(".ai-assets-panel"),quick:box(".body > .quick"),how:box(".body > .how"),overview:box(".page > main > .overview"),calendar:box(".page > main > .card:not(.overview):not(.info)"),eventGuide:box(".event-body > .event-guide"),eventHeading:box(".event-body > .section-heading"),aiHero:box(".ai-body > .ai-hero"),aiHelp:box(".ai-body > .ai-how-disclosure"),rewardSummary:box(".shell > main > .summary"),rewardInbox:box(".shell > main > .inbox"),scrollWidth:document.documentElement.scrollWidth};
    });
    const label=name+" @"+width;
    if(!a.frame||!a.nav)failed.push(label+" frame or nav missing");
    else {
     if(a.navCount!==5||a.activeCount!==1)failed.push(label+" nav links/active "+a.navCount+"/"+a.activeCount);
-    if(Math.abs(a.nav.x-a.frame.x)>1.1||Math.abs(a.nav.w-a.frame.w)>1.1)failed.push(label+" nav and frame do not align");
-    if(Math.abs(a.nav.bottom-900)>1.1)failed.push(label+" nav not at screen bottom");
+    if(width<1024) {
+      if(Math.abs(a.nav.x-a.frame.x)>1.1||Math.abs(a.nav.w-a.frame.w)>1.1)failed.push(label+" mobile/tablet nav and frame do not align");
+      if(Math.abs(a.nav.bottom-900)>1.1)failed.push(label+" bottom navigation displaced");
+    }else {
+      if(a.nav.x+a.nav.w>a.frame.x-6)failed.push(label+" desktop nav overlaps content");
+      if(Math.abs(a.nav.y-24)>1.1)failed.push(label+" desktop navigation not at top");
+      if(a.nav.w>220)failed.push(label+" desktop rail is too wide");
+    }
     if(a.scrollWidth>width+1)failed.push(label+" horizontal overflow: "+a.scrollWidth);
     if(name==="home"&&width>=768&&a.market&&a.market.w<a.frame.w*0.75)failed.push(label+" desktop market width: "+a.market.w+" vs frame "+a.frame.w);
+    if(width>=1024){
+      if(name==="home"&&a.quick&&a.how&&a.quick.x<a.how.x+a.how.w-2)failed.push(label+" home summary and quick cards aren't separate columns");
+      if(name==="event"&&a.eventGuide&&a.eventHeading&&a.eventGuide.x>=a.eventHeading.x)failed.push(label+" event guide and list aren't side by side");
+      if(name==="attendance"&&a.overview&&a.calendar&&a.overview.x>=a.calendar.x)failed.push(label+" attendance overview and calendar aren't side by side");
+      if(name==="reward"&&a.rewardSummary&&a.rewardInbox&&a.rewardSummary.x>=a.rewardInbox.x)failed.push(label+" reward sidebar and messages aren't side by side");
+      if(name==="ai-process"&&a.aiHero&&a.aiHelp&&a.aiHero.x>=a.aiHelp.x)failed.push(label+" AI preview and help aren't side by side");
+    }
     if(name!=="home"&&!a.back)failed.push(label+" home return link missing");
     if(name==="event"&&(a.backColor!=="rgb(255, 255, 255)"||a.iconColor!=="rgb(255, 255, 255)"))failed.push(label+" back-link contrast: "+a.backColor+" "+a.iconColor);
    }

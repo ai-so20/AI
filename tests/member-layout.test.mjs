@@ -19,3 +19,12 @@ test("shared CSS is imported and navigation uses a responsive width", () => {
   assert.match(css, /@media\(min-width:768px\)/);
   assert.match(css, /repeat\(5,minmax\(0,1fr\)\)/);
 });
+
+test("desktop is an isolated layout instead of a stretched phone frame", () => {
+  const layout=read("app/layout.js");
+  const desktop=read("app/member-desktop.css");
+  assert.match(layout,/member-desktop\\.css/);
+  assert.match(desktop,/@media \\(min-width: 1024px\\)/);
+  assert.match(desktop,/flex-direction: column/);
+  assert.match(desktop,/grid-column: 2/);
+});

@@ -5,6 +5,7 @@ import "./ai-process-mobile.css";
 import "./admin-console.css";
 import "./ai-process-finance.css";
 import "./member-layout.css";
+import "./member-desktop.css";
 
 export const metadata = {
   title: "AI PROCESS",
