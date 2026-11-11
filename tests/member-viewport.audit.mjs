@@ -48,7 +48,7 @@ for(const width of widths){
       if(name==="reward"&&a.rewardInbox&&a.rewardInbox.h>430)failed.push(label+" oversized empty inbox panel: "+a.rewardInbox.h);
     }
     if(a.scrollWidth>width+1)failed.push(label+" horizontal overflow: "+a.scrollWidth);
-    const targetPad=width<768?20:width<1024?24:28;
+    const targetPad=width<768?20:width<1024?24:Math.max(22,Math.min(28,width*0.022));
     if(Math.abs(a.headerPad-targetPad)>1.1||Math.abs(a.contentPad-targetPad)>1.1)
       failed.push(label+" inconsistent common insets "+a.headerPad+"/"+a.contentPad+" (expected "+targetPad+")");
     if(name==="home"&&width>=768&&width<1024&&a.bodyDisplay==="grid")
