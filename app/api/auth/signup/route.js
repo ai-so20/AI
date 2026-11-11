@@ -94,7 +94,7 @@ export async function POST(request) {
           id: createdUserId,
           nickname,
           real_name: realName,
-          approval_status: "approved",
+          approval_status: "pending",
         },
         { onConflict: "id" }
       );
