@@ -25,7 +25,7 @@ for(const width of widths){
       backColor:back?getComputedStyle(back).color:null,
       iconColor:back?getComputedStyle(back.firstElementChild).color:null,
       navCount:nav?.querySelectorAll("a").length,activeCount:nav?.querySelectorAll('a[aria-current="page"]').length,
-      scrollWidth:document.documentElement.scrollWidth};
+      market:box(".ai-assets-panel"),scrollWidth:document.documentElement.scrollWidth};
    });
    const label=name+" @"+width;
    if(!a.frame||!a.nav)failed.push(label+" frame or nav missing");
@@ -34,6 +34,7 @@ for(const width of widths){
     if(Math.abs(a.nav.x-a.frame.x)>1.1||Math.abs(a.nav.w-a.frame.w)>1.1)failed.push(label+" nav and frame do not align");
     if(Math.abs(a.nav.bottom-900)>1.1)failed.push(label+" nav not at screen bottom");
     if(a.scrollWidth>width+1)failed.push(label+" horizontal overflow: "+a.scrollWidth);
+    if(name==="home"&&width>=768&&a.market&&a.market.w<a.frame.w*0.75)failed.push(label+" desktop market width: "+a.market.w+" vs frame "+a.frame.w);
     if(name!=="home"&&!a.back)failed.push(label+" home return link missing");
     if(name==="event"&&(a.backColor!=="rgb(255, 255, 255)"||a.iconColor!=="rgb(255, 255, 255)"))failed.push(label+" back-link contrast: "+a.backColor+" "+a.iconColor);
    }

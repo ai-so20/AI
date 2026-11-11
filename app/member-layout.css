@@ -26,6 +26,8 @@
 .member-app-surface .member-app-nav{width:calc(100% - 48px)!important;max-width:var(--member-desktop-width)!important}
 .member-app-surface .phone>.body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:18px}
 .member-app-surface .phone>.body>*{min-width:0}
+/* Prevent the final market panel leaving the desktop home right column empty. */
+.member-app-surface .phone>.body>.ai-assets-panel{grid-column:1/-1}
 .member-app-surface .event-body .events{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:16px}
 .member-app-surface .event-body .events>*{min-width:0}
 .member-app-surface .page>main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px;align-items:start}
