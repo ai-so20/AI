@@ -20,18 +20,14 @@
 .member-app-surface .ai-shell .ai-body{padding-left:var(--member-gutter)!important;padding-right:var(--member-gutter)!important}
 .member-app-surface .ai-shell .ai-state-bar{margin-left:var(--member-gutter)!important;margin-right:var(--member-gutter)!important}
 .member-app-surface .shell>main{padding-left:var(--member-gutter)!important;padding-right:var(--member-gutter)!important}
+/* Tablet uses one consistent reading column. 2-column desktop grids start at 1024px. */
 @media(min-width:768px){
 .member-app-surface{padding:24px 24px 0!important}
 .member-app-surface>.member-app-frame{max-width:var(--member-desktop-width)!important;min-height:calc(100dvh - 24px);box-shadow:0 12px 42px rgba(34,61,97,.10)!important}
 .member-app-surface .member-app-nav{width:calc(100% - 48px)!important;max-width:var(--member-desktop-width)!important}
-.member-app-surface .phone>.body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:18px}
-.member-app-surface .phone>.body>*{min-width:0}
-/* Prevent the final market panel leaving the desktop home right column empty. */
-.member-app-surface .phone>.body>.ai-assets-panel{grid-column:1/-1}
-.member-app-surface .event-body .events{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:16px}
-.member-app-surface .event-body .events>*{min-width:0}
-.member-app-surface .page>main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px;align-items:start}
-.member-app-surface .page>main>.eyebrow,.member-app-surface .page>main>h1,.member-app-surface .page>main>.lead,.member-app-surface .page>main>.info{grid-column:1/-1}
+}
+@media(min-width:768px) and (max-width:1023px){
+.member-app-surface{--member-desktop-width:880px;--member-gutter:24px}
 }
 @media(max-width:767px){
 .member-app-surface{padding:0!important}

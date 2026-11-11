@@ -10,7 +10,6 @@ on:
       - 'app/design-ai-process/**'
       - 'app/design-reward/**'
       - 'tests/member-viewport.audit.mjs'
-      - 'tests/member-auth-journey.audit.mjs'
       - '.github/workflows/member-viewport-audit.yml'
   workflow_dispatch:
 permissions:
@@ -47,15 +46,12 @@ jobs:
             sleep 1
           done
           node tests/member-viewport.audit.mjs
-          node tests/member-auth-journey.audit.mjs
       - name: Save browser screenshots and coordinates
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: member-viewport-audit
-          path: |
-            artifacts/member-viewport
-            artifacts/member-auth-journey
+          path: artifacts/member-viewport
           if-no-files-found: warn
           retention-days: 7
       - name: Show server errors

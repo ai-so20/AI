@@ -28,3 +28,13 @@ test("desktop is an isolated layout instead of a stretched phone frame", () => {
   assert.match(desktop,/flex-direction: column/);
   assert.match(desktop,/grid-column: 2/);
 });
+
+test("tablet keeps a single shared column until desktop begins at 1024px", () => {
+ const css=read("app/member-layout.css");
+ const pc=read("app/member-desktop.css");
+ assert.match(css, /max-width:1023px/);
+ assert.match(css, /--member-desktop-width:880px/);
+ assert.match(css, /--member-gutter:24px/);
+ assert.match(pc, /min-width: 1024px/);
+ assert.doesNotMatch(css,/\.phone>\.body\{display:grid/);
+});

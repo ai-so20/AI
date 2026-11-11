@@ -2,7 +2,7 @@ import {chromium} from "playwright";
 import {mkdir,writeFile} from "node:fs/promises";
 const origin=process.env.BASE_URL||"http://127.0.0.1:3100";
 const routes=["home","event","attendance","ai-process","reward"];
-const widths=[320,360,390,440,480,768,1024,1440];
+const widths=[320,360,390,440,480,768,900,1023,1024,1280,1440];
 await mkdir("artifacts/member-viewport",{recursive:true});
 const browser=await chromium.launch({headless:true}),failed=[],records=[];
 for(const width of widths){
@@ -25,6 +25,9 @@ for(const width of widths){
       backColor:back?getComputedStyle(back).color:null,
       iconColor:back?getComputedStyle(back.firstElementChild).color:null,
       navCount:nav?.querySelectorAll("a").length,activeCount:nav?.querySelectorAll('a[aria-current="page"]').length,
+      headerPad:(()=>{const s={home:".phone>.hero",event:".event-hero",attendance:".attendance-topbar","ai-process":".ai-shell>header",reward:".reward-topbar"};const el=document.querySelector(s[location.pathname.replace("/design-","")]);return el?parseFloat(getComputedStyle(el).paddingLeft):null})(),
+      contentPad:(()=>{const s={home:".phone>.body",event:".event-phone>.event-body",attendance:".page>main","ai-process":".ai-body",reward:".shell>main"};const el=document.querySelector(s[location.pathname.replace("/design-","")]);return el?parseFloat(getComputedStyle(el).paddingLeft):null})(),
+      bodyDisplay:(()=>{const el=document.querySelector(".phone>.body");return el?getComputedStyle(el).display:null})(),
       market:box(".ai-assets-panel"),quick:box(".body > .quick"),how:box(".body > .how"),overview:box(".page > main > .overview"),calendar:box(".page > main > .card:not(.overview):not(.info)"),eventGuide:box(".event-body > .event-guide"),eventHeading:box(".event-body > .section-heading"),aiHero:box(".ai-body > .ai-hero"),aiHelp:box(".ai-body > .ai-how-disclosure"),aiSurprise:box(".ai-body > .ai-surprise-panel"),rewardSummary:box(".shell > main > .summary"),rewardInbox:box(".shell > main > .inbox"),scrollWidth:document.documentElement.scrollWidth};
    });
    const label=name+" @"+width;
@@ -40,6 +43,11 @@ for(const width of widths){
       if(a.nav.w>220)failed.push(label+" desktop rail is too wide");
     }
     if(a.scrollWidth>width+1)failed.push(label+" horizontal overflow: "+a.scrollWidth);
+    const targetPad=width<768?20:width<1024?24:28;
+    if(Math.abs(a.headerPad-targetPad)>1.1||Math.abs(a.contentPad-targetPad)>1.1)
+      failed.push(label+" inconsistent common insets "+a.headerPad+"/"+a.contentPad+" (expected "+targetPad+")");
+    if(name==="home"&&width>=768&&width<1024&&a.bodyDisplay==="grid")
+      failed.push(label+" tablet still forces a desktop grid");
     if(name==="home"&&width>=768&&a.market&&a.market.w<a.frame.w*0.75)failed.push(label+" desktop market width: "+a.market.w+" vs frame "+a.frame.w);
     if(width>=1024){
       if(name==="home"&&a.quick&&a.how&&a.quick.x<a.how.x+a.how.w-2)failed.push(label+" home summary and quick cards aren't separate columns");
@@ -52,7 +60,7 @@ for(const width of widths){
     if(name==="event"&&(a.backColor!=="rgb(255, 255, 255)"||a.iconColor!=="rgb(255, 255, 255)"))failed.push(label+" back-link contrast: "+a.backColor+" "+a.iconColor);
    }
    results.push({name,...a});records.push({width,name,...a});
-   if(width===390||width===1024)await page.screenshot({path:"artifacts/member-viewport/"+name+"-"+width+".png",animations:"disabled"});
+   if([390,900,1024,1280].includes(width))await page.screenshot({path:"artifacts/member-viewport/"+name+"-"+width+".png",animations:"disabled"});
   }catch(e){failed.push(name+" @"+width+": "+String(e.message||e));}finally{await page.close();}
  }
  if(results.length===5){
