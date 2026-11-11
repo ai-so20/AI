@@ -6,7 +6,7 @@ const origin=process.env.BASE_URL||"http://127.0.0.1:3100",uid="00000000-0000-40
 const now=Date.now(),past=new Date(now-3600000).toISOString(),future=new Date(now+24*3600000).toISOString();
 const user={id:uid,role:"authenticated",aud:"authenticated",email:"qa-only@example.invalid",created_at:past,app_metadata:{provider:"email",providers:["email"]},user_metadata:{},identities:[]};
 const profile={id:uid,nickname:"검수회원",role:"member",approval_status:"approved"};
-const process={id:"process-qa",user_id:uid,status:"running",start_amount:1000000,current_amount:1050000,duration_hours:24,started_at:past,ends_at:future,last_tick_at:new Date(now-120000).toISOString(),snapshot_tick_count:2};
+const processFixture={id:"process-qa",user_id:uid,status:"running",start_amount:1000000,current_amount:1050000,duration_hours:24,started_at:past,ends_at:future,last_tick_at:new Date(now-120000).toISOString(),snapshot_tick_count:2};
 const logs=[{id:"log-qa",process_id:"process-qa",user_id:uid,market_at:new Date(now-200000).toISOString(),asset_symbol:"BTC/USD",asset_name:"비트코인",asset_type:"coin",market_pct:2,amount_before:1000000,delta:50000,amount_after:1050000,result_type:"profit"}];
 const b64=obj=>Buffer.from(JSON.stringify(obj)).toString("base64url");
 const jwt=[b64({alg:"HS256",typ:"JWT"}),b64({sub:uid,aud:"authenticated",role:"authenticated",iat:Math.floor(now/1000)-30,exp:Math.floor(now/1000)+3600,session_id:"session-qa"}),"fixture"].join(".");
@@ -26,7 +26,7 @@ for(const width of [390,1280]){
   if(path==="/auth/v1/user")return ok(route,user);
   if(path==="/auth/v1/token")return ok(route,{...stored,user});
   if(path==="/rest/v1/profiles")return ok(route,profile);
-  if(path==="/rest/v1/ai_process_sessions")return ok(route,[process]);
+  if(path==="/rest/v1/ai_process_sessions")return ok(route,[processFixture]);
   if(path==="/rest/v1/ai_process_logs")return ok(route,logs);
   if(["/rest/v1/event_winners","/rest/v1/group_messages","/rest/v1/private_messages"].includes(path))return ok(route,[]);
   if(path==="/rest/v1/rpc/get_auto_events")return ok(route,events);
