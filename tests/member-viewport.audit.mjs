@@ -22,6 +22,7 @@ for(const width of widths){
     const nav=document.querySelector(".member-app-nav");
     return {frame:box(".member-app-frame"),nav:box(".member-app-nav"),
       back:box('a[aria-label="홈으로 돌아가기"]'),
+      brandColor:(()=>{const e=document.querySelector(".phone>.hero .brand");return e?getComputedStyle(e).color:null})(),
       backColor:back?getComputedStyle(back).color:null,
       iconColor:back?getComputedStyle(back.firstElementChild).color:null,
       navCount:nav?.querySelectorAll("a").length,activeCount:nav?.querySelectorAll('a[aria-current="page"]').length,
@@ -41,6 +42,10 @@ for(const width of widths){
       if(a.nav.x+a.nav.w>a.frame.x-6)failed.push(label+" desktop nav overlaps content");
       if(Math.abs(a.nav.y-24)>1.1)failed.push(label+" desktop navigation not at top");
       if(a.nav.w>220)failed.push(label+" desktop rail is too wide");
+      if(a.nav.w<179)failed.push(label+" desktop navigation rail too small");
+      if(name==="home"&&a.brandColor!=="rgb(244, 249, 255)")failed.push(label+" home wordmark contrast "+a.brandColor);
+      if(width===1024&&a.frame.w<770)failed.push(label+" desktop content narrowed too much: "+a.frame.w);
+      if(name==="reward"&&a.rewardInbox&&a.rewardInbox.h>430)failed.push(label+" oversized empty inbox panel: "+a.rewardInbox.h);
     }
     if(a.scrollWidth>width+1)failed.push(label+" horizontal overflow: "+a.scrollWidth);
     const targetPad=width<768?20:width<1024?24:28;

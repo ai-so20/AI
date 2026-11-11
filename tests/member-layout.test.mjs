@@ -38,3 +38,12 @@ test("tablet keeps a single shared column until desktop begins at 1024px", () =>
  assert.match(pc, /min-width: 1024px/);
  assert.doesNotMatch(css,/\.phone>\.body\{display:grid/);
 });
+
+test("PC-only layout uses a fluid rail and preserves mobile CSS", () => {
+ const desktop=read("app/member-desktop.css");
+ assert.match(desktop,/--member-rail-width:\s*clamp\(180px,\s*16\.5vw,\s*210px\)/);
+ assert.match(desktop,/var\(--member-rail-width\)/);
+ assert.match(desktop,/\.phone > \.hero \.brand \{color: #f4f9ff !important;\}/);
+ assert.match(desktop,/min-height:360px/);
+ assert.match(desktop,/@media \(min-width: 1024px\)/);
+});

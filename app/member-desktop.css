@@ -2,17 +2,21 @@
    All changes are deliberately limited to 1024px+ viewports. */
 @media (min-width: 1024px) {
   .member-app-surface {
-    --member-gutter: 28px;
+    /* Desktop rail scales down before the main content becomes cramped at 1024px. */
+    --member-rail-width: clamp(180px, 16.5vw, 210px);
+    --member-rail-gap: 16px;
+    --member-outer-gutter: clamp(20px, 2.2vw, 28px);
+    --member-gutter: clamp(22px, 2.2vw, 28px);
     max-width: 1320px;
     margin-inline: auto;
-    padding: 24px 28px 32px !important;
+    padding: 24px var(--member-outer-gutter) 32px !important;
     position: relative;
   }
   .member-app-surface > .member-app-frame {
-    width: calc(100% - 226px) !important;
+    width: calc(100% - var(--member-rail-width) - var(--member-rail-gap)) !important;
     max-width: none !important;
     min-height: calc(100dvh - 56px);
-    margin: 0 0 0 226px !important;
+    margin: 0 0 0 calc(var(--member-rail-width) + var(--member-rail-gap)) !important;
     padding-bottom: 32px !important;
     border-radius: 16px;
     box-shadow: 0 9px 30px rgba(24, 53, 88, .09) !important;
@@ -22,11 +26,11 @@
     position: fixed !important;
     top: 24px !important;
     bottom: 24px !important;
-    left: max(28px, calc((100vw - 1320px) / 2 + 28px)) !important;
+    left: max(var(--member-outer-gutter), calc((100vw - 1320px) / 2 + var(--member-outer-gutter))) !important;
     right: auto !important;
     transform: none !important;
-    width: 210px !important;
-    max-width: 210px !important;
+    width: var(--member-rail-width) !important;
+    max-width: var(--member-rail-width) !important;
     height: calc(100dvh - 48px) !important;
     min-height: 0 !important;
     overflow-y: auto;
@@ -77,6 +81,9 @@
   .member-app-surface .member-app-nav > a:hover {background: #f1f6fc;}
 
   /* Home: finite hero text measure, balanced summary/shortcuts, full-width market. */
+  /* Ensure the home wordmark remains legible against the dark blue header art. */
+  .member-app-surface .phone > .hero .brand {color: #f4f9ff !important;}
+  .member-app-surface .phone > .hero .brand .logo {color: #78bdff !important;}
   .member-app-surface .phone > .hero {min-height: 300px;}
   .member-app-surface .phone > .hero .intro,
   .member-app-surface .phone > .hero .portfolio {max-width: 540px;}
@@ -171,6 +178,9 @@
   .member-app-surface .ai-body:has(> .ai-how-disclosure) > .ai-how-disclosure {grid-column:1;grid-row:2;margin-top:0;}
   .member-app-surface .ai-body:has(> .ai-how-disclosure) > .ai-surprise-panel {grid-column:2;grid-row:1 / span 2;margin:0;}
   .member-app-surface .ai-body:has(> .ai-how-disclosure) .ai-surprise-highlights {display:grid;grid-template-columns:1fr;gap:12px;}
+  .member-app-surface .ai-body:has(> .ai-how-disclosure) > .ai-panel.ai-tint:not(.ai-surprise-panel) {
+    grid-column: 1 / -1;
+  }
   .member-app-surface .ai-body:not(:has(> .ai-how-disclosure)) > .ai-hero,
   .member-app-surface .ai-body > .ai-fold,
   .member-app-surface .ai-body > .ai-history {grid-column:1/-1;}
@@ -192,7 +202,7 @@
     grid-column:2;
     grid-row:4 / span 4;
     margin:0;
-    min-height:480px;
+    min-height:360px;
     min-width:0;
   }
 }
