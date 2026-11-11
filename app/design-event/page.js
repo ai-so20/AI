@@ -73,22 +73,29 @@ useEffect(()=>{if(!signed)return;const timer=setInterval(()=>{void load()},30000
 async function submit(item,direct){if(busy||!signed||isDesignUiLocked())return;if(item.participated||!isLive(item)){setNotice(item.participated?"이미 참여한 이벤트입니다.":"현재 참여 가능한 시간이 아닙니다.");await load();return}let answer=direct===undefined?(answers[item.event_id]??null):direct;if(item.event_type==="number"){const n=Number(answer);if(!Number.isInteger(n)||n<1||n>100){setNotice("1~100 사이의 숫자를 선택하세요.");return}answer=String(n)}if(["quiz","gift_box"].includes(item.event_type)&&!["1","2","3","4"].includes(String(answer))){setNotice("먼저 보기를 선택하세요.");return}setBusy(item.event_id);setNotice("");if(item.event_type==="roulette")await new Promise(resolve=>setTimeout(resolve,900));try{const {data,error}=await supabase.rpc("join_auto_event",{target_event_id:item.event_id,submitted_answer:answer});if(error){setNotice("참여 실패: "+error.message)}else if(!data?.success){setNotice(data?.message||"참여가 처리되지 않았습니다.")}else{await load();setNotice(data?.message||item.title+" 참여가 완료되었습니다.")}}catch(e){setNotice("참여 처리 중 오류가 발생했습니다.")}finally{setBusy(null)}}
 const isLive=x=>{const start=new Date(x.starts_at).getTime(),end=new Date(x.ends_at).getTime();return Number.isFinite(start)&&Number.isFinite(end)&&Date.now()>=start&&Date.now()<end&&x.status==="active"};
 const visible=signed&&!isDesignUiLocked()?events.filter(x=>tab==="전체"||(tab==="참여 가능"?isLive(x)&&!x.participated:Boolean(x.participated))):[];const displayedEvents=showAllEvents?visible:visible.slice(0,6);const active=events.filter(isLive).length,participated=events.filter(x=>x.participated).length,winners=events.filter(x=>x.status==="completed"&&x.winner_nickname),myWins=nickname?winners.filter(x=>String(x.winner_nickname).trim()===nickname.trim()).length:0,displayedWinners=signed&&!isDesignUiLocked()?(recentWinners.length?recentWinners:events.filter(x=>x.status==="completed"&&x.winner_nickname).map(x=>({id:x.event_id,name:x.winner_nickname,prize:x.prize||x.title,at:x.ends_at}))):[];
-return <div className="event-stage"><div className="event-phone"><header className="event-hero"><div className="event-top"><HomeReturnLink/><div className="brand"><span className="logo">ΛI</span> PROCESS</div></div><div className="event-hero-copy"><span className="chip">AI PROCESS · BENEFITS</span><h1>지금 참여하는<br/>오늘의 이벤트</h1><p>매시간 이어지는 회원 혜택을 확인하세요.</p></div><span className="event-hero-watermark" aria-hidden="true">24</span></header><main className="event-body"><section className="event-summary"><div><span>진행 중인 이벤트</span><strong>{loading||!signed?"—":active}<small>개</small></strong></div><div><span>오늘 참여</span><strong>{loading||!signed?"—":participated}<small>건</small></strong></div><div><span>오늘 내 당첨</span><strong>{loading||!signed?"—":myWins}<small>건</small></strong></div></section><section className="event-guide" aria-label="이벤트 참여 안내">
-  <div className="event-guide-head"><span className="event-guide-mark" aria-hidden="true">i</span><div><span className="event-guide-kicker">참여 전 확인하세요</span><h2>이벤트 이용 안내</h2></div><span className="event-guide-hour">24H · 연속 운영</span></div>
-  <div className="event-guide-steps">
-    <div><b>01</b><strong>진행 중이라면 바로 참여</strong><span>진행 시간 전체에 응모 가능</span></div>
-    <div><b>02</b><strong>종료 즉시 다음 시작</strong><span>별도 대기 없이 연속 진행</span></div>
-    <div><b>03</b><strong>당첨 혜택 확인</strong><span>상품지급센터에서 결과와 상품 확인</span></div>
+return <div className="event-stage"><div className="event-phone"><header className="event-hero"><div className="event-top"><HomeReturnLink/><div className="brand"><span className="logo">ΛI</span> PROCESS</div></div><div className="event-hero-copy"><span className="chip">AI PROCESS · BENEFITS</span><h1>지금 참여하는<br/>오늘의 이벤트</h1><p>매시간 이어지는 회원 혜택을 확인하세요.</p></div><span className="event-hero-watermark" aria-hidden="true">24</span></header><main className="event-body"><section className="event-summary"><div><span>진행 중인 이벤트</span><strong>{loading||!signed?"—":active}<small>개</small></strong></div><div><span>오늘 참여</span><strong>{loading||!signed?"—":participated}<small>건</small></strong></div><div><span>오늘 내 당첨</span><strong>{loading||!signed?"—":myWins}<small>건</small></strong></div></section><section className="event-guide" aria-label="이벤트 당첨 혜택">
+  <div className="event-guide-head">
+    <div><span className="event-guide-kicker">AI PROCESS · EVENT BENEFIT</span><h2>이벤트 당첨 혜택</h2></div>
+    <span className="event-guide-hour">매시간 연속 운영</span>
   </div>
-  <div className="event-benefit" aria-label="이벤트 당첨 혜택">
-    <span className="event-benefit-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 12h18M12 8C6 8 7 2 9 3c2 0 3 3 3 5Zm0 0c6 0 5-6 3-5-2 0-3 3-3 5Z"/></svg></span>
-    <div className="event-benefit-copy"><span>이벤트 당첨 혜택 · 랜덤 기프티콘</span><strong>3,000원 ~ 300,000원 상당</strong><p>당첨 시 랜덤 기프티콘 혜택 제공 · 상품지급센터에서 확인</p></div>
+  <div className="event-benefit">
+    <div className="event-benefit-copy">
+      <span className="event-benefit-label">당첨 회원 랜덤 기프티콘</span>
+      <strong><small>최대</small> 300,000원</strong>
+      <p>3,000원 ~ 300,000원 상당의 랜덤 기프티콘 혜택</p>
+    </div>
+    <span className="event-benefit-art" aria-hidden="true">
+      <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="12" y="24" width="40" height="32" rx="5"/><path d="M32 24v32M12 35h40M32 24C19 24 22 9 28 12c4 2 4 8 4 12Zm0 0c13 0 10-15 4-12-4 2-4 8-4 12Z"/></svg>
+    </span>
+    <span className="event-benefit-glow" aria-hidden="true"></span>
   </div>
-  <details className="event-guide-details"><summary>참여 조건과 당첨 방식 자세히 보기 <span aria-hidden="true">⌄</span></summary>
-    <div><p>승인된 회원은 진행 중인 이벤트에 즉시 참여할 수 있으며 해당 회차가 진행되는 시간 동안 1회 응모할 수 있습니다. 이벤트가 종료되면 다음 회차가 바로 시작됩니다.</p>
-    <p>숫자·퀴즈·상자 선택형은 안내된 보기 또는 숫자를 제출합니다. 선착순은 서버에 가장 먼저 정상 접수된 회원을 기준으로 판정하며, 회차 종료 후 당첨자가 확정됩니다.</p>
-    <p>이벤트 당첨 시 3,000원~300,000원 상당의 랜덤 기프티콘 혜택이 제공됩니다. 종료 후 당첨 결과를 확인할 수 있으며, 상품과 수령 방법은 상품지급센터의 기록·메시지에서 확인합니다. 실제 상품 전달 전에는 '지급 대기'로 표시됩니다.</p>
-    <p className="event-guide-note">AI PROCESS 돌발 체험 이벤트는 별도 혜택입니다. 진행 조건은 AI PROCESS 화면에서 확인할 수 있습니다.</p></div>
+  <div className="event-guide-foot">이벤트 당첨 시 상품지급센터에서 당첨 결과와 수령 안내를 확인할 수 있습니다.</div>
+  <details className="event-guide-details"><summary>참여 조건 · 당첨 및 지급 안내 <span aria-hidden="true">⌄</span></summary>
+    <div>
+      <p>승인된 회원은 진행 중인 회차에 1회 응모할 수 있습니다. 회차가 끝나면 다음 이벤트가 즉시 시작되며, 당첨 여부는 회차 종료 후 확인할 수 있습니다.</p>
+      <p>선착순 이벤트는 서버에 가장 먼저 정상 접수된 회원을 기준으로 판정합니다. 상품 지급 전에는 상품지급센터에서 ‘지급 대기’로 표시될 수 있습니다.</p>
+      <p className="event-guide-note">AI PROCESS 돌발 체험 이벤트는 별도 혜택이며, 상세 안내는 AI PROCESS 화면에서 확인할 수 있습니다.</p>
+    </div>
   </details>
 </section><div className="section-heading"><h2>이벤트</h2><span>실시간 회차 현황</span></div>{eventLoadError&&<p role="alert" className="notice">{eventLoadError}</p>}{notice&&<p role="status" className="notice">{notice}</p>}{!signed&&!loading&&<div className="empty">{accessState==="locked"?"회원 입장 화면에서 잠금을 해제해주세요.":accessState==="login"?"회원 로그인 후 참여할 수 있습니다.":accessState==="unapproved"?"관리자 승인 후 이벤트에 참여할 수 있습니다.":accessState==="admin"?"관리자 이벤트 관리는 기존 관리자 화면을 이용하세요.":"회원 정보를 확인해주세요."} {(accessState==="login"||accessState==="locked")&&<PageActionLink href="/design-entry?next=%2Fdesign-event" label="회원 입장" detail="로그인 후 이벤트에 참여하세요" icon="event"/>}{accessState==="admin"&&<PageActionLink href="/?tab=event" label="이벤트 관리" detail="관리자 화면으로 이동" icon="admin"/>}</div>}<div className="tabs" aria-label="이벤트 보기">{tabs.map(x=><button key={x} className={tab===x?"active":""} onClick={()=>{setTab(x);setShowAllEvents(false)}}>{x}</button>)}</div>{loading?<div className="empty">이벤트 불러오는 중...</div>:visible.length?<div className="events">{displayedEvents.map(x=><article key={x.event_id} className={"event-item "+(isLive(x)?"event-item--live":x.participated?"event-item--done":"")} style={{alignItems:"stretch",flexDirection:"column"}}><div style={{display:"flex",gap:12,alignItems:"center"}}><EventTypeBadge type={x.event_type}/><div className="event-copy"><span className={"event-status "+(isLive(x)?"is-live":"")}>{isLive(x)?"● 진행 중":x.status==="completed"?"종료":"예정"}</span><span className="event-round">{x.round_number||"-"}회차</span><h3>{x.title}</h3><p className="event-prize">{x.prize&&x.prize!=="VIP EVENT 당첨"?"상품 · "+x.prize:"당첨 결과 및 상품은 회차 종료 후 안내됩니다."}</p>{x.description&&<p className="event-desc">{x.description}</p>}<small className="event-schedule">{x.starts_at?new Date(x.starts_at).toLocaleTimeString("ko-KR",{timeZone:"Asia/Seoul",hour:"2-digit",minute:"2-digit"}):""} ~ {x.ends_at?new Date(x.ends_at).toLocaleTimeString("ko-KR",{timeZone:"Asia/Seoul",hour:"2-digit",minute:"2-digit"}):""} · {x.participated?"참여 완료":isLive(x)?"지금 참여 가능":x.status==="completed"?"종료":"참여 대기"}</small></div></div>{(x.participated||x.winner_nickname||x.revealed_answer)&&<div className="event-result">{x.participated&&<p><strong>내 참여:</strong> {x.my_answer||"응모 완료"}{x.status==="completed"&&x.my_result_text?" · "+x.my_result_text:""}</p>}{x.status==="completed"&&x.revealed_answer&&<p><strong>공개된 정답:</strong> {x.revealed_answer}</p>}{x.status==="completed"&&x.winner_nickname&&<p><strong>🏆 당첨:</strong> {x.winner_nickname}</p>}</div>}{isLive(x)&&!x.participated&&signed&&<EventInput item={x} answer={answers[x.event_id]} onChange={v=>setAnswers(a=>({...a,[x.event_id]:v}))} submit={v=>submit(x,v)} busy={busy===x.event_id}/>}</article>)}{visible.length>displayedEvents.length&&<button type="button" className="event-more" onClick={()=>setShowAllEvents(true)}>나머지 {visible.length-displayedEvents.length}개 회차 더 보기 <span aria-hidden="true">↓</span></button>}{showAllEvents&&visible.length>6&&<button type="button" className="event-more event-more--less" onClick={()=>setShowAllEvents(false)}>회차 목록 접기 <span aria-hidden="true">↑</span></button>}</div>:<div className="empty">{!signed?"이벤트 참여는 회원 로그인 후 가능합니다.":tab==="참여 가능"?"현재 참여할 수 있는 회차가 없습니다. 다음 회차는 바로 이어집니다.":tab==="참여 완료"?"아직 참여한 이벤트가 없습니다.":"표시할 이벤트가 없습니다."}</div>}<section className="winner"><div className="section-heading"><h2>최근 당첨 내역</h2><span>조회 가능한 최근 기록</span></div>{winnerHistoryState==="error"&&<p className="winner-status" role="status">과거 당첨 공지를 조회하지 못했습니다. 확인 가능한 오늘 회차 결과만 표시합니다.</p>}{winnerHistoryState==="ready"&&recentWinners.length===0&&displayedWinners.length>0&&<p className="winner-status">현재 계정에서 확인 가능한 과거 공지가 없어 오늘 회차 결과만 표시합니다.</p>}{displayedWinners.length?<div className="events">{displayedWinners.slice(0,8).map(w=><article className="event-item" key={w.id}><div className="event-copy"><h3>🏆 {w.name}</h3><p>{w.prize||"이벤트 당첨"}</p>{w.at&&<small>{new Date(w.at).toLocaleString("ko-KR",{timeZone:"Asia/Seoul",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})}</small>}</div></article>)}</div>:<p>현재 계정에서 확인 가능한 당첨 내역이 없습니다.</p>}</section></main><MemberNav current="event"/></div><style jsx>{`
 .winner-status{background:#f5f9ff;border:1px solid #e4edf9;padding:10px 12px;font-size:12px;color:#54708e;line-height:1.6;border-radius:9px;margin:0 0 10px}.event-result{width:100%;margin-top:9px;padding:10px 11px;background:#f4f8fd;border-radius:8px}.event-result p{font-size:12px;line-height:1.6;margin:2px 0;color:#315073}.event-result strong{color:#142f51}.notice{font-size:12px;color:#086ee5;padding:10px}
@@ -111,30 +118,31 @@ return <div className="event-stage"><div className="event-phone"><header classNa
 .event-summary>div{padding:0 13px}.event-summary span{font-size:12px;color:#61748c;min-height:17px}
 .event-summary strong{font-size:25px;margin-top:7px;color:#15365e}.event-summary small{font-size:12px;color:#6b8098}
 .event-guide{margin-top:20px;background:#fff;border:1px solid #dbe6f0;border-radius:12px;overflow:hidden}
-.event-guide-head{display:flex;align-items:center;gap:10px;padding:16px 15px 12px}
-.event-guide-mark{display:grid;place-items:center;width:30px;height:30px;flex:none;border-radius:8px;background:#e6f1fe;color:#1772ce;font-family:Georgia,serif;font-weight:800;font-size:17px}
-.event-guide-head>div{min-width:0;flex:1}.event-guide-kicker{display:block;font-size:11px;color:#5b7da3;font-weight:750}
-.event-guide h2{font-size:17px;letter-spacing:-.5px;color:#183451;margin:3px 0 0}
-.event-guide-hour{display:inline-flex;align-items:center;padding:6px 8px;border:1px solid #d3e2f3;border-radius:6px;color:#356b9f;font-size:10px;font-weight:800;white-space:nowrap}
-.event-benefit{display:flex;align-items:center;gap:12px;margin:13px 14px;padding:14px 13px;background:#eaf4ff;border:1px solid #cbdff3;border-left:3px solid #287aca;border-radius:8px}
-.event-benefit-icon{display:grid;place-items:center;flex:none;width:38px;height:38px;border-radius:10px;color:#1d6abb;background:#d7eaff}
-.event-benefit-icon svg{display:block;width:22px;height:22px}
-.event-benefit-copy{min-width:0}
-.event-benefit-copy>span{display:block;color:#3d6491;font-size:11px;font-weight:800;line-height:1.4}
-.event-benefit-copy>strong{display:block;margin:4px 0 2px;color:#114b87;font-size:18px;line-height:1.35;letter-spacing:-.4px;font-weight:850;font-variant-numeric:tabular-nums}
-.event-benefit-copy>p{margin:4px 0 0;color:#486b90;font-size:11px;line-height:1.55}
-.event-guide-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;padding:12px 5px;background:#f6f9fd;border-top:1px solid #ebf0f6;border-bottom:1px solid #ebf0f6}
-.event-guide-steps>div{padding:0 10px;min-width:0}.event-guide-steps>div+div{border-left:1px solid #e3eaf2}
-.event-guide-steps b{display:block;margin-bottom:7px;font-size:12px;font-weight:850;color:#1476d3;font-variant-numeric:tabular-nums}
-.event-guide-steps strong{display:block;color:#203d60;font-size:12px;line-height:1.55;word-break:keep-all}
-.event-guide-steps span{display:block;margin-top:5px;color:#617a92;font-size:11px;line-height:1.55;word-break:keep-all}
-.event-guide-details>summary{list-style:none;display:flex;justify-content:space-between;gap:7px;align-items:center;padding:13px 15px;cursor:pointer;color:#1b609d;font-size:13px;font-weight:800;min-height:45px}
+.event-guide-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 15px 14px}
+.event-guide-head>div{min-width:0;flex:1}
+.event-guide-kicker{display:block;font-size:10px;letter-spacing:1.1px;color:#5e7da0;font-weight:850}
+.event-guide h2{font-size:18px;letter-spacing:-.55px;color:#183451;margin:5px 0 0}
+.event-guide-hour{display:inline-flex;align-items:center;padding:7px 9px;border:1px solid #d3e2f3;border-radius:6px;color:#356b9f;font-size:11px;font-weight:800;white-space:nowrap}
+.event-benefit{position:relative;display:flex;align-items:center;isolation:isolate;overflow:hidden;min-height:155px;padding:22px 19px;margin:0 13px 0;background:linear-gradient(115deg,#123458 0%,#164d81 78%,#246aa5 100%);border:1px solid #22588c;border-radius:10px;color:#fff}
+.event-benefit:before{content:"";pointer-events:none;position:absolute;right:-65px;top:-75px;width:215px;height:215px;border:1px solid #ffffff28;border-radius:50%;box-shadow:0 0 0 27px #ffffff08,0 0 0 57px #ffffff05;z-index:-1}
+.event-benefit-copy{position:relative;z-index:1;min-width:0;flex:1}
+.event-benefit-label{display:block;color:#b9d7f3;font-size:12px;line-height:1.45;font-weight:750}
+.event-benefit-copy>strong{display:block;white-space:nowrap;margin:9px 0 8px;color:#fff;font-size:29px;line-height:1.15;letter-spacing:-1px;font-weight:850;font-variant-numeric:tabular-nums}
+.event-benefit-copy>strong small{font-size:14px;font-weight:750;color:#c2daf2;letter-spacing:0}
+.event-benefit-copy>p{margin:0;color:#dfedfb;font-size:12px;line-height:1.55;word-break:keep-all}
+.event-benefit-art{position:absolute;right:9px;top:16px;display:grid;place-items:center;width:81px;height:81px;opacity:.16;transform:rotate(-13deg);color:#d9ebff;pointer-events:none}
+.event-benefit-art svg{display:block;width:100%;height:100%}
+.event-benefit-glow{position:absolute;right:-30px;bottom:-88px;width:150px;height:150px;border:1px solid #ffffff26;border-radius:50%;pointer-events:none}
+.event-guide-foot{padding:13px 16px 12px;color:#526d8b;font-size:12px;line-height:1.6;word-break:keep-all}
+.event-guide-details{border-top:1px solid #e6eef7}
+.event-guide-details>summary{list-style:none;display:flex;justify-content:space-between;gap:7px;align-items:center;padding:12px 15px;cursor:pointer;color:#286eab;font-size:13px;font-weight:750;min-height:46px}
 .event-guide-details>summary::-webkit-details-marker{display:none}
 .event-guide-details>summary>span{font-size:20px;line-height:1;transition:transform .2s}
 .event-guide-details[open]>summary>span{transform:rotate(180deg)}
-.event-guide-details>div{padding:0 16px 16px;border-top:1px solid #ecf1f7}
-.event-guide-details p{font-size:13px;line-height:1.75;color:#4c637e;margin:12px 0 0}
-.event-guide-details .event-guide-note{margin-top:13px;padding:11px;background:#edf5ff;border-left:3px solid #3782ce;border-radius:4px;color:#315a82}
+.event-guide-details>summary:focus-visible{outline:2px solid #2575c8;outline-offset:-2px}
+.event-guide-details>div{padding:0 16px 15px;border-top:1px solid #ecf1f7}
+.event-guide-details p{font-size:12px;line-height:1.75;color:#4c637e;margin:12px 0 0;word-break:keep-all}
+.event-guide-details .event-guide-note{margin-top:12px;padding:10px;background:#edf5ff;border-left:3px solid #3782ce;border-radius:4px;color:#315a82}
 .section-heading{margin:25px 1px 11px}.section-heading h2{font-size:19px;color:#1b3451}.section-heading span{font-size:12px}
 .tabs{margin:0 0 12px;gap:5px}.tabs button{flex:1;padding:10px 6px;min-width:0;min-height:44px;border-radius:8px;font-size:13px;background:#edf2f9;color:#53677e}
 .tabs button.active{background:#1e65b1;box-shadow:none}
@@ -156,7 +164,7 @@ return <div className="event-stage"><div className="event-phone"><header classNa
 .event-result p{font-size:13px}.notice{margin:8px 0;border:1px solid #d7e8fa;border-radius:9px;background:#f2f8ff;color:#235a90;font-size:13px}
 .empty{padding:25px 12px;border-radius:11px;font-size:13px;line-height:1.6}
 .winner .events .event-item{padding:13px 15px}.winner .event-copy h3{font-size:14px}
-@media(max-width:370px){.event-hero{height:263px;padding:18px 17px 22px}.event-body{padding:0 12px}.event-summary>div{padding:0 7px}.event-summary strong{font-size:21px}.event-guide-steps>div{padding:0 7px}.event-guide-steps strong{font-size:11px}.event-guide-steps span{font-size:10px}.event-benefit{gap:8px;padding:12px 9px;margin:12px 10px}.event-benefit-icon{width:31px;height:31px}.event-benefit-icon svg{width:19px;height:19px}.event-benefit-copy>strong{font-size:16px}.event-icon{width:54px;height:64px}.event-copy h3{font-size:15px}}
+@media(max-width:370px){.event-hero{height:263px;padding:18px 17px 22px}.event-body{padding:0 12px}.event-summary>div{padding:0 7px}.event-summary strong{font-size:21px}.event-guide-head{padding:14px 12px}.event-guide h2{font-size:17px}.event-guide-hour{padding:6px;font-size:10px}.event-benefit{margin:0 10px;padding:20px 13px;min-height:148px}.event-benefit-copy>strong{font-size:25px}.event-benefit-copy>p{font-size:11px}.event-benefit-art{width:60px;height:60px;right:0}.event-icon{width:54px;height:64px}.event-copy h3{font-size:15px}}
  `}</style><style jsx global>{`.event-stage .event-action{padding:12px 2px 0;display:flex;flex-direction:column;gap:10px}
 .event-stage .event-action>button{width:100%;min-height:46px;padding:12px 16px;border:1px solid #086ee5;border-radius:13px;background:#086ee5;color:#fff;font-family:inherit;font-size:14px;line-height:1.35;font-weight:800;box-shadow:0 3px 8px #086ee51f;cursor:pointer}
 .event-stage .event-action>button:hover:not(:disabled){background:#075fc9}
