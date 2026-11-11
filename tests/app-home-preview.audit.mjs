@@ -14,7 +14,7 @@ for(const width of widths){
   await page.getByRole("heading",{name:"총 평가금액"}).waitFor();
   const info=await page.evaluate(()=>{
    const f=selector=>{const e=document.querySelector(selector);if(!e)return null;const b=e.getBoundingClientRect();return {x:b.x,w:b.width,y:b.y,h:b.height}};
-   const nav=[...document.querySelectorAll('nav')].filter(n=>getComputedStyle(n).display!=="none");
+   const nav=[...document.querySelectorAll('nav')].filter(n=>n.getClientRects().length>0);
    const main=document.querySelector("main");
    const quick=document.querySelector('[aria-label="바로가기"]');
    const market=document.querySelector('[aria-labelledby="app-market-title"]');
