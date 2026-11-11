@@ -132,7 +132,7 @@ return <div className="event-stage"><div className="event-phone"><header classNa
 .event-benefit-copy>p{margin:0;color:#dfedfb;font-size:12px;line-height:1.55;word-break:keep-all}
 .event-benefit-art{position:absolute;right:9px;top:16px;display:grid;place-items:center;width:81px;height:81px;opacity:.16;transform:rotate(-13deg);color:#d9ebff;pointer-events:none}
 .event-benefit-art svg{display:block;width:100%;height:100%}
-.event-benefit-glow{position:absolute;right:-30px;bottom:-88px;width:150px;height:150px;border:1px solid #ffffff26;border-radius:50%;pointer-events:none}
+.event-benefit-glow{position:absolute;right:0;bottom:-88px;width:150px;height:150px;border:1px solid #ffffff26;border-radius:50%;pointer-events:none}
 .event-guide-foot{padding:13px 16px 12px;color:#526d8b;font-size:12px;line-height:1.6;word-break:keep-all}
 .event-guide-details{border-top:1px solid #e6eef7}
 .event-guide-details>summary{list-style:none;display:flex;justify-content:space-between;gap:7px;align-items:center;padding:12px 15px;cursor:pointer;color:#286eab;font-size:13px;font-weight:750;min-height:46px}
