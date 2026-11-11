@@ -106,6 +106,7 @@
   /* Event: prize/participation guidance is the left rail, live rounds to the right. */
   .member-app-surface .event-hero {height: 246px !important;}
   .member-app-surface .event-hero-copy {max-width: 520px; margin-top: 10px !important;}
+  .member-app-surface .event-hero-copy p {color:#163c66 !important;font-weight:650;}
   .member-app-surface .event-body {
     display: grid;
     grid-template-columns: minmax(0, .86fr) minmax(0, 1.14fr);
@@ -167,8 +168,9 @@
   }
   .member-app-surface .ai-body > * {min-width:0;}
   .member-app-surface .ai-body:has(> .ai-how-disclosure) > .ai-hero {grid-column:1;grid-row:1;}
-  .member-app-surface .ai-body:has(> .ai-how-disclosure) > .ai-how-disclosure {grid-column:2;grid-row:1;margin-top:0;}
-  .member-app-surface .ai-body:has(> .ai-how-disclosure) > .ai-surprise-panel {grid-column:1/-1;}
+  .member-app-surface .ai-body:has(> .ai-how-disclosure) > .ai-how-disclosure {grid-column:1;grid-row:2;margin-top:0;}
+  .member-app-surface .ai-body:has(> .ai-how-disclosure) > .ai-surprise-panel {grid-column:2;grid-row:1 / span 2;margin:0;}
+  .member-app-surface .ai-body:has(> .ai-how-disclosure) .ai-surprise-highlights {display:grid;grid-template-columns:1fr;gap:12px;}
   .member-app-surface .ai-body:not(:has(> .ai-how-disclosure)) > .ai-hero,
   .member-app-surface .ai-body > .ai-fold,
   .member-app-surface .ai-body > .ai-history {grid-column:1/-1;}
