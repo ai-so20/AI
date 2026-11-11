@@ -1,0 +1,64 @@
+name: Member viewport audit
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/member-layout.css'
+      - 'app/app-home-preview/**'
+      - 'app/design-home/**'
+      - 'app/design-event/**'
+      - 'app/design-attendance/**'
+      - 'app/design-ai-process/**'
+      - 'app/design-reward/**'
+      - 'tests/member-viewport.audit.mjs'
+      - 'tests/app-home-preview.audit.mjs'
+      - '.github/workflows/member-viewport-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  viewport:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Install Chromium automation
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Build application
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-validation-only
+        run: npm run build
+      - name: Compare viewport geometry and take screenshots
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-validation-only
+          BASE_URL: http://127.0.0.1:3100
+        run: |
+          (npm run start -- -p 3100 > /tmp/member-next.log 2>&1 &)
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:3100/design-home -o /dev/null; then break; fi
+            sleep 1
+          done
+          node tests/member-viewport.audit.mjs
+          node tests/app-home-preview.audit.mjs
+      - name: Save browser screenshots and coordinates
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: member-viewport-audit
+          path: |
+            artifacts/member-viewport
+            artifacts/app-home-preview
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Show server errors
+        if: failure()
+        run: tail -n 100 /tmp/member-next.log || true
