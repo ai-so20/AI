@@ -1,0 +1,36 @@
+/* Shared member layout. No legacy / admin styles are changed. */
+.member-app-surface{--member-gutter:20px;--member-desktop-width:960px;box-sizing:border-box;width:100%;min-height:100dvh;padding:0!important;background:#edf3fa}
+.member-app-surface>.member-app-frame{box-sizing:border-box;position:relative;width:100%!important;max-width:100%!important;min-height:100dvh;margin-inline:auto!important;padding-bottom:calc(98px + env(safe-area-inset-bottom))!important;box-shadow:none!important;background-color:#f7faff;overflow-x:clip}
+.member-app-surface .member-app-nav{box-sizing:border-box!important;position:fixed!important;z-index:50!important;left:50%!important;right:auto!important;bottom:0!important;transform:translateX(-50%)!important;width:100%!important;max-width:100%!important;height:calc(80px + env(safe-area-inset-bottom))!important;padding:10px 4px calc(12px + env(safe-area-inset-bottom))!important;display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;align-items:center!important;background:rgba(255,255,255,.985)!important;border-top:1px solid #e0e9f2!important;box-shadow:0 -5px 18px rgba(37,71,108,.04)!important}
+.member-app-surface .member-app-nav>a{min-width:0}
+/* Fixed shared 64px top-row geometry in the four subpages. */
+.member-app-surface .event-hero{padding-left:var(--member-gutter)!important;padding-right:var(--member-gutter)!important}
+.member-app-surface .event-top{height:64px!important;min-height:64px;align-items:center!important}
+.member-app-surface .attendance-topbar{height:64px!important;min-height:64px;padding:0 var(--member-gutter)!important;align-items:center!important}
+.member-app-surface .ai-shell>header{padding-left:var(--member-gutter)!important;padding-right:var(--member-gutter)!important;padding-top:0!important}
+.member-app-surface .ai-top{height:64px!important;min-height:64px;margin-bottom:20px!important;align-items:center!important}
+.member-app-surface .reward-topbar{height:64px!important;min-height:64px;padding:0 var(--member-gutter)!important;align-items:center!important}
+.member-app-surface .event-top>a,.member-app-surface .ai-top>a,.member-app-surface .attendance-topbar>a,.member-app-surface .reward-topbar>a{color:#24466c!important}
+/* Shared horizontal inset, without overriding content, graphics or data states. */
+.member-app-surface .phone>.hero,.member-app-surface .phone>.body{padding-left:var(--member-gutter)!important;padding-right:var(--member-gutter)!important}
+.member-app-surface .event-phone>.event-body{padding-left:var(--member-gutter)!important;padding-right:var(--member-gutter)!important}
+.member-app-surface .page>main{padding-left:var(--member-gutter)!important;padding-right:var(--member-gutter)!important}
+.member-app-surface .ai-shell .ai-body{padding-left:var(--member-gutter)!important;padding-right:var(--member-gutter)!important}
+.member-app-surface .ai-shell .ai-state-bar{margin-left:var(--member-gutter)!important;margin-right:var(--member-gutter)!important}
+.member-app-surface .shell>main{padding-left:var(--member-gutter)!important;padding-right:var(--member-gutter)!important}
+@media(min-width:768px){
+.member-app-surface{padding:24px 24px 0!important}
+.member-app-surface>.member-app-frame{max-width:var(--member-desktop-width)!important;min-height:calc(100dvh - 24px);box-shadow:0 12px 42px rgba(34,61,97,.10)!important}
+.member-app-surface .member-app-nav{width:calc(100% - 48px)!important;max-width:var(--member-desktop-width)!important}
+.member-app-surface .phone>.body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:18px}
+.member-app-surface .phone>.body>*{min-width:0}
+.member-app-surface .event-body .events{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:16px}
+.member-app-surface .event-body .events>*{min-width:0}
+.member-app-surface .page>main{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 18px;align-items:start}
+.member-app-surface .page>main>.eyebrow,.member-app-surface .page>main>h1,.member-app-surface .page>main>.lead,.member-app-surface .page>main>.info{grid-column:1/-1}
+}
+@media(max-width:767px){
+.member-app-surface{padding:0!important}
+.member-app-surface>.member-app-frame{max-width:none!important;box-shadow:none!important}
+.member-app-surface .member-app-nav{width:100%!important;max-width:none!important}
+}
