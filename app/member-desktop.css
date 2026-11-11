@@ -1,0 +1,310 @@
+/* Desktop workspace is independent from the mobile app frame.
+   All changes are deliberately limited to 1024px+ viewports. */
+@media (min-width: 1024px) {
+  .member-app-surface {
+    /* Desktop rail scales down before the main content becomes cramped at 1024px. */
+    --member-rail-width: clamp(180px, 16.5vw, 210px);
+    --member-rail-gap: 16px;
+    --member-outer-gutter: clamp(20px, 2.2vw, 28px);
+    --member-gutter: clamp(22px, 2.2vw, 28px);
+    max-width: 1320px;
+    margin-inline: auto;
+    padding: 24px var(--member-outer-gutter) 32px !important;
+    position: relative;
+  }
+  .member-app-surface > .member-app-frame {
+    width: calc(100% - var(--member-rail-width) - var(--member-rail-gap)) !important;
+    max-width: none !important;
+    min-height: calc(100dvh - 56px);
+    margin: 0 0 0 calc(var(--member-rail-width) + var(--member-rail-gap)) !important;
+    padding-bottom: 32px !important;
+    border-radius: 16px;
+    box-shadow: 0 9px 30px rgba(24, 53, 88, .09) !important;
+  }
+  /* Member navigation becomes a desktop sidebar, not a stretched phone tab bar. */
+  .member-app-surface .member-app-nav {
+    position: fixed !important;
+    top: 24px !important;
+    bottom: 24px !important;
+    left: max(var(--member-outer-gutter), calc((100vw - 1320px) / 2 + var(--member-outer-gutter))) !important;
+    right: auto !important;
+    transform: none !important;
+    width: var(--member-rail-width) !important;
+    max-width: var(--member-rail-width) !important;
+    height: calc(100dvh - 48px) !important;
+    min-height: 0 !important;
+    overflow-y: auto;
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch !important;
+    justify-content: flex-start !important;
+    gap: 7px;
+    padding: 22px 12px !important;
+    background: #fff !important;
+    border: 1px solid #e2eaf3 !important;
+    border-radius: 15px;
+    box-shadow: 0 9px 30px rgba(24, 53, 88, .07) !important;
+  }
+  .member-app-surface .member-app-nav::before {
+    content: "AI PROCESS";
+    display: block;
+    margin: 0 0 19px;
+    padding: 0 10px 20px;
+    border-bottom: 1px solid #e5ecf5;
+    font-size: 18px;
+    font-weight: 850;
+    letter-spacing: -.7px;
+    color: #145cae;
+    white-space: nowrap;
+  }
+  .member-app-surface .member-app-nav > a {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 12px !important;
+    width: 100%;
+    min-height: 48px !important;
+    padding: 0 13px !important;
+    border-radius: 9px;
+  }
+  .member-app-surface .member-app-nav > a > span {
+    font-size: 13px !important;
+    line-height: 1.3 !important;
+    min-height: 0 !important;
+    text-align: left !important;
+    white-space: nowrap !important;
+    letter-spacing: -.35px;
+  }
+  .member-app-surface .member-app-nav > a > svg {width: 21px; height: 21px;}
+  .member-app-surface .member-app-nav > a[aria-current="page"] {background: #eaf3ff;}
+  .member-app-surface .member-app-nav > a:hover {background: #f1f6fc;}
+
+  /* Home: finite hero text measure, balanced summary/shortcuts, full-width market. */
+  /* Ensure the home wordmark remains legible against the dark blue header art. */
+  .member-app-surface .phone > .hero .brand {color: #f4f9ff !important;}
+  .member-app-surface .phone > .hero .brand .logo {color: #78bdff !important;}
+  .member-app-surface .phone > .hero {min-height: 300px;}
+  .member-app-surface .phone > .hero .intro,
+  .member-app-surface .phone > .hero .portfolio {max-width: 540px;}
+  .member-app-surface .phone > .hero .intro {padding-top: 30px; min-height: 270px;}
+  .member-app-surface .phone > .hero .intro h1 {font-size: 29px;}
+  .member-app-surface .phone > .hero .intro .start {max-width: 360px;}
+  .member-app-surface .phone > .body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.03fr) minmax(0, .97fr);
+    align-items: start;
+    gap: 20px;
+  }
+  .member-app-surface .phone > .body > .how,
+  .member-app-surface .phone > .body > .process {grid-column: 1; grid-row: 1; margin: 0;}
+  .member-app-surface .phone > .body > .quick {
+    grid-column: 2;
+    grid-row: 1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 10px;
+    margin: 0;
+  }
+  .member-app-surface .phone > .body > .trend {grid-column: 1/-1;}
+  .member-app-surface .phone > .body > .ai-assets-panel {grid-column: 1/-1;}
+  .member-app-surface .phone > .body .ai-assets-list {grid-template-columns: repeat(2,minmax(0,1fr));}
+
+  /* Event: prize/participation guidance is the left rail, live rounds to the right. */
+  .member-app-surface .event-hero {height: 246px !important;}
+  .member-app-surface .event-hero-copy {max-width: 520px; margin-top: 10px !important;}
+  .member-app-surface .event-hero-copy p {color:#163c66 !important;font-weight:650;}
+  .member-app-surface .event-body {
+    display: grid;
+    grid-template-columns: minmax(0, .86fr) minmax(0, 1.14fr);
+    align-items: start;
+    column-gap: 24px;
+    row-gap: 15px;
+  }
+  .member-app-surface .event-body > .event-summary {grid-column: 1/-1;}
+  .member-app-surface .event-body > .event-guide {
+    grid-column: 1;
+    grid-row: 2 / span 12;
+    align-self: start;
+    position: sticky;
+    top: 24px;
+    min-width: 0;
+  }
+  .member-app-surface .event-body > :not(.event-summary):not(.event-guide) {
+    grid-column: 2;
+    min-width: 0;
+  }
+  .member-app-surface .event-body .events {
+    display: grid;
+    grid-template-columns: 1fr;
+    row-gap: 12px;
+  }
+
+  /* Attendance: totals + instructions on the left; calendar takes the right. */
+  .member-app-surface .page > main {
+    display: grid;
+    grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
+    grid-template-rows: auto auto auto auto 1fr;
+    align-items: start;
+    gap: 9px 24px;
+  }
+  .member-app-surface .page > main > .eyebrow,
+  .member-app-surface .page > main > h1,
+  .member-app-surface .page > main > .lead {grid-column: 1/-1;}
+  .member-app-surface .page > main > .overview {grid-column: 1; grid-row: 4; margin: 0;}
+  .member-app-surface .page > main > .card:not(.overview):not(.info) {
+    grid-column: 2;
+    grid-row: 4 / span 2;
+    min-width: 0;
+    margin: 0;
+  }
+  .member-app-surface .page > main > .info {
+    grid-column: 1;
+    grid-row: 5;
+    margin: 0;
+    align-self: start;
+  }
+  .member-app-surface .page > main > .lead {margin-bottom: 20px;}
+
+  /* AI PROCESS: status and distinct service cards, never a single stretched card stack. */
+  .member-app-surface .ai-body {
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 16px 22px;
+    align-items: start;
+  }
+  .member-app-surface .ai-body > * {min-width:0;}
+  .member-app-surface .ai-body:has(> .ai-how-disclosure) > .ai-hero {grid-column:1;grid-row:1;}
+  .member-app-surface .ai-body:has(> .ai-how-disclosure) > .ai-how-disclosure {grid-column:1;grid-row:2;margin-top:0;}
+  .member-app-surface .ai-body:has(> .ai-how-disclosure) > .ai-surprise-panel {grid-column:2;grid-row:1 / span 2;margin:0;}
+  .member-app-surface .ai-body:has(> .ai-how-disclosure) .ai-surprise-highlights {display:grid;grid-template-columns:1fr;gap:12px;}
+  .member-app-surface .ai-body:has(> .ai-how-disclosure) > .ai-panel.ai-tint:not(.ai-surprise-panel) {
+    grid-column: 1 / -1;
+  }
+  .member-app-surface .ai-body:not(:has(> .ai-how-disclosure)) > .ai-hero,
+  .member-app-surface .ai-body > .ai-fold,
+  .member-app-surface .ai-body > .ai-history {grid-column:1/-1;}
+
+  /* Rewards: status and benefit controls left, delivery/inbox right. */
+  .member-app-surface .shell > main {
+    display: grid;
+    grid-template-columns: minmax(0,.88fr) minmax(0,1.12fr);
+    gap: 14px 24px;
+    align-items: start;
+  }
+  .member-app-surface .shell > main > .kicker,
+  .member-app-surface .shell > main > h1,
+  .member-app-surface .shell > main > .sub {grid-column:1/-1;}
+  .member-app-surface .shell > main > .summary {grid-column:1;grid-row:4;margin:0;}
+  .member-app-surface .shell > main > .benefits {grid-column:1;grid-row:5;margin:0;}
+  .member-app-surface .shell > main > .reward-history {grid-column:1;grid-row:6;margin:0;}
+  .member-app-surface .shell > main > .inbox {
+    grid-column:2;
+    grid-row:4 / span 4;
+    margin:0;
+    min-height:360px;
+    min-width:0;
+  }
+}
+
+/* Stage 3 — home-only presentation refinements. No data or interaction changes. */
+@media (min-width: 1024px) {
+  /* Hero: keep the illustration visible while improving reading width. */
+  .member-app-surface .phone > .hero .intro {max-width: 540px;}
+  .member-app-surface .phone > .hero .intro h1 {
+    font-size: clamp(28px, 2.55vw, 33px);
+    line-height: 1.35;
+    letter-spacing: -.9px;
+  }
+  .member-app-surface .phone > .hero .intro p {font-size: 14px;line-height:1.8;}
+  .member-app-surface .phone > .hero .intro .start {
+    width: 100%;max-width: 310px;min-height: 50px;
+    box-shadow: 0 7px 18px rgba(14,91,198,.15);
+  }
+  .member-app-surface .phone > .hero .portfolio {max-width: 570px;}
+  .member-app-surface .phone > .hero .portfolio p {font-size: 14px;}
+  .member-app-surface .phone > .hero .returns span {font-size: 13px;}
+
+  /* The operation summary and shortcuts should read as one intentional row. */
+  .member-app-surface .phone > .body > .how,
+  .member-app-surface .phone > .body > .process {
+    padding: 19px 18px 20px;
+    border: 1px solid #dce7f4;
+    box-shadow: 0 5px 18px rgba(30,69,119,.055);
+  }
+  .member-app-surface .phone > .body > .how h2 {font-size: 18px;margin-bottom: 19px;}
+  .member-app-surface .phone > .body > .how .how-grid b {font-size: 14px;}
+  .member-app-surface .phone > .body > .how .how-grid small {font-size: 12px;}
+  .member-app-surface .phone > .body > .process .process-head b {font-size: 19px;}
+  .member-app-surface .phone > .body > .process .steps small {font-size: 12px;}
+  .member-app-surface .phone > .body > .quick {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(96px, auto);
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    align-self: start;
+    background: #fff;
+    border: 1px solid #dce7f4;
+    border-radius: 16px;
+    box-shadow: 0 5px 18px rgba(30,69,119,.055);
+  }
+  .member-app-surface .phone > .body > .quick > button {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-content: center;
+    align-items: center;
+    justify-items: start;
+    column-gap: 10px;
+    row-gap: 3px;
+    min-height: 96px;
+    padding: 12px 11px;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    transition: background-color .15s ease;
+  }
+  .member-app-surface .phone > .body > .quick > button:nth-child(odd) {border-right:1px solid #eaf0f7;}
+  .member-app-surface .phone > .body > .quick > button:nth-child(-n+2) {border-bottom:1px solid #eaf0f7;}
+  .member-app-surface .phone > .body > .quick > button:hover {background:#f5f9ff;}
+  .member-app-surface .phone > .body > .quick > button:focus-visible {
+    outline: 2px solid #1676e9;outline-offset: -4px;
+  }
+  .member-app-surface .phone > .body > .quick img {
+    grid-column: 1;grid-row: 1 / span 2;
+    width: 44px;height: 44px;object-fit: contain;
+  }
+  .member-app-surface .phone > .body > .quick b {
+    grid-column: 2;grid-row: 1;
+    font-size: 13px;line-height: 1.35;
+    text-align: left;white-space: normal;word-break: keep-all;
+    color:#14365f;
+  }
+  .member-app-surface .phone > .body > .quick small {
+    grid-column: 2;grid-row: 2;
+    font-size: 11px;line-height: 1.4;
+    text-align: left;white-space: normal;word-break: keep-all;
+    color:#5b728d;
+  }
+
+  /* Read stored asset trends and market quotes at comfortable PC sizes. */
+  .member-app-surface .phone > .body > .trend {padding: 21px 22px 20px;}
+  .member-app-surface .phone > .body > .trend .section-title b {font-size: 19px;}
+  .member-app-surface .phone > .body > .trend .trend-svg {height: 160px;}
+  .member-app-surface .phone > .body > .trend .trend-measures small {font-size: 12px;}
+  .member-app-surface .phone > .body > .trend .trend-measures b {font-size: 18px;}
+  .member-app-surface .phone > .body > .trend .trend-caption {font-size: 13px;}
+  .member-app-surface .phone > .body > .ai-assets-panel {padding: 19px 18px;}
+  .member-app-surface .phone > .body > .ai-assets-panel .section-title b {font-size: 18px;}
+  .member-app-surface .phone > .body > .ai-assets-panel .ai-assets-list {gap: 11px;}
+  .member-app-surface .phone > .body > .ai-assets-panel .ai-assets-row {
+    padding: 12px 13px;gap: 10px;border-color: #e5edf7;
+  }
+  .member-app-surface .phone > .body > .ai-assets-panel .ai-assets-name strong {font-size: 14px;}
+  .member-app-surface .phone > .body > .ai-assets-panel .ai-assets-name small {font-size: 12px;}
+  .member-app-surface .phone > .body > .ai-assets-panel .ai-assets-price strong {font-size: 15px;}
+}

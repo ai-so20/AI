@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --experimental-default-type=module --test tests/ai-process-core.test.mjs",
+    "test": "node --experimental-default-type=module --test tests/*.test.mjs",
     "check": "npm test && npm run build"
   },
   "dependencies": {
