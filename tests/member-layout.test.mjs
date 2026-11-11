@@ -47,3 +47,14 @@ test("PC-only layout uses a fluid rail and preserves mobile CSS", () => {
  assert.match(desktop,/min-height:360px/);
  assert.match(desktop,/@media \(min-width: 1024px\)/);
 });
+
+test("home-only polish stays inside desktop media query", () => {
+ const css=read("app/member-desktop.css");
+ const block=css.split("/* Stage 3 — home-only presentation refinements. No data or interaction changes. */")[1];
+ assert.ok(block, "stage 3 CSS block exists");
+ assert.match(block, /^\s*@media \(min-width: 1024px\)/);
+ assert.match(block,/\.phone > \.body > \.quick > button/);
+ assert.match(block,/\.phone > \.body > \.trend \.trend-svg/);
+ assert.match(block,/\.phone > \.body > \.ai-assets-panel \.ai-assets-price strong/);
+ assert.doesNotMatch(block,/design-entry|design-event|design-attendance|design-ai-process|design-reward/);
+});

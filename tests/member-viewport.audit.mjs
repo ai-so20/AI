@@ -29,7 +29,7 @@ for(const width of widths){
       headerPad:(()=>{const s={home:".phone>.hero",event:".event-hero",attendance:".attendance-topbar","ai-process":".ai-shell>header",reward:".reward-topbar"};const el=document.querySelector(s[location.pathname.replace("/design-","")]);return el?parseFloat(getComputedStyle(el).paddingLeft):null})(),
       contentPad:(()=>{const s={home:".phone>.body",event:".event-phone>.event-body",attendance:".page>main","ai-process":".ai-body",reward:".shell>main"};const el=document.querySelector(s[location.pathname.replace("/design-","")]);return el?parseFloat(getComputedStyle(el).paddingLeft):null})(),
       bodyDisplay:(()=>{const el=document.querySelector(".phone>.body");return el?getComputedStyle(el).display:null})(),
-      market:box(".ai-assets-panel"),quick:box(".body > .quick"),how:box(".body > .how"),overview:box(".page > main > .overview"),calendar:box(".page > main > .card:not(.overview):not(.info)"),eventGuide:box(".event-body > .event-guide"),eventHeading:box(".event-body > .section-heading"),aiHero:box(".ai-body > .ai-hero"),aiHelp:box(".ai-body > .ai-how-disclosure"),aiSurprise:box(".ai-body > .ai-surprise-panel"),rewardSummary:box(".shell > main > .summary"),rewardInbox:box(".shell > main > .inbox"),scrollWidth:document.documentElement.scrollWidth};
+      market:box(".ai-assets-panel"),quick:box(".body > .quick"),how:box(".body > .how"),quickLayout:(()=>{const el=document.querySelector(".body > .quick > button");return el?{display:getComputedStyle(el).display,font:parseFloat(getComputedStyle(el.querySelector("b")).fontSize)}:null})(),overview:box(".page > main > .overview"),calendar:box(".page > main > .card:not(.overview):not(.info)"),eventGuide:box(".event-body > .event-guide"),eventHeading:box(".event-body > .section-heading"),aiHero:box(".ai-body > .ai-hero"),aiHelp:box(".ai-body > .ai-how-disclosure"),aiSurprise:box(".ai-body > .ai-surprise-panel"),rewardSummary:box(".shell > main > .summary"),rewardInbox:box(".shell > main > .inbox"),scrollWidth:document.documentElement.scrollWidth};
    });
    const label=name+" @"+width;
    if(!a.frame||!a.nav)failed.push(label+" frame or nav missing");
@@ -44,6 +44,8 @@ for(const width of widths){
       if(a.nav.w>220)failed.push(label+" desktop rail is too wide");
       if(a.nav.w<179)failed.push(label+" desktop navigation rail too small");
       if(name==="home"&&a.brandColor!=="rgb(244, 249, 255)")failed.push(label+" home wordmark contrast "+a.brandColor);
+      if(name==="home"&&a.quickLayout&&(a.quickLayout.display!=="grid"||a.quickLayout.font<12.5))
+        failed.push(label+" desktop shortcut typography/layout "+JSON.stringify(a.quickLayout));
       if(width===1024&&a.frame.w<770)failed.push(label+" desktop content narrowed too much: "+a.frame.w);
       if(name==="reward"&&a.rewardInbox&&a.rewardInbox.h>430)failed.push(label+" oversized empty inbox panel: "+a.rewardInbox.h);
     }

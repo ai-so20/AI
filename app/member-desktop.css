@@ -206,3 +206,105 @@
     min-width:0;
   }
 }
+
+/* Stage 3 — home-only presentation refinements. No data or interaction changes. */
+@media (min-width: 1024px) {
+  /* Hero: keep the illustration visible while improving reading width. */
+  .member-app-surface .phone > .hero .intro {max-width: 540px;}
+  .member-app-surface .phone > .hero .intro h1 {
+    font-size: clamp(28px, 2.55vw, 33px);
+    line-height: 1.35;
+    letter-spacing: -.9px;
+  }
+  .member-app-surface .phone > .hero .intro p {font-size: 14px;line-height:1.8;}
+  .member-app-surface .phone > .hero .intro .start {
+    width: 100%;max-width: 310px;min-height: 50px;
+    box-shadow: 0 7px 18px rgba(14,91,198,.15);
+  }
+  .member-app-surface .phone > .hero .portfolio {max-width: 570px;}
+  .member-app-surface .phone > .hero .portfolio p {font-size: 14px;}
+  .member-app-surface .phone > .hero .returns span {font-size: 13px;}
+
+  /* The operation summary and shortcuts should read as one intentional row. */
+  .member-app-surface .phone > .body > .how,
+  .member-app-surface .phone > .body > .process {
+    padding: 19px 18px 20px;
+    border: 1px solid #dce7f4;
+    box-shadow: 0 5px 18px rgba(30,69,119,.055);
+  }
+  .member-app-surface .phone > .body > .how h2 {font-size: 18px;margin-bottom: 19px;}
+  .member-app-surface .phone > .body > .how .how-grid b {font-size: 14px;}
+  .member-app-surface .phone > .body > .how .how-grid small {font-size: 12px;}
+  .member-app-surface .phone > .body > .process .process-head b {font-size: 19px;}
+  .member-app-surface .phone > .body > .process .steps small {font-size: 12px;}
+  .member-app-surface .phone > .body > .quick {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-auto-rows: minmax(96px, auto);
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    align-self: start;
+    background: #fff;
+    border: 1px solid #dce7f4;
+    border-radius: 16px;
+    box-shadow: 0 5px 18px rgba(30,69,119,.055);
+  }
+  .member-app-surface .phone > .body > .quick > button {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-content: center;
+    align-items: center;
+    justify-items: start;
+    column-gap: 10px;
+    row-gap: 3px;
+    min-height: 96px;
+    padding: 12px 11px;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    transition: background-color .15s ease;
+  }
+  .member-app-surface .phone > .body > .quick > button:nth-child(odd) {border-right:1px solid #eaf0f7;}
+  .member-app-surface .phone > .body > .quick > button:nth-child(-n+2) {border-bottom:1px solid #eaf0f7;}
+  .member-app-surface .phone > .body > .quick > button:hover {background:#f5f9ff;}
+  .member-app-surface .phone > .body > .quick > button:focus-visible {
+    outline: 2px solid #1676e9;outline-offset: -4px;
+  }
+  .member-app-surface .phone > .body > .quick img {
+    grid-column: 1;grid-row: 1 / span 2;
+    width: 44px;height: 44px;object-fit: contain;
+  }
+  .member-app-surface .phone > .body > .quick b {
+    grid-column: 2;grid-row: 1;
+    font-size: 13px;line-height: 1.35;
+    text-align: left;white-space: normal;word-break: keep-all;
+    color:#14365f;
+  }
+  .member-app-surface .phone > .body > .quick small {
+    grid-column: 2;grid-row: 2;
+    font-size: 11px;line-height: 1.4;
+    text-align: left;white-space: normal;word-break: keep-all;
+    color:#5b728d;
+  }
+
+  /* Read stored asset trends and market quotes at comfortable PC sizes. */
+  .member-app-surface .phone > .body > .trend {padding: 21px 22px 20px;}
+  .member-app-surface .phone > .body > .trend .section-title b {font-size: 19px;}
+  .member-app-surface .phone > .body > .trend .trend-svg {height: 160px;}
+  .member-app-surface .phone > .body > .trend .trend-measures small {font-size: 12px;}
+  .member-app-surface .phone > .body > .trend .trend-measures b {font-size: 18px;}
+  .member-app-surface .phone > .body > .trend .trend-caption {font-size: 13px;}
+  .member-app-surface .phone > .body > .ai-assets-panel {padding: 19px 18px;}
+  .member-app-surface .phone > .body > .ai-assets-panel .section-title b {font-size: 18px;}
+  .member-app-surface .phone > .body > .ai-assets-panel .ai-assets-list {gap: 11px;}
+  .member-app-surface .phone > .body > .ai-assets-panel .ai-assets-row {
+    padding: 12px 13px;gap: 10px;border-color: #e5edf7;
+  }
+  .member-app-surface .phone > .body > .ai-assets-panel .ai-assets-name strong {font-size: 14px;}
+  .member-app-surface .phone > .body > .ai-assets-panel .ai-assets-name small {font-size: 12px;}
+  .member-app-surface .phone > .body > .ai-assets-panel .ai-assets-price strong {font-size: 15px;}
+}
