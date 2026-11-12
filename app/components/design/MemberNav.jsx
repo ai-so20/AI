@@ -17,7 +17,7 @@ ai:<><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 1v4m6-4v4M9 19
 reward:<><path d="M4 5h16v11H9l-5 4V5Z"/><path d="m8 10 3 3 5-5"/></>
 };
 export default function MemberNav({current}){
-  return <nav className={styles.nav} aria-label="하단 메뉴">
+  return <nav className={`${styles.nav} member-app-nav`} aria-label="하단 메뉴">
     {links.map(link=><Link key={link.key} href={link.href} aria-current={current===link.key?"page":undefined} className={styles.item}>
       <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{icons[link.key]}</svg>
       <span className={styles.label}>{link.label}</span>
