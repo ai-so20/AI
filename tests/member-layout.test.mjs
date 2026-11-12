@@ -58,3 +58,15 @@ test("home-only polish stays inside desktop media query", () => {
  assert.match(block,/\.phone > \.body > \.ai-assets-panel \.ai-assets-price strong/);
  assert.doesNotMatch(block,/design-entry|design-event|design-attendance|design-ai-process|design-reward/);
 });
+
+test("home header uses text-only AI 프로세스 and asset quotes align right", () => {
+ const home=read("app/design-home/page.js");
+ assert.match(home, /className="brand" aria-label="AI 프로세스"/);
+ assert.doesNotMatch(home, /className="logo">ΛI/);
+ assert.match(home,/\.brand span:last-child\{font-size:19px/);
+ assert.match(home,/\.stage \.ai-assets-price\{grid-column:1\/-1;grid-row:2;justify-self:end;text-align:right\}/);
+ assert.match(home,/\.stage \.ai-assets-name strong\{display:block;font-size:13px/);
+ assert.match(home,/Number\.isFinite\(item\.changePct\)/);
+ assert.match(home,/className="ai-assets-state-kicker">AI 반영/);
+ assert.doesNotMatch(home,/changePct:\s*[+-]?\d/);
+});

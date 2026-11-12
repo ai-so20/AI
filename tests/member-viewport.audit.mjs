@@ -23,6 +23,8 @@ for(const width of widths){
     return {frame:box(".member-app-frame"),nav:box(".member-app-nav"),
       back:box('a[aria-label="홈으로 돌아가기"]'),
       brandColor:(()=>{const e=document.querySelector(".phone>.hero .brand");return e?getComputedStyle(e).color:null})(),
+      brandText:(()=>{const e=document.querySelector(".phone>.hero .brand");return e?.textContent?.replace(/\s+/g," ").trim()||null})(),
+      quoteAlign:(()=>{const e=document.querySelector(".ai-assets-row .ai-assets-price");return e?getComputedStyle(e).textAlign:null})(),
       backColor:back?getComputedStyle(back).color:null,
       iconColor:back?getComputedStyle(back.firstElementChild).color:null,
       navCount:nav?.querySelectorAll("a").length,activeCount:nav?.querySelectorAll('a[aria-current="page"]').length,
@@ -56,6 +58,8 @@ for(const width of widths){
     if(name==="home"&&width>=768&&width<1024&&a.bodyDisplay==="grid")
       failed.push(label+" tablet still forces a desktop grid");
     if(name==="home"&&width>=768&&a.market&&a.market.w<a.frame.w*0.75)failed.push(label+" desktop market width: "+a.market.w+" vs frame "+a.frame.w);
+    if(name==="home"&&(a.brandText!=="AI프로세스"||a.quoteAlign!=="right"))
+      failed.push(label+" wordmark or quote alignment "+a.brandText+"/"+a.quoteAlign);
     if(width>=1024){
       if(name==="home"&&a.quick&&a.how&&a.quick.x<a.how.x+a.how.w-2)failed.push(label+" home summary and quick cards aren't separate columns");
       if(name==="event"&&a.eventGuide&&a.eventHeading&&a.eventGuide.x>=a.eventHeading.x)failed.push(label+" event guide and list aren't side by side");
@@ -67,7 +71,7 @@ for(const width of widths){
     if(name==="event"&&(a.backColor!=="rgb(255, 255, 255)"||a.iconColor!=="rgb(255, 255, 255)"))failed.push(label+" back-link contrast: "+a.backColor+" "+a.iconColor);
    }
    results.push({name,...a});records.push({width,name,...a});
-   if([390,900,1024,1280].includes(width))await page.screenshot({path:"artifacts/member-viewport/"+name+"-"+width+".png",animations:"disabled"});
+   if([390,900,1024,1280].includes(width))await page.screenshot({path:"artifacts/member-viewport/"+name+"-"+width+".png",fullPage:name==="home",animations:"disabled"});
   }catch(e){failed.push(name+" @"+width+": "+String(e.message||e));}finally{await page.close();}
  }
  if(results.length===5){
