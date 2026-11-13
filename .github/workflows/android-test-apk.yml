@@ -66,6 +66,14 @@ jobs:
           path: android-test/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+      - name: Enable KVM hardware acceleration if available
+        run: |
+          if test -e /dev/kvm; then
+            sudo chmod 666 /dev/kvm
+            ls -l /dev/kvm
+          else
+            echo "KVM device unavailable; emulator will use software mode."
+          fi
       - name: Install and launch in Android emulator
         id: emulator
         uses: reactivecircus/android-emulator-runner@v2
@@ -89,8 +97,6 @@ jobs:
             file android-test/emulator-check/screen.png
             adb shell dumpsys activity activities > android-test/emulator-check/activity.txt
             adb logcat -d -t 2000 > android-test/emulator-check/logcat.txt
-            adb shell uiautomator dump /data/local/tmp/aiprocess-test-window.xml || true
-            adb exec-out cat /data/local/tmp/aiprocess-test-window.xml > android-test/emulator-check/window.xml || true
             ls -lh android-test/emulator-check/
       - name: Export emulator screenshot and note
         if: always()
