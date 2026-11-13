@@ -98,10 +98,7 @@ jobs:
             adb shell pidof com.vipai.aiprocess.smoketest > android-test/emulator-check/pid-final.txt || true
             file android-test/emulator-check/*.png || true
             ls -lh android-test/emulator-check/
-            if ! test -s android-test/emulator-check/pid-final.txt; then
-              echo "App process exited during smoke test; consult emulator-check/logcat.txt"
-              exit 1
-            fi
+            test -s android-test/emulator-check/pid-final.txt
             test "$(wc -c < android-test/emulator-check/screen.png)" -gt 6000
             echo "Verified running Android app"
       - name: Export emulator screenshot and note
