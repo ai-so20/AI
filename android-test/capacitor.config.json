@@ -3,7 +3,7 @@
   "appName": "AI 프로세스 테스트",
   "webDir": "www",
   "server": {
-    "url": "https://ai-1ulw0n0ul-vipai.vercel.app/design-entry",
+    "url": "https://ai-lirj0va6x-vipai.vercel.app/design-entry",
     "cleartext": false,
     "errorPath": "offline.html"
   },

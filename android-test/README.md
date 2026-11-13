@@ -3,7 +3,7 @@
 이 폴더는 운영 Next.js 앱을 수정하지 않고 **Android APK 설치·앱 실행 가능성**만 확인하기 위한 Capacitor 8 시험 프로젝트입니다.
 
 ## 앱 최초 진입 화면
-https://ai-1ulw0n0ul-vipai.vercel.app/design-entry
+https://ai-lirj0va6x-vipai.vercel.app/design-entry
 
 **비로그인 상태**에서는 `회원 로그인` 화면으로 시작합니다. 승인된 기존 회원의 닉네임/비밀번호로 로그인하면 `/design-home`으로 이동합니다. 이미 로그인 세션이 유지 중이라면 자동으로 홈으로 이동할 수 있습니다. 로그인, 승인, 로그인 이후 메뉴별 기능은 실제 회원 계정으로 추가 검증해야 합니다.
 
@@ -58,5 +58,5 @@ main 및 Vercel production 환경은 건드리지 않습니다.
 Android Java 소스는 매 빌드마다 \`node scripts/prepare-android.mjs\`로 생성된 네이티브 프로젝트에 적용됩니다.
 
 ## 앱 전용 로그아웃 검증
-이 빌드는 앱 전용 Vercel 미리보기 `https://ai-1ulw0n0ul-vipai.vercel.app/design-entry`를 불러옵니다. 해당 미리보기의 홈 상단에 `로그아웃` 버튼이 추가되어 있습니다. 기존 앱의 프리뷰 도메인과 달라 **업데이트 후 기존 로그인 세션이 유지되지 않을 수 있습니다**. 새 로그인을 진행해 확인하세요.
+이 빌드는 앱 전용 Vercel 미리보기 `https://ai-lirj0va6x-vipai.vercel.app/design-entry`를 불러옵니다. 해당 미리보기의 홈 상단에 `로그아웃` 버튼이 추가되어 있습니다. 기존 앱의 프리뷰 도메인과 달라 **업데이트 후 기존 로그인 세션이 유지되지 않을 수 있습니다**. 새 로그인을 진행해 확인하세요.
 로그아웃을 누르면 Supabase `auth.signOut()` 성공 후 회원 데이터를 화면에서 초기화하고 로그인 화면으로 돌아갑니다. 앱에서 다른 회원 정보를 표시하는지 반드시 다시 실행해 검수하세요.

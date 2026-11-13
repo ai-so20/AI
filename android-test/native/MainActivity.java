@@ -28,7 +28,7 @@ import com.getcapacitor.BridgeWebViewClient;
  */
 public class MainActivity extends BridgeActivity {
     private static final String TAG = "AIProcessAndroid";
-    private static final String SERVICE_ORIGIN = "https://ai-1ulw0n0ul-vipai.vercel.app";
+    private static final String SERVICE_ORIGIN = "https://ai-lirj0va6x-vipai.vercel.app";
     private static final String LOGIN_URL = SERVICE_ORIGIN + "/design-entry";
     private static final String HOME_URL = SERVICE_ORIGIN + "/design-home";
     private long lastExitAttempt = 0L;
