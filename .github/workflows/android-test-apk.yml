@@ -68,7 +68,6 @@ jobs:
           retention-days: 14
       - name: Install and launch in Android emulator
         id: emulator
-        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -77,13 +76,22 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            adb install -r android-test/android/app/build/outputs/apk/debug/app-debug.apk
-            adb shell am start -n com.vipai.aiprocess.smoketest/.MainActivity
-            sleep 15
-            adb shell pidof com.vipai.aiprocess.smoketest
+            set -eu
             mkdir -p android-test/emulator-check
-            adb shell screencap -p /sdcard/ai-preview-screen.png
-            adb pull /sdcard/ai-preview-screen.png android-test/emulator-check/screen.png
+            adb install -r android-test/android/app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -W -n com.vipai.aiprocess.smoketest/.MainActivity
+            sleep 25
+            APP_PID="$(adb shell pidof com.vipai.aiprocess.smoketest | tr -d '\r')"
+            test -n "$APP_PID"
+            echo "Verified running Android app PID: $APP_PID" | tee android-test/emulator-check/process.txt
+            adb exec-out screencap -p > android-test/emulator-check/screen.png
+            test "$(wc -c < android-test/emulator-check/screen.png)" -gt 6000
+            file android-test/emulator-check/screen.png
+            adb shell dumpsys activity activities > android-test/emulator-check/activity.txt
+            adb logcat -d -t 2000 > android-test/emulator-check/logcat.txt
+            adb shell uiautomator dump /data/local/tmp/aiprocess-test-window.xml || true
+            adb exec-out cat /data/local/tmp/aiprocess-test-window.xml > android-test/emulator-check/window.xml || true
+            ls -lh android-test/emulator-check/
       - name: Export emulator screenshot and note
         if: always()
         run: |
