@@ -4,9 +4,12 @@
   "webDir": "www",
   "server": {
     "url": "https://ai-r6u0rn1ma-vipai.vercel.app/design-entry",
-    "cleartext": false
+    "cleartext": false,
+    "errorPath": "offline.html"
   },
   "android": {
     "allowMixedContent": false
-  }
+  },
+  "backgroundColor": "#f5f8fd",
+  "loggingBehavior": "debug"
 }

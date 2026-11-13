@@ -39,3 +39,20 @@ APK: `android/app/build/outputs/apk/debug/app-debug.apk`
 이 테스트는 `test/android-capacitor-20261113` 브랜치에만 존재합니다.
 기존 UI 복원 브랜치: `restore/ui-before-app-20261111` (`b44fe06`).
 main 및 Vercel production 환경은 건드리지 않습니다.
+
+
+## 앱 안정화 (Android test hardening)
+
+이 브랜치는 기존 APK의 **로그인부터 시작** 구조를 유지하면서 네이티브 기능을 보완합니다.
+
+- 뒤로 가기: 웹 히스토리 우선, 루트에서 2회 누르면 종료
+- 키보드: Android adjustResize, 열린 키보드 먼저 닫기
+- 로그인 유지: WebView localStorage/쿠키를 삭제하지 않음. 기존 Supabase 인증 유효성/승인 검사는 웹에서 그대로 수행
+- 화면 이동: 같은 출처 Next.js 경로를 WebView에서 유지, 다른 도메인은 기존 Capacitor 외부 처리
+- 네트워크 오류: APK 안에 포함된 \`www/offline.html\`로 전환; '다시 연결하기'로 회원 로그인 주소 재시도
+- 서버 연동: 기존 Vercel/Supabase 유지, API/회원 정보 복제하지 않음
+
+중요: **실제 웹 UI/JS 번들은 아직 서버에서 받습니다.** 앱 내부에 내장된 것은 네이티브 실행 구조와 오프라인 오류 화면입니다. 현재 서버 의존적인 Next.js 웹 UI와 API를 통째로 정적 내장하려면 별도 모바일 프런트 빌드 및 API 경로 분리 작업이 필요합니다. 이번 버전을 전체 오프라인 앱이라고 소개하지 마세요.
+
+테스트 코드는 \`node --test tests/native-hardening.test.mjs\`로 실행되며,
+Android Java 소스는 매 빌드마다 \`node scripts/prepare-android.mjs\`로 생성된 네이티브 프로젝트에 적용됩니다.
