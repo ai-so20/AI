@@ -45,6 +45,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
       - name: Install Capacitor
         run: npm install --no-audit --no-fund
+      - name: Verify login screen is the APK entry point
+        run: |
+          node -e 'const c=require("./capacitor.config.json"); if(new URL(c.server.url).pathname!=="/design-entry")process.exit(1); console.log("login-first APK entry route confirmed:",c.server.url)'
       - name: Create native Android project
         run: |
           npx cap add android
