@@ -2,7 +2,7 @@ name: AI 프로세스 - Android APK 동작 검증
 on:
   push:
     branches:
-      - test/android-app-hardening-20261113
+      - test/android-app-logout-20261113
     paths:
       - 'android-test/**'
       - '.github/workflows/android-test-apk.yml'

@@ -19,7 +19,7 @@ test("network error recovery is shipped as an offline local asset",()=>{
   const local=read("www/offline.html");
   assert.match(local,/서버에 연결할 수 없습니다/);
   assert.match(local,/id="retry"/);
-  assert.match(local,/window.location.replace\("https:\/\/ai-r6u0rn1ma-vipai.vercel.app\/design-entry"\)/);
+  assert.match(local,/window.location.replace\("https:\/\/ai-1ulw0n0ul-vipai.vercel.app\/design-entry"\)/);
   assert.doesNotMatch(local,/<script[^>]*src=/i);
   assert.doesNotMatch(local,/<link[^>]*href=/i);
 });
