@@ -70,3 +70,14 @@ test("home header uses text-only AI 프로세스 and asset quotes align right", 
  assert.match(home,/className="ai-assets-state-kicker">AI 반영/);
  assert.doesNotMatch(home,/changePct:\s*[+-]?\d/);
 });
+
+test("app-only home logout ends real Supabase session before routing",()=>{
+  const code=read("app/design-home/page.js");
+  assert.match(code,/async function handleMemberLogout\(\)/);
+  assert.match(code,/await supabase\.auth\.signOut\(\)/);
+  assert.match(code,/window\.localStorage\.setItem\("vip-ui-locked","1"\)/);
+  assert.match(code,/router\.replace\("\/design-entry\?switch=1"\)/);
+  assert.match(code,/className="member-logout" onClick=\{handleMemberLogout\}/);
+  assert.match(code,/role="alert" className="member-logout-error"/);
+  assert.doesNotMatch(code,/removeAllCookies|deleteDatabase/);
+});
